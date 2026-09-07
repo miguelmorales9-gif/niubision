@@ -276,12 +276,23 @@ img { background: #0a090e; }
 .field:focus, select:focus, textarea:focus, .search:focus {
   outline: 0; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(212,176,106,.18);
 }
+.view-stage { will-change: transform, opacity; min-height: 40vh; }
+.view-stage .screen { animation: none; }
+.view-stage.leave.to-left { animation: leaveL .2s ease forwards; }
+.view-stage.leave.to-right { animation: leaveR .2s ease forwards; }
+.view-stage.enter.from-right { animation: enterR .34s cubic-bezier(.22,.8,.2,1) both; }
+.view-stage.enter.from-left { animation: enterL .34s cubic-bezier(.22,.8,.2,1) both; }
+.view-stage.enter.fade { animation: fadeUp .34s ease both; }
+@keyframes leaveL { to { opacity: 0; transform: translateX(-24px) scale(.985); } }
+@keyframes leaveR { to { opacity: 0; transform: translateX(24px) scale(.985); } }
+@keyframes enterR { from { opacity: 0; transform: translateX(24px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes enterL { from { opacity: 0; transform: translateX(-24px) scale(.985); } to { opacity: 1; transform: none; } }
+.app-header { animation: fadeUp .35s ease both; }
+.nav { animation: fadeUp .4s .05s ease both; }
 @media (prefers-reduced-motion: reduce) {
-  .orb, .splash-logo-wrap::after, .splash-name, .splash-tag, .hold-bar, .logo-btn img,
-  .sheet, .btn.primary, .nav button.on, .progress > span, .timer, .stat b, .ring-card b, .price {
-    animation: none !important;
-  }
-  .card:hover, .plan:hover, .ex-card:hover { transform: none; }
+  .view-stage.leave.to-left, .view-stage.leave.to-right,
+  .view-stage.enter.from-right, .view-stage.enter.from-left, .view-stage.enter.fade,
+  .app-header, .nav { animation: none !important; }
 }
 
 
@@ -3122,6 +3133,27 @@ function bindRoutinesCoach() {
   };
 }
 
+function viewBody() {
+  if (state.view === "home") return homeView();
+  if (state.view === "work") return workView();
+  if (state.view === "book") return libraryView();
+  if (state.view === "price") return pricesView();
+  if (state.view === "habit") return habitView();
+  if (state.view === "rutinas") return routinesCoachView();
+  return peopleView();
+}
+function viewOrder() {
+  if (state.role === "coach") return ["home", "work", "rutinas", "book", "people"];
+  if (state.role === "guest") return ["price"];
+  return ["home", "work", "book", "habit", "price"];
+}
+let viewGen = 0;
+function afterPaint() {
+  $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
+  if (state.view === "work") bindWork();
+  if (state.view === "rutinas") bindRoutinesCoach();
+  bindChrome();
+}
 function render() {
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
@@ -3129,19 +3161,44 @@ function render() {
   if (state.role === "guest" && state.view !== "price") state.view = "price";
   document.body.classList.toggle("in-app", !!state.role);
   if (!state.role) return renderGate();
-  let body = "";
-  if (state.view === "home") body = homeView();
-  else if (state.view === "work") body = workView();
-  else if (state.view === "book") body = libraryView();
-  else if (state.view === "price") body = pricesView();
-  else if (state.view === "habit") body = habitView();
-  else if (state.view === "rutinas") body = routinesCoachView();
-  else body = peopleView();
-  $("#app").innerHTML = header() + body + nav();
-  $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
-  if (state.view === "work") bindWork();
-  if (state.view === "rutinas") bindRoutinesCoach();
-  bindChrome();
+  const html = viewBody();
+  const app = $("#app");
+  const stage = $("#viewStage");
+  const shell = app && app.querySelector(".app-header") && app.querySelector(".nav");
+  if (!shell || !stage) {
+    viewGen++;
+    app.innerHTML = header() + `<main id="viewStage" class="view-stage enter fade">${html}</main>` + nav();
+    state._lastView = state.view;
+    afterPaint();
+    return;
+  }
+  $$(".nav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === state.view));
+  if (state._lastView === state.view) {
+    stage.innerHTML = html;
+    afterPaint();
+    return;
+  }
+  const order = viewOrder();
+  const a = order.indexOf(state._lastView);
+  const b = order.indexOf(state.view);
+  const dir = (a < 0 || b < 0 || b >= a) ? 1 : -1;
+  const gen = ++viewGen;
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    stage.innerHTML = html;
+    stage.className = "view-stage";
+    state._lastView = state.view;
+    afterPaint();
+    return;
+  }
+  stage.className = "view-stage leave " + (dir > 0 ? "to-left" : "to-right");
+  setTimeout(() => {
+    if (gen !== viewGen) return;
+    stage.innerHTML = html;
+    stage.className = "view-stage enter " + (dir > 0 ? "from-right" : "from-left");
+    state._lastView = state.view;
+    afterPaint();
+  }, 180);
 }
 
 async function boot() {
