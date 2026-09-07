@@ -194,7 +194,96 @@ img { background: #0a090e; }
 .pay-secure .k { color:var(--gold); font-size:11px; letter-spacing:.12em; text-transform:uppercase; display:block; margin-bottom:6px; }
 .pay-secure p, .pay-secure li { color:var(--mute); font-size:13px; line-height:1.45; }
 .pay-secure ul { margin:6px 0 0 16px; }
+
 .pay-secure li { margin:4px 0; }
+
+@keyframes halo {
+  0%, 100% { opacity: .42; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.14); }
+}
+@keyframes gleam {
+  0% { transform: translateX(-80%) skewX(-18deg); opacity: 0; }
+  18% { opacity: .55; }
+  50% { transform: translateX(10%) skewX(-18deg); opacity: .85; }
+  100% { transform: translateX(90%) skewX(-18deg); opacity: 0; }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sheetIn {
+  from { transform: translateY(32px); opacity: .4; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes navGlow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(212,176,106,0)); }
+  50% { filter: drop-shadow(0 0 8px rgba(212,176,106,.55)); }
+}
+@keyframes goldSheen {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes barGlow {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 10px rgba(212,176,106,.55); }
+}
+@keyframes tick {
+  50% { transform: scale(1.06); }
+}
+.orb { animation: halo 3s ease-in-out infinite; }
+.splash-logo-wrap { overflow: visible; }
+.splash-logo-wrap::after {
+  content: ""; position: absolute; inset: 0; border-radius: 36px;
+  background: linear-gradient(90deg, transparent, rgba(247,241,232,.0) 30%, rgba(247,241,232,.32) 50%, rgba(212,176,106,.2) 58%, transparent);
+  animation: gleam 4.6s ease-in-out infinite; pointer-events: none; mix-blend-mode: screen;
+}
+.splash-logo { transition: transform .2s ease, filter .2s ease; }
+.splash-logo-wrap.charged .splash-logo { transform: scale(1.05); filter: drop-shadow(0 0 18px rgba(212,176,106,.7)); }
+.splash-name { animation: fadeUp .55s ease both; }
+.splash-tag { animation: fadeUp .7s .12s ease both; }
+.hold-bar { animation: barGlow 2s ease-in-out infinite; }
+.hold-bar span { transition: width .08s linear; }
+.logo-btn img { animation: pulse 2.8s ease-in-out infinite; }
+.sheet { animation: sheetIn .34s cubic-bezier(.2,.8,.2,1); }
+.btn { transition: transform .16s ease, filter .16s ease, background .16s ease, border-color .16s ease; position: relative; overflow: hidden; }
+.btn.primary { background: linear-gradient(90deg, #d4b06a, #f3b184, #d4b06a); background-size: 200% 100%; animation: goldSheen 4.5s linear infinite; }
+.btn.primary:hover, .btn.ghost:hover, .pay-btn:hover, .cover-tile:hover {
+  border-color: var(--gold); filter: brightness(1.08);
+}
+.press { transform: scale(.97) !important; }
+.card, .plan, .ex-card, .rt-card, .ring-card {
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.card:hover, .plan:hover, .ex-card:hover, .rt-card:hover {
+  border-color: var(--gold-dim);
+  box-shadow: 0 10px 28px rgba(0,0,0,.28);
+  transform: translateY(-2px);
+}
+.plan.featured { box-shadow: 0 0 0 1px rgba(212,176,106,.35), 0 12px 32px rgba(0,0,0,.25); }
+.stat b, .ring-card b, .price { animation: fadeUp .5s ease both; }
+.nav button { transition: color .2s ease, transform .2s ease; }
+.nav button.on { animation: navGlow 2.4s ease-in-out infinite; }
+.nav button:active { transform: scale(.92); }
+.filters button { transition: border-color .2s ease, color .2s ease, transform .16s ease; }
+.dot, .habit, .list-row { transition: border-color .2s ease, background .2s ease, transform .16s ease; }
+.habit:active, .list-row:active { transform: scale(.99); }
+.progress > span { background-size: 200% 100%; animation: goldSheen 2.8s linear infinite; }
+.timer { animation: tick 1.2s ease-in-out infinite; }
+.pay-btn { transition: transform .16s ease, border-color .2s ease, background .2s ease; }
+.studio-lock { transition: opacity .2s ease; }
+.studio-lock:hover, .studio-lock:focus { opacity: 1; color: var(--gold); }
+#toast.show { animation: pop .28s ease; }
+.field:focus, select:focus, textarea:focus, .search:focus {
+  outline: 0; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(212,176,106,.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb, .splash-logo-wrap::after, .splash-name, .splash-tag, .hold-bar, .logo-btn img,
+  .sheet, .btn.primary, .nav button.on, .progress > span, .timer, .stat b, .ring-card b, .price {
+    animation: none !important;
+  }
+  .card:hover, .plan:hover, .ex-card:hover { transform: none; }
+}
+
 
 </style>
 </head>
@@ -1341,6 +1430,7 @@ function renderGate() {
   const re = $("#reenter"); if (re) re.onclick = () => enterClient("home");
   const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
   $("#studioLock").onclick = openCoachGate;
+  bindMotion();
 }
 function bindSplash() {
   const wrap = $("#holdLogo");
@@ -2593,7 +2683,18 @@ function downloadTextPdf(filterName) {
   toast("PDF descargado");
 }
 
+function bindMotion() {
+  $$(".btn, .pay-btn, .ex-card, .plan, .filters button").forEach((el) => {
+    if (el.dataset.mv) return;
+    el.dataset.mv = "1";
+    el.addEventListener("pointerdown", () => el.classList.add("press"));
+    ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => {
+      el.addEventListener(ev, () => el.classList.remove("press"));
+    });
+  });
+}
 function bindChrome() {
+  bindMotion();
   const sw = $("#switchRole");
   if (sw) sw.onclick = () => {
     if (state.role === "client") state.profile.unlocked = false;
