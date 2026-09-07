@@ -188,6 +188,11 @@ img { background: #0a090e; }
 .mark.gpay { background:#2a261f; color:var(--gold); }
 .mark.spay { background:#1f1d28; color:var(--cream); }
 .mark.tpay { background:#2a241c; color:var(--peach); }
+.pay-secure { margin:12px 0 4px; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:var(--bg-2); }
+.pay-secure .k { color:var(--gold); font-size:11px; letter-spacing:.12em; text-transform:uppercase; display:block; margin-bottom:6px; }
+.pay-secure p, .pay-secure li { color:var(--mute); font-size:13px; line-height:1.45; }
+.pay-secure ul { margin:6px 0 0 16px; }
+.pay-secure li { margin:4px 0; }
 
 </style>
 </head>
@@ -948,47 +953,108 @@ function payCfg() {
 function escAttr(s) {
   return String(s || "").replace(/&/g, "\x26amp;").replace(/"/g, "\x26quot;").replace(/</g, "\x26lt;");
 }
+function maskDest(s, kind) {
+  const t = String(s || "").trim();
+  if (!t) return "";
+  if (kind === "ath") {
+    const n = t.replace(/\D/g, "");
+    if (n.length < 4) return "número del estudio";
+    return "termina en " + n.slice(-4);
+  }
+  if (t.indexOf("@") > 0) {
+    const parts = t.split("@");
+    return parts[0].slice(0, 1) + "•••@" + parts[1];
+  }
+  if (/paypal\.me/i.test(t)) return "PayPal.me del estudio";
+  if (t.length <= 4) return "••••";
+  return t.slice(0, 2) + "•••" + t.slice(-2);
+}
+function paypalSafe(raw) {
+  const p = String(raw || "").trim();
+  if (!p) return { ok: false };
+  if (/^https?:/i.test(p)) {
+    let u;
+    try { u = new URL(p); } catch (e) { return { ok: false }; }
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (u.protocol !== "https:") return { ok: false };
+    if (host !== "paypal.com" && host !== "paypal.me") return { ok: false };
+    return { ok: true, href: u.origin + u.pathname.replace(/\/$/, "") };
+  }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p)) return { ok: true, email: p.toLowerCase() };
+  const user = p.replace(/^@/, "").replace(/^https:\/\/(?:www\.)?paypal\.me\//i, "").replace(/^paypal\.me\//i, "");
+  if (/^[a-zA-Z0-9._-]{3,64}$/.test(user)) return { ok: true, me: user };
+  return { ok: false };
+}
+function paySecureHtml() {
+  return `<div class="pay-secure">
+    <span class="k">Seguridad en pagos digitales</span>
+    <p>NiuBision no pide ni guarda números de tarjeta, PIN, CVV ni claves de ATH Móvil. El dinero se mueve en PayPal, ATH Móvil, Google Pay, Samsung Pay o el lector Touch Pay.</p>
+    <ul>
+      <li>Confirme el monto antes de salir de la app.</li>
+      <li>Pague solo con estos botones. Nadie del estudio le pedirá su clave.</li>
+      <li>El destino se muestra enmascarado. El recibo queda en este teléfono.</li>
+    </ul>
+  </div>`;
+}
 function planPriceOf(planLabel) {
   const raw = String(planLabel || "");
-  const hit = PLANS.find((x) => raw.indexOf(x.name) >= 0) || PLANS.find((x) => raw.indexOf(x.price) >= 0);
+  const hit = PLANS.find((x) => raw.indexOf(x.name) >= 0)
+    || PLANS.find((x) => x.name.indexOf(raw) >= 0)
+    || PLANS.find((x) => raw.indexOf(x.price) >= 0);
   if (hit) return { amount: hit.price, unit: hit.unit, name: hit.name };
   const m = raw.match(/(\d+(?:\.\d+)?)\s*USD/i);
   return { amount: m ? m[1] : "", unit: "", name: raw };
 }
 function paypalHref(amount, item) {
-  const p = payCfg().paypal;
-  if (!p) return "";
-  if (/paypal\.me/i.test(p) || /^https?:/i.test(p)) {
-    const base = p.replace(/\/$/, "");
-    return /paypal\.me/i.test(base) && amount ? base + "/" + amount : base;
+  const safe = paypalSafe(payCfg().paypal);
+  if (!safe.ok) return "";
+  if (safe.href) {
+    if (amount && /paypal\.me/i.test(safe.href)) return safe.href + "/" + amount;
+    return safe.href;
   }
-  const q = new URLSearchParams({
-    cmd: "_xclick",
-    business: p,
-    currency_code: "USD",
-    item_name: item || "NiuBision",
-    amount: String(amount || "")
-  });
-  return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
+  if (safe.me && amount) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me) + "/" + encodeURIComponent(amount);
+  if (safe.me) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me);
+  if (safe.email) {
+    const q = new URLSearchParams({
+      cmd: "_xclick",
+      business: safe.email,
+      currency_code: "USD",
+      item_name: item || "NiuBision",
+      amount: String(amount || ""),
+      no_shipping: "1",
+      no_note: "1"
+    });
+    return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
+  }
+  return "";
 }
 function payMethods(planLabel) {
   const info = planPriceOf(planLabel);
   const cfg = payCfg();
   const athNum = cfg.ath.replace(/\D/g, "");
+  const pp = paypalSafe(cfg.paypal);
   return [
-    { id: "paypal", mark: "PP", cls: "paypal", name: "PayPal", hint: cfg.paypal ? "Abre el cobro de " + info.amount + " USD" : "El estudio aún no puso su PayPal" },
-    { id: "ath", mark: "ATH", cls: "ath", name: "ATH Móvil", hint: athNum ? "Enviar al " + athNum : "Ponga el número ATH en el estudio" },
-    { id: "google", mark: "G", cls: "gpay", name: "Google Pay", hint: cfg.google ? "Enviar a " + cfg.google : "Avisa al coach y paga desde Google Pay" },
-    { id: "samsung", mark: "S", cls: "spay", name: "Samsung Pay", hint: cfg.samsung ? "Enviar a " + cfg.samsung : "Avisa al coach y paga desde Samsung Pay" },
-    { id: "touch", mark: "TAP", cls: "tpay", name: "Touch Pay", hint: "Pago presencial: acerque tarjeta o teléfono al lector" }
+    { id: "paypal", mark: "PP", cls: "paypal", name: "PayPal", hint: pp.ok ? "Cobro cifrado de " + info.amount + " USD · " + maskDest(cfg.paypal, "paypal") : "El estudio aún no puso un PayPal válido" },
+    { id: "ath", mark: "ATH", cls: "ath", name: "ATH Móvil", hint: athNum ? "Enviar al que " + maskDest(cfg.ath, "ath") : "Ponga el número ATH en el estudio" },
+    { id: "google", mark: "G", cls: "gpay", name: "Google Pay", hint: cfg.google ? "Wallet · " + maskDest(cfg.google, "google") : "Avisa al coach y paga en Google Pay" },
+    { id: "samsung", mark: "S", cls: "spay", name: "Samsung Pay", hint: cfg.samsung ? "Wallet · " + maskDest(cfg.samsung, "samsung") : "Avisa al coach y paga en Samsung Pay" },
+    { id: "touch", mark: "TAP", cls: "tpay", name: "Touch Pay", hint: "Presencial: tap en el lector. No se digita la tarjeta aquí." }
   ];
 }
 function payButtonsHtml(planLabel) {
   return `<div class="pay-grid">${payMethods(planLabel).map((m) => `<button type="button" class="pay-btn" data-pay="${m.id}"><span class="mark ${m.cls}">${m.mark}</span><span><strong>${m.name}</strong><em>${m.hint}</em></span></button>`).join("")}</div>`;
 }
-function recordPay(planLabel, method) {
+function recordPay(planLabel, method, status) {
   const info = planPriceOf(planLabel);
-  const row = { date: todayKey(), plan: planLabel, amount: info.amount, method, name: state.profile.name || (state.health && state.health.name) || "" };
+  const row = {
+    id: "p" + Date.now(),
+    date: todayKey(),
+    plan: planLabel,
+    amount: info.amount,
+    method,
+    status: status || "iniciado",
+    name: state.profile.name || (state.health && state.health.name) || ""
+  };
   state.payments = state.payments || [];
   state.payments.push(row);
   const last = (state.contracts || [])[state.contracts.length - 1];
@@ -996,58 +1062,107 @@ function recordPay(planLabel, method) {
   persist();
   return row;
 }
+function payLabel(id) {
+  return ({ paypal: "PayPal", ath: "ATH Móvil", google: "Google Pay", samsung: "Samsung Pay", touch: "Touch Pay" })[id] || id;
+}
+function payDestHint(method) {
+  const cfg = payCfg();
+  if (method === "paypal") return maskDest(cfg.paypal, "paypal") || "PayPal del estudio";
+  if (method === "ath") return maskDest(cfg.ath, "ath") || "ATH Móvil del estudio";
+  if (method === "google") return maskDest(cfg.google, "google") || "Google Pay del estudio";
+  if (method === "samsung") return maskDest(cfg.samsung, "samsung") || "Samsung Pay del estudio";
+  return cfg.touch ? maskDest(cfg.touch, "touch") : "lector presencial";
+}
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
   const who = state.profile.name || (state.health && state.health.name) || "Cliente";
-  const text = `Pago NiuBision\n${who}\n${planLabel}\n${info.amount ? info.amount + " USD" : ""}\nMétodo: ${method}`;
+  const text = `Pago NiuBision (iniciado)\n${who}\n${planLabel}\n${info.amount ? info.amount + " USD" : ""}\nMétodo: ${method}\nSin tarjetas ni PIN en la app.`;
   window.open(waLink(text), "_blank");
+}
+function showPayReceipt(row) {
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Recibo</p>
+    <h2>Pago iniciado</h2>
+    <p><strong>${row.amount || "—"} USD</strong> · ${row.method}</p>
+    <p class="muted">${row.plan}<br>${row.date} · ${row.name || "Cliente"}</p>
+    <p class="muted">Esto no es un cargo de tarjeta en NiuBision. El cobro lo confirma PayPal, ATH Móvil o la wallet. El coach marca «recibido» cuando vea el dinero.</p>
+    <button class="btn primary" id="closeSheet">Entendido</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
 }
 async function runPay(method, planLabel) {
   const info = planPriceOf(planLabel);
   const cfg = payCfg();
   const item = "NiuBision — " + (info.name || planLabel);
-  recordPay(planLabel, method);
+  const row = recordPay(planLabel, payLabel(method), "iniciado");
   if (method === "paypal") {
     const href = paypalHref(info.amount, item);
     if (!href) {
-      toast("Falta el PayPal del estudio");
+      toast("PayPal del estudio no es un enlace seguro");
       notifyPay(planLabel, "PayPal");
+      showPayReceipt(row);
       return;
     }
-    window.open(href, "_blank");
+    window.open(href, "_blank", "noopener,noreferrer");
     notifyPay(planLabel, "PayPal");
-    toast("Abriendo PayPal");
+    showPayReceipt(row);
     return;
   }
   if (method === "ath") {
     const num = cfg.ath.replace(/\D/g, "");
-    const msg = num
-      ? `ATH Móvil ${info.amount} USD\nNúmero: ${num}\nAbra ATH Móvil → Enviar o Pagar a negocio y pegue el número.`
-      : "Falta el número de ATH Móvil del estudio";
     if (num) {
       await copyText(num);
-      toast("Número ATH copiado");
-    } else toast(msg);
+      toast("Número ATH copiado. Ábralo en ATH Móvil, no lo pegue en otro chat.");
+    } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
+    showPayReceipt(row);
     return;
   }
   if (method === "google") {
     if (cfg.google) await copyText(cfg.google);
-    window.open("https://pay.google.com/", "_blank");
+    window.open("https://pay.google.com/", "_blank", "noopener,noreferrer");
     notifyPay(planLabel, "Google Pay");
-    toast(cfg.google ? "Destino copiado. Abra Google Pay" : "Abra Google Pay y avise al coach");
+    showPayReceipt(row);
     return;
   }
   if (method === "samsung") {
     if (cfg.samsung) await copyText(cfg.samsung);
     notifyPay(planLabel, "Samsung Pay");
-    toast(cfg.samsung ? "Destino copiado. Abra Samsung Pay" : "Abra Samsung Pay y avise al coach");
+    toast("Abra Samsung Pay en este teléfono. No envíe el PIN.");
+    showPayReceipt(row);
     return;
   }
   if (method === "touch") {
     notifyPay(planLabel, "Touch Pay");
-    toast("Touch Pay es presencial. El coach confirma el cobro en sesión.");
+    toast("Touch Pay es presencial. La tarjeta no se escribe en la app.");
+    showPayReceipt(row);
   }
+}
+function openPayConfirm(method, planLabel) {
+  const info = planPriceOf(planLabel);
+  const name = payLabel(method);
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Confirmar pago</p>
+    <h2>${info.amount ? info.amount + " USD" : "Monto del plan"}</h2>
+    <p>${info.name || planLabel}</p>
+    <p class="muted">${name} · destino ${payDestHint(method)}</p>
+    ${paySecureHtml()}
+    <button class="btn primary" id="payGo">Pagar con ${name}</button>
+    <button class="btn ghost" id="closeSheet">Cancelar</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  modal.querySelector("#payGo").onclick = async () => {
+    modal.remove();
+    await runPay(method, planLabel);
+  };
 }
 function openPaySheet(planLabel) {
   const info = planPriceOf(planLabel);
@@ -1058,15 +1173,16 @@ function openPaySheet(planLabel) {
     <p class="tagline">Pago</p>
     <h2>${info.name || "NiuBision"}</h2>
     <div class="price">${info.amount ? info.amount + " USD" : ""} <small>${info.unit || ""}</small></div>
-    <p class="muted">El IVA/IVU no está incluido. Escoja cómo pagar. El coach recibe aviso por WhatsApp.</p>
+    <p class="muted">El IVA/IVU no está incluido. Confirme el método. NiuBision no guarda tarjetas.</p>
     ${payButtonsHtml(planLabel)}
+    ${paySecureHtml()}
     <button class="btn ghost" id="closeSheet">Ahora no</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  $$("[data-pay]", modal).forEach((b) => b.onclick = async () => {
-    await runPay(b.dataset.pay, planLabel);
+  $$("[data-pay]", modal).forEach((b) => b.onclick = () => {
     modal.remove();
+    openPayConfirm(b.dataset.pay, planLabel);
   });
 }
 
@@ -1550,7 +1666,8 @@ function homeView() {
       </div>
       <div class="card">
         <h3>Métodos de pago</h3>
-        <p class="muted">El cliente los ve al firmar. PayPal y ATH Móvil cobran de verdad si usted llena el destino. Google Pay, Samsung Pay y Touch Pay avisan por WhatsApp; Touch Pay es el cobro presencial con tap.</p>
+        <p class="muted">El cliente los ve al firmar. NiuBision no cobra tarjetas: el dinero sale en PayPal, ATH Móvil o la wallet. Use solo paypal.me, un email de PayPal o https://paypal.com. No pida PIN ni CVV por chat.</p>
+        ${paySecureHtml()}
         <input class="field" id="payPaypal" placeholder="PayPal: email o paypal.me/suusuario" value="${escAttr((state.settings.pay||{}).paypal)}">
         <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr((state.settings.pay||{}).ath)}">
         <input class="field" id="payGoogle" placeholder="Google Pay: email o teléfono" value="${escAttr((state.settings.pay||{}).google)}">
@@ -1909,6 +2026,7 @@ function pricesView() {
     <div class="card">
       <h3>Cómo pagar</h3>
       <p class="muted">PayPal, ATH Móvil, Google Pay, Samsung Pay y Touch Pay. El IVU no está incluido. Después del contrato se abre esta misma lista.</p>
+      ${paySecureHtml()}
       ${payButtonsHtml((state.profile && state.profile.plan) || "NiuBision Estándar")}
       ${state.role !== "guest" ? `<button class="btn ghost" id="openPay">Pagar un plan ya contratado</button>` : ""}
     </div>
@@ -1923,6 +2041,7 @@ function peopleView() {
     <h2 style="font-family:var(--display);font-size:26px">Clientes</h2>
     <p class="muted">Añada clientes reales. El código se pega en la portada, en «Tengo un código». Un enlace file:// no viaja a otro teléfono.</p>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos firmados</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${k.name}</strong><div class="muted">${k.plan} · ${k.date}${k.flagged?" · bandera de salud":""}${k.payMethod?" · "+k.payMethod:""}</div></div><button class="btn small ghost" data-delk="${k.id}">Eliminar</button></div>`).join("")}</div>` : ""}
+    ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().slice(0,12).map((p) => `<div class="list-row"><div><strong>${p.amount || "—"} USD · ${p.method}</strong><div class="muted">${p.name || "Cliente"} · ${p.plan} · ${p.date} · ${p.status || "iniciado"}</div></div>${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" data-gotpay="${p.id}">Marcar recibido</button>`}</div>`).join("")}</div>` : ""}
     ${state.health ? `<div class="card"><h3>Cuestionario de salud</h3><p class="muted">${state.health.name} · ${state.health.date} · ${HEALTH_ITEMS.some((q)=>state.health[q.id]==="sí") ? "hay al menos un sí" : "todas las respuestas no"}</p><button class="btn small ghost" id="delHealth">Eliminar cuestionario</button></div>` : ""}
     ${state.waiver ? `<div class="card"><h3>Relevo</h3><p class="muted">${state.waiver.name} · ${state.waiver.date}</p><button class="btn small ghost" id="delWaiver">Eliminar relevo</button></div>` : "<p class='muted'>Aún no hay relevo firmado en este teléfono.</p>"}
     ${state.clients.map((c) => {
@@ -2494,8 +2613,10 @@ function bindChrome() {
   if (saveWa) saveWa.onclick = () => { state.settings.wa = $("#waNum").value; persist(); toast("Número guardado"); };
   const savePay = $("#savePay");
   if (savePay) savePay.onclick = () => {
+    const paypal = ($("#payPaypal") && $("#payPaypal").value || "").trim();
+    if (paypal && !paypalSafe(paypal).ok) return toast("PayPal inválido. Use paypal.me, un email o un enlace https://paypal.com");
     state.settings.pay = {
-      paypal: ($("#payPaypal") && $("#payPaypal").value || "").trim(),
+      paypal,
       ath: ($("#payAth") && $("#payAth").value || "").trim(),
       google: ($("#payGoogle") && $("#payGoogle").value || "").trim(),
       samsung: ($("#paySamsung") && $("#paySamsung").value || "").trim(),
@@ -2513,8 +2634,16 @@ function bindChrome() {
     if (b.closest(".modal")) return;
     b.onclick = () => {
       const last = (state.contracts || [])[state.contracts.length - 1];
-      runPay(b.dataset.pay, last ? last.plan : ((state.profile && state.profile.plan) || "NiuBision Estándar"));
+      openPayConfirm(b.dataset.pay, last ? last.plan : ((state.profile && state.profile.plan) || "NiuBision Estándar"));
     };
+  });
+  $$("[data-gotpay]").forEach((b) => b.onclick = () => {
+    const row = (state.payments || []).find((p) => p.id === b.dataset.gotpay);
+    if (!row) return;
+    row.status = "recibido";
+    persist();
+    toast("Pago marcado recibido");
+    render();
   });
   const cu = $("#cloudUrl");
   const cc = $("#cloudConnect");
