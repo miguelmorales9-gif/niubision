@@ -123,80 +123,22 @@ textarea { min-height: 80px; resize: vertical; }
 
 .splash { min-height: 100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:24px; overflow:hidden; position:relative; }
 .splash.out { opacity:0; transform:scale(.98); transition: .4s ease; }
-@keyframes orbBreath {
-  0%, 100% { transform: translate3d(var(--tx, 0px), var(--ty, 0px), 0) scale(1); opacity: .55; }
-  50% { transform: translate3d(var(--tx, 0px), var(--ty, 0px), 0) scale(1.32); opacity: 1; }
-}
-@keyframes logoFloat {
-  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
-  50% { transform: translateY(-14px) rotate(1.2deg); }
-}
-@keyframes logoGlow {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(212,176,106,.25)); }
-  50% { filter: drop-shadow(0 0 38px rgba(212,176,106,.9)); }
-}
-@keyframes ringSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-@keyframes riseIn {
-  from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
-  to { opacity: 1; transform: none; filter: blur(0); }
-}
-@keyframes mote {
-  0%, 100% { transform: translateY(0) scale(1); opacity: .15; }
-  50% { transform: translateY(-26px) scale(1.35); opacity: .9; }
-}
-@keyframes tileIn {
-  from { opacity: 0; transform: translateY(22px); filter: blur(4px); }
-  to { opacity: 1; transform: none; filter: blur(0); }
-}
-@keyframes barPulse {
-  0%, 100% { opacity: .45; }
-  50% { opacity: 1; }
-}
-.orb { position:absolute; width:340px; height:340px; border-radius:50%; background:radial-gradient(circle, rgba(212,176,106,.5), transparent 68%); filter:blur(8px); animation: orbBreath 3s ease-in-out infinite; pointer-events:none; --tx:0px; --ty:0px; }
-.logo-stage { --tx:0px; --ty:0px; position:relative; z-index:1; width:200px; height:200px; border:0; background:none; padding:0; transform: translate3d(var(--tx), var(--ty), 0); transition: transform .12s linear; }
-.logo-float { display:block; width:100%; height:100%; position:relative; animation: logoFloat 3s ease-in-out infinite; }
-.splash-logo { width:176px; height:176px; border-radius:40px; object-fit:cover; position:absolute; left:50%; top:50%; margin:-88px 0 0 -88px; animation: logoGlow 2.4s ease-in-out infinite; }
-.ring { position:absolute; inset:-8px; width:216px; height:216px; pointer-events:none; }
-.ring-spin { animation: ringSpin 10s linear infinite; }
-.ring-spin circle { fill:none; stroke:rgba(212,176,106,.4); stroke-width:2.2; stroke-dasharray:14 10; stroke-linecap:round; }
-.ring-hold { transform:rotate(-90deg); }
-.ring-hold circle { fill:none; stroke:#d4b06a; stroke-width:3.5; stroke-dasharray:100; stroke-dashoffset:100; stroke-linecap:round; }
-.logo-stage.charged .logo-float { animation: none; transform: scale(1.07); }
-.logo-stage.charged .splash-logo { filter: drop-shadow(0 0 36px rgba(212,176,106,.9)); }
-.splash-name { font-family:var(--display); font-size:34px; animation: riseIn .7s ease both; }
-.splash-tag { color:var(--mute); animation: riseIn .7s .25s ease both; }
-.hold-bar { width:160px; height:4px; background:var(--bg-3); border-radius:99px; overflow:hidden; animation: barPulse 2s ease-in-out infinite; }
+.orb { position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(212,176,106,.28), transparent 68%); filter:blur(8px); animation: pulse 2.8s ease-in-out infinite; }
+.splash-logo-wrap { position:relative; width:168px; height:168px; border:0; background:none; padding:0; }
+.splash-logo { width:168px; height:168px; border-radius:36px; object-fit:cover; }
+.ring { position:absolute; inset:-10px; width:188px; height:188px; transform:rotate(-90deg); }
+.ring circle { fill:none; stroke:#d4b06a; stroke-width:3; stroke-dasharray:100; stroke-dashoffset:100; }
+.splash-logo-wrap.charged .splash-logo { transform:scale(1.04); }
+.splash-name { font-family:var(--display); font-size:34px; }
+.splash-tag { color:var(--mute); }
+.hold-bar { width:160px; height:4px; background:var(--bg-3); border-radius:99px; overflow:hidden; }
 .hold-bar span { display:block; height:100%; width:0; background:var(--gold); }
 .logo-btn { border:0; background:none; margin:0 auto 12px; display:block; }
 .logo-btn img { width:132px; height:132px; border-radius:28px; margin:0 auto; }
 .logo-btn.spin img { animation: pop .6s ease; }
-.cover-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:18px 0 8px; position:relative; z-index:1; width: min(100%, 420px); }
-.cover-tile { background:var(--bg-2); border:1px solid var(--line); border-radius:18px; padding:16px; color:var(--cream); text-align:left; cursor:pointer; opacity:0; animation: tileIn .55s ease forwards; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
-.cover-tile:nth-child(1) { animation-delay: .45s; }
-.cover-tile:nth-child(2) { animation-delay: .55s; }
-.cover-tile:nth-child(3) { animation-delay: .65s; }
-.cover-tile:nth-child(4) { animation-delay: .75s; }
-.cover-tile span { display:block; color:var(--mute); font-size:13px; margin-top:4px; line-height:1.35; }
-.cover-tile b { display:block; font-family:var(--display); font-size:22px; font-weight:500; }
-.cover-tile.wide { grid-column:1 / -1; }
-.cover-tile.featured { border-color:var(--gold-dim); background:#1e1b24; }
-.cover-tile:hover, .cover-tile:focus-visible { border-color:var(--gold); transform:translateY(-3px); }
-.cover-tile:active { transform: scale(.96); border-color: var(--gold-dim); }
-.land { position:relative; overflow:hidden; min-height:100svh; padding:28px 16px 36px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; }
-.land .orb { top: 6%; left:50%; margin-left:-150px; }
-.land .orb-2 { width:200px; height:200px; top:auto; bottom:6%; left:8%; margin-left:0; opacity:.7; animation-delay:-1.2s; }
-.land .logo-stage { margin: 4px auto 6px; }
-.land h1, .land > p, .land .tagline, .land .actions, .land .disclaimer, .land .studio-lock { position:relative; z-index:1; }
-.splash-line { color:var(--gold); letter-spacing:.12em; text-transform:uppercase; font-size:11px; animation: riseIn .7s .12s ease both; }
-.dust { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
-.dust span { position:absolute; width:6px; height:6px; border-radius:50%; background:var(--gold); box-shadow:0 0 10px rgba(212,176,106,.8); animation: mote 4.5s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .dust, .orb, .logo-float, .splash-logo, .ring-spin, .cover-tile, .splash-name, .splash-line, .splash-tag, .hold-bar { animation:none !important; opacity:1 !important; filter:none !important; }
-}
-.btn.primary:active { transform: scale(.98); }
+.cover-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:18px 0 8px; }
+.cover-tile { background:var(--bg-2); border:1px solid var(--line); border-radius:18px; padding:16px; color:var(--cream); text-align:left; }
+.cover-tile span { display:block; color:var(--mute); font-size:13px; margin-top:4px; }
 .studio-lock { background:none; border:0; color:var(--mute); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin:18px auto 0; display:block; opacity:.45; }
 pre.contract { white-space:pre-wrap; font-size:12px; line-height:1.45; background:#0e0c14; padding:12px; border-radius:12px; max-height:240px; overflow:auto; margin:10px 0; }
 #sigPad { width:100%; height:140px; background:#0e0c14; border:1px dashed var(--gold-dim); border-radius:12px; touch-action:none; }
@@ -211,6 +153,7 @@ body.in-app { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
 .set-row { grid-template-columns: 22px minmax(96px,1.3fr) minmax(64px,1fr) 32px; }
 .compare { overflow-x: auto; }
 .cover-tile:active { transform: scale(.98); border-color: var(--gold-dim); }
+.btn.primary:active { transform: scale(.98); }
 img { background: #0a090e; }
 
 .week { display:flex; justify-content:space-between; gap:6px; margin:14px 0 12px; }
@@ -644,7 +587,7 @@ const state = {
   checkins: store.get("nb_checkins", []),
   habits: store.get("nb_habits", {}),
   timer: null,
-  splash: !store.get("nb_role", null),
+  splash: store.get("nb_seen_cover", false) ? false : true,
   pendingPlan: null
 };
 state.pin = store.get("nb_pin", "");
@@ -1251,38 +1194,15 @@ function applyHash() {
   if (assigned) applyClientAssign(assigned);
 }
 
-function logoMark(id, hold) {
-  return `<button class="logo-stage" id="${id}" aria-label="NiuBision">
-      <span class="logo-float">
-        <svg class="ring ring-spin" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" pathLength="100"/></svg>
-        ${hold ? `<svg class="ring ring-hold" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" pathLength="100"/></svg>` : ""}
-        <img src="${LOGO}" alt="NiuBision" class="splash-logo">
-      </span>
-    </button>`;
-}
-function bindLogoTilt(root) {
-  const stage = root && root.querySelector(".logo-stage");
-  if (!root || !stage) return;
-  root.addEventListener("pointermove", (e) => {
-    const x = (e.clientX / window.innerWidth - 0.5) * 20;
-    const y = (e.clientY / window.innerHeight - 0.5) * 16;
-    stage.style.setProperty("--tx", x + "px");
-    stage.style.setProperty("--ty", y + "px");
-    const orb = root.querySelector(".orb");
-    if (orb) {
-      orb.style.setProperty("--tx", (-x) + "px");
-      orb.style.setProperty("--ty", (-y) + "px");
-    }
-  });
-}
 function renderGate() {
   if (state.splash) {
     $("#app").innerHTML = `<section class="splash" id="splash">
-      <div class="dust" id="dust"></div>
       <div class="orb" id="orb"></div>
-      ${logoMark("holdLogo", true)}
+      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga el logo">
+        <svg class="ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" pathLength="100"/></svg>
+        <img src="${LOGO}" alt="NiuBision" class="splash-logo">
+      </button>
       <p class="splash-name">NiuBision</p>
-      <p class="splash-line">See the work. Enjoy the day.</p>
       <p class="splash-tag">Mantenga el logo para entrar</p>
       <div class="hold-bar"><span id="holdFill"></span></div>
     </section>`;
@@ -1290,33 +1210,32 @@ function renderGate() {
     return;
   }
   $("#app").innerHTML = `
-    <section class="hero cover land" id="land">
-      <div class="dust" id="dust"></div>
-      <div class="orb" id="orb"></div>
-      <div class="orb orb-2"></div>
-      <p class="tagline">See the work. Enjoy the day.</p>
-      ${logoMark("logoPulse", false)}
+    <section class="screen hero cover">
+      <p class="tagline">Acceso con código</p>
+      <button class="logo-btn" id="logoPulse"><img src="${LOGO}" alt="NiuBision"></button>
       <h1>NiuBision</h1>
       <p>El entrenamiento está cerrado. Solo entra quien tiene el código que envía el coach.</p>
-      <div class="cover-grid">
-        <button type="button" class="cover-tile" data-peek="base"><b>97</b>Base<span>Plan escrito. Entrena solo.</span></button>
-        <button type="button" class="cover-tile" data-peek="premium"><b>197</b>Premium<span>Llamada semanal.</span></button>
-        <button type="button" class="cover-tile wide featured" data-peek="estandar"><b>127 USD</b>Estándar · el de la mayoría<span>Check-in, hábitos y corrección de técnica.</span></button>
-        <button type="button" class="cover-tile wide" id="haveCode"><b>Código</b><span>Péguelo para abrir el entrenamiento.</span></button>
-      </div>
       <div class="actions">
-        <button class="btn primary" id="seePlans">Ver planes</button>
+        <button class="btn primary" id="haveCode">Pegar código del coach</button>
+        <button class="btn ghost" id="seePlans">Ver planes (sin entrenar)</button>
         ${state.profile && state.profile.unlocked ? `<button class="btn ghost" id="reenter">Ya tengo código en este teléfono</button>` : ""}
       </div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
       <button class="studio-lock" id="studioLock" aria-label="Acceso del estudio">estudio</button>
     </section>`;
-  bindLand();
+  $("#logoPulse").onclick = () => {
+    $("#logoPulse").classList.add("spin");
+    setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
+  };
+  const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
+  const re = $("#reenter"); if (re) re.onclick = () => enterClient("home");
+  const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
+  $("#studioLock").onclick = openCoachGate;
 }
 function bindSplash() {
   const wrap = $("#holdLogo");
   const fill = $("#holdFill");
-  const ring = $(".ring-hold circle");
+  const ring = $(".ring circle");
   let hold = 0, ticking = false, raf;
   const go = () => {
     state.splash = false;
@@ -1344,68 +1263,13 @@ function bindSplash() {
   window.addEventListener("pointerup", up);
   wrap.addEventListener("click", () => { if (hold < 100) toast("Mantenga pulsado el logo"); });
   const splash = $("#splash");
-  seedDust(splash);
-  bindLogoTilt(splash);
-}
-function seedDust(root) {
-  if (!root) return;
-  let box = root.querySelector(".dust");
-  if (!box) {
-    box = document.createElement("div");
-    box.className = "dust";
-    root.prepend(box);
-  }
-  box.innerHTML = "";
-  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  for (let i = 0; i < 20; i++) {
-    const s = document.createElement("span");
-    s.style.left = (4 + Math.random() * 92) + "%";
-    s.style.top = (6 + Math.random() * 80) + "%";
-    s.style.animationDelay = (Math.random() * 6) + "s";
-    s.style.animationDuration = (5 + Math.random() * 5) + "s";
-    s.style.opacity = String(0.12 + Math.random() * 0.4);
-    box.appendChild(s);
-  }
-}
-function bindLand() {
-  const land = $("#land");
-  const wrap = $("#logoPulse");
-  seedDust(land);
-  bindLogoTilt(land);
-  if (wrap) wrap.onclick = () => {
-    wrap.classList.add("charged");
-    setTimeout(() => wrap.classList.remove("charged"), 700);
-  };
-  $$("[data-peek]").forEach((b) => b.onclick = () => openPlanPeek(b.dataset.peek));
-  const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
-  const re = $("#reenter"); if (re) re.onclick = () => enterClient("home");
-  const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
-  const lock = $("#studioLock"); if (lock) lock.onclick = openCoachGate;
-}
-function openPlanPeek(id) {
-  const p = PLANS.find((x) => x.id === id);
-  if (!p) return;
-  const modal = document.createElement("div");
-  modal.className = "modal";
-  modal.innerHTML = `<div class="sheet">
-    <div class="handle"></div>
-    <p class="tagline">${p.eyebrow}</p>
-    <h2>${p.name}</h2>
-    <div class="price">${p.price} USD <small>${p.unit}</small></div>
-    <p>${p.simple}</p>
-    <ul class="include">${p.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
-    <button class="btn primary" id="peekGo">Ver todos los planes</button>
-    <button class="btn ghost" id="closeSheet">Cerrar</button>
-  </div>`;
-  document.body.appendChild(modal);
-  modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  modal.querySelector("#peekGo").onclick = () => {
-    modal.remove();
-    state.role = "guest";
-    state.view = "price";
-    persist();
-    render();
-  };
+  splash.addEventListener("pointermove", (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 16;
+    const y = (e.clientY / window.innerHeight - 0.5) * 16;
+    wrap.style.transform = `translate(${x}px, ${y}px)`;
+    const orb = $("#orb");
+    if (orb) orb.style.transform = `translate(${-x}px, ${-y}px)`;
+  });
 }
 
 function enterClient(view) {
