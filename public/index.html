@@ -697,7 +697,7 @@ function persist() {
   store.set("nb_habits", state.habits);
   store.set("nb_routine_edits", state.routineEdits);
   store.set("nb_routines_custom", state.customRoutines);
-  store.set("nb_pin", state.pinHash ? "" : (state.pin || ""));
+  store.set("nb_pin", state.pin || "");
   store.set("nb_pin_hash", state.pinHash || "");
   store.set("nb_pin_salt", state.pinSalt || "");
   store.set("nb_health", state.health);
@@ -976,9 +976,15 @@ function originOk() {
   const h = location.hostname;
   return h === "localhost" || h === "127.0.0.1";
 }
+function canHash() {
+  try { return !!(window.isSecureContext && crypto && crypto.subtle); } catch (e) { return false; }
+}
 async function sha256Hex(s) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (!canHash()) return "";
+  try {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) { return ""; }
 }
 function newSalt() {
   const a = new Uint8Array(16);
@@ -986,39 +992,72 @@ function newSalt() {
   return Array.from(a).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 function hasPin() {
-  return !!(state.pinHash || (state.pin && /^\d{4,8}$/.test(state.pin)));
+  return !!(state.pinHash || (state.pin && String(state.pin).length >= 4));
 }
 async function setPin(plain) {
-  const salt = newSalt();
-  state.pinSalt = salt;
-  state.pinHash = await sha256Hex(salt + ":" + plain);
-  state.pin = "";
+  const p = String(plain || "").trim();
+  state.pin = p;
+  if (canHash()) {
+    try {
+      const salt = newSalt();
+      const hash = await sha256Hex(salt + ":" + p);
+      if (hash) {
+        state.pinSalt = salt;
+        state.pinHash = hash;
+      }
+    } catch (e) {}
+  }
   persist();
 }
-async function checkPin(plain) {
+function pinLocked() {
   const until = store.get("nb_pin_lock", 0) || 0;
-  if (Date.now() < until) {
-    toast("Espere " + Math.ceil((until - Date.now()) / 1000) + "s");
+  if (!until) return 0;
+  const left = until - Date.now();
+  if (left <= 0 || left > 20000) {
+    store.set("nb_pin_lock", 0);
+    store.set("nb_pin_fails", 0);
+    return 0;
+  }
+  return left;
+}
+async function checkPin(plain) {
+  const wait = pinLocked();
+  if (wait > 0) {
+    toast("Espere " + Math.ceil(wait / 1000) + "s");
     return false;
   }
+  const p = String(plain || "").trim();
   let ok = false;
-  if (state.pinHash && state.pinSalt) {
-    ok = (await sha256Hex(state.pinSalt + ":" + plain)) === state.pinHash;
-  } else if (state.pin && plain === state.pin) {
-    ok = true;
-    await setPin(plain);
+  if (state.pin && p === String(state.pin).trim()) ok = true;
+  if (!ok && state.pinHash && state.pinSalt && canHash()) {
+    try { ok = (await sha256Hex(state.pinSalt + ":" + p)) === state.pinHash; } catch (e) {}
   }
   if (!ok) {
     const n = (store.get("nb_pin_fails", 0) || 0) + 1;
     store.set("nb_pin_fails", n);
     if (n >= 5) {
-      store.set("nb_pin_lock", Date.now() + Math.min(n * 15000, 300000));
-      toast("Demasiados intentos. Espere un momento.");
+      store.set("nb_pin_lock", Date.now() + 15000);
+      toast("Demasiados intentos. Espere 15 segundos.");
     }
     return false;
   }
   store.set("nb_pin_fails", 0);
   store.set("nb_pin_lock", 0);
+  if (ok && p && p !== String(state.pin || "").trim()) state.pin = p;
+  persist();
+  return true;
+}
+function resetStudioPin() {
+  if (!confirm("¿Borrar la clave de este teléfono? Los clientes y contratos se quedan. Luego crea una clave nueva.")) return false;
+  state.pin = "";
+  state.pinHash = "";
+  state.pinSalt = "";
+  store.set("nb_pin", "");
+  store.set("nb_pin_hash", "");
+  store.set("nb_pin_salt", "");
+  store.set("nb_pin_fails", 0);
+  store.set("nb_pin_lock", 0);
+  persist();
   return true;
 }
 function maskDest(s, kind) {
@@ -1356,6 +1395,7 @@ function enterClient(view) {
 }
 function openCoachGate() {
   const has = hasPin();
+  pinLocked();
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -1366,24 +1406,37 @@ function openCoachGate() {
     <input class="field" id="pinA" inputmode="numeric" maxlength="8" placeholder="Clave" autocomplete="off">
     ${has ? "" : '<input class="field" id="pinB" inputmode="numeric" maxlength="8" placeholder="Repetir clave" autocomplete="off">'}
     <button class="btn primary" id="pinGo">${has ? "Entrar" : "Guardar clave y entrar"}</button>
+    ${has ? '<button class="btn ghost" id="pinReset">Olvidé la clave</button>' : ""}
     <button class="btn ghost" id="closeSheet">Cancelar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const pr = modal.querySelector("#pinReset");
+  if (pr) pr.onclick = () => {
+    if (!resetStudioPin()) return;
+    modal.remove();
+    toast("Clave borrada. Cree una nueva.");
+    openCoachGate();
+  };
   modal.querySelector("#pinGo").onclick = async () => {
     const a = ($("#pinA").value || "").trim();
     if (!/^\d{4,8}$/.test(a)) return toast("Use 4 a 8 dígitos");
-    if (!has) {
-      const b = ($("#pinB").value || "").trim();
-      if (a !== b) return toast("Las claves no coinciden");
-      if (state.settings.studioKeyFromClient) {
-        state.settings.studioKey = "";
-        state.settings.studioKeyFromClient = false;
+    try {
+      if (!has) {
+        const b = ($("#pinB").value || "").trim();
+        if (a !== b) return toast("Las claves no coinciden");
+        if (state.settings.studioKeyFromClient) {
+          state.settings.studioKey = "";
+          state.settings.studioKeyFromClient = false;
+        }
+        studioKey();
+        await setPin(a);
+      } else if (!(await checkPin(a))) {
+        if (!pinLocked() && (store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
+        return;
       }
-      studioKey();
-      await setPin(a);
-    } else if (!(await checkPin(a))) {
-      if ((store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
+    } catch (e) {
+      toast("No se pudo validar. Intente de nuevo.");
       return;
     }
     modal.remove();
@@ -2992,6 +3045,8 @@ function render() {
 
 async function boot() {
   applyHash();
+  pinLocked();
+  if (state.pin != null && state.pin !== "") state.pin = String(state.pin);
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
   }
