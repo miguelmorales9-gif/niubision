@@ -142,6 +142,57 @@ textarea { min-height: 80px; resize: vertical; }
 .cover-tile { background:var(--bg-2); border:1px solid var(--line); border-radius:18px; padding:16px; color:var(--cream); text-align:left; }
 .cover-tile span { display:block; color:var(--mute); font-size:13px; margin-top:4px; }
 .studio-lock { background:none; border:0; color:var(--mute); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin:18px auto 0; display:block; opacity:.45; }
+.land, .splash { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.land-bg {
+  position: absolute; inset: -12%;
+  background-size: cover; background-position: 50% 42%;
+  filter: blur(22px) saturate(1.15) brightness(.55);
+  transform: scale(1.12);
+  animation: ken 18s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes ken { from { transform: scale(1.08); } to { transform: scale(1.16); } }
+.land-veil {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(18,16,24,.15), rgba(18,16,24,.78) 62%, #121018 100%),
+    linear-gradient(180deg, rgba(18,16,24,.2), rgba(18,16,24,.85));
+}
+.land-spot {
+  position: absolute; width: 46vmax; height: 46vmax; border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,176,106,.2), transparent 68%);
+  left: var(--sx, 50%); top: var(--sy, 38%);
+  transform: translate(-50%, -50%);
+  pointer-events: none; mix-blend-mode: screen;
+  transition: left .18s ease, top .18s ease;
+}
+.hold-orb {
+  position: relative; z-index: 2; width: 152px; height: 152px;
+  border: 0; padding: 0; background: none; border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(212,176,106,.28), 0 20px 50px rgba(0,0,0,.45);
+}
+.hold-orb .hold-cut {
+  display: block; width: 152px; height: 152px; border-radius: 50%; overflow: hidden;
+}
+.hold-orb img {
+  width: 152px; height: 210px; object-fit: cover; object-position: 50% 58%;
+  margin-top: -18px; background: transparent !important;
+}
+.hold-orb .ring { inset: -12px; width: 176px; height: 176px; }
+.hold-orb.charged { box-shadow: 0 0 0 1px rgba(212,176,106,.7), 0 0 36px rgba(212,176,106,.45); }
+.hold-orb.charged img { transform: scale(1.04); }
+.land-inner { position: relative; z-index: 2; width: min(520px, 100%); padding: 28px 20px 40px; text-align: center; }
+.land-inner h1 { font-family: var(--display); font-weight: 500; font-size: 42px; letter-spacing: .02em; }
+.land-lead { color: var(--mute); margin: 12px auto 0; font-size: 16px; line-height: 1.5; max-width: 36ch; }
+.land-peeks { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 18px 0 8px; }
+.land-peeks .cover-tile { padding: 14px 10px; }
+.land-peeks strong { display: block; font-size: 14px; color: var(--gold); }
+.land { cursor: default; }
+.splash > .splash-name, .splash > .splash-tag, .splash > .hold-bar { position: relative; z-index: 2; }
+@media (max-width: 520px) {
+  .land-peeks { grid-template-columns: 1fr; }
+  .land-inner h1 { font-size: 34px; }
+}
 pre.contract { white-space:pre-wrap; font-size:12px; line-height:1.45; background:#0e0c14; padding:12px; border-radius:12px; max-height:240px; overflow:auto; margin:10px 0; }
 #sigPad { width:100%; height:140px; background:#0e0c14; border:1px dashed var(--gold-dim); border-radius:12px; touch-action:none; }
 
@@ -1471,12 +1522,14 @@ function applyHash() {
 }
 
 function renderGate() {
+  const bg = `<div class="land-bg" style="background-image:url('${MARK_LOGO}')"></div><div class="land-veil"></div><div class="land-spot" id="landSpot"></div>`;
   if (state.splash) {
     $("#app").innerHTML = `<section class="splash" id="splash">
+      ${bg}
       <div class="orb" id="orb"></div>
-      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga el logo">
+      <button class="hold-orb" id="holdLogo" aria-label="Mantenga el logo">
         <svg class="ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" pathLength="100"/></svg>
-        <img src="${MARK_LOGO}" alt="NiuBision" class="splash-logo">
+        <span class="hold-cut"><img src="${MARK_LOGO}" alt="NiuBision"></span>
       </button>
       <p class="splash-name">NiuBision</p>
       <p class="splash-tag">Mantenga el logo para entrar</p>
@@ -1486,28 +1539,48 @@ function renderGate() {
     return;
   }
   $("#app").innerHTML = `
-    <section class="screen hero cover">
-      <p class="tagline">Acceso con código</p>
-      <button class="logo-btn" id="logoPulse"><img src="${MARK_LOGO}" alt="NiuBision" class="splash-logo"></button>
-      <h1>NiuBision</h1>
-      <p>El entrenamiento está cerrado. Solo entra quien tiene el código que envía el coach.</p>
-      <div class="actions">
-        <button class="btn primary" id="haveCode">Pegar código del coach</button>
-        <button class="btn ghost" id="seePlans">Ver planes (sin entrenar)</button>
-        ${state.profile && state.profile.unlocked ? `<button class="btn ghost" id="reenter">Ya tengo código en este teléfono</button>` : ""}
+    <section class="land" id="land">
+      ${bg}
+      <div class="land-inner">
+        <p class="tagline">See the work. Enjoy the day.</p>
+        <button class="hold-orb logo-btn" id="logoPulse" aria-label="NiuBision">
+          <span class="hold-cut"><img src="${MARK_LOGO}" alt="NiuBision"></span>
+        </button>
+        <h1>NiuBision</h1>
+        <p class="land-lead">El entrenamiento está cerrado. Solo entra quien tiene el código que envía el coach.</p>
+        <div class="actions">
+          <button class="btn primary" id="haveCode">Pegar código del coach</button>
+          <button class="btn ghost" id="seePlans">Ver planes (sin entrenar)</button>
+          ${state.profile && state.profile.unlocked ? `<button class="btn ghost" id="reenter">Ya tengo código en este teléfono</button>` : ""}
+        </div>
+        <div class="land-peeks">
+          <button class="cover-tile" data-go="price"><strong>Base</strong><span>97 USD · plan escrito</span></button>
+          <button class="cover-tile" data-go="price"><strong>Estándar</strong><span>127 USD · hábitos y check-in</span></button>
+          <button class="cover-tile" data-go="price"><strong>Premium</strong><span>197 USD · 1 videollamada / sem</span></button>
+        </div>
+        <p class="disclaimer">${APP_DISCLAIMER}</p>
+        <button class="studio-lock" id="studioLock" aria-label="Acceso del estudio">estudio</button>
       </div>
-      <p class="disclaimer">${APP_DISCLAIMER}</p>
-      <button class="studio-lock" id="studioLock" aria-label="Acceso del estudio">estudio</button>
     </section>`;
   $("#logoPulse").onclick = () => {
     $("#logoPulse").classList.add("spin");
     setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
   };
+  const goPlans = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
   const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
   const re = $("#reenter"); if (re) re.onclick = () => enterClient("home");
-  const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
+  const sp = $("#seePlans"); if (sp) sp.onclick = goPlans;
+  $$("[data-go]").forEach((b) => b.onclick = goPlans);
   $("#studioLock").onclick = openCoachGate;
   bindMotion();
+  bindSpotlight(document.getElementById("land"));
+}
+function bindSpotlight(root) {
+  if (!root) return;
+  root.addEventListener("pointermove", (e) => {
+    root.style.setProperty("--sx", (e.clientX / window.innerWidth * 100) + "%");
+    root.style.setProperty("--sy", (e.clientY / window.innerHeight * 100) + "%");
+  });
 }
 function bindSplash() {
   const wrap = $("#holdLogo");
@@ -1539,14 +1612,7 @@ function bindSplash() {
   wrap.addEventListener("pointerdown", down);
   window.addEventListener("pointerup", up);
   wrap.addEventListener("click", () => { if (hold < 100) toast("Mantenga pulsado el logo"); });
-  const splash = $("#splash");
-  splash.addEventListener("pointermove", (e) => {
-    const x = (e.clientX / window.innerWidth - 0.5) * 16;
-    const y = (e.clientY / window.innerHeight - 0.5) * 16;
-    wrap.style.transform = `translate(${x}px, ${y}px)`;
-    const orb = $("#orb");
-    if (orb) orb.style.transform = `translate(${-x}px, ${-y}px)`;
-  });
+  bindSpotlight(document.getElementById("splash"));
 }
 
 function enterClient(view) {
