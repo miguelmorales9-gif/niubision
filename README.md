@@ -4,11 +4,31 @@ App de coaching para Puerto Rico.
 
 ## App en la web
 
-Cuando GitHub Pages termine de publicar:
-
 https://miguelmorales9-gif.github.io/niubision/
 
+Dominio propio (después de apuntar el DNS en Porkbun): https://niubision.com
+
 Esa dirección es la app. Compártala con clientes. No guarda expedientes; solo sirve el programa.
+
+## DNS para niubision.com (Porkbun)
+
+En el panel de Porkbun, quite la página de parking y deje estos registros:
+
+Apex `niubision.com` — tipo A:
+
+- 185.199.108.153
+- 185.199.109.153
+- 185.199.110.153
+- 185.199.111.153
+
+`www.niubision.com` — tipo CNAME → `miguelmorales9-gif.github.io`
+
+Opcional IPv6 (AAAA):
+
+- 2606:50c0:8000::153
+- 2606:50c0:8001::153
+- 2606:50c0:8002::153
+- 2606:50c0:8003::153
 
 ## Nube de expedientes
 
