@@ -410,19 +410,19 @@ window.NBroutinesStock = [
     goal: "Aprender sentadilla, bisagra, empuje y tracción tres veces por semana.",
     evidence: "En personas principiantes, un programa de cuerpo completo 2 a 3 días por semana produce ganancias de fuerza comparables a rutinas divididas cuando el volumen semanal es similar. Fuente de criterio: posicionamiento ACSM sobre progresión del entrenamiento de resistencia.",
     daysPlan: [
-      { title: "Día A · Sentadilla y empuje", items: [
+      { title: "Día 1 · Sentadilla y empuje", items: [
         { name: "Goblet Squat", sets: 3, reps: "8–10", rest: 90, exId: "Goblet_Squat" },
         { name: "Dumbbell Bench Press", sets: 3, reps: "8–10", rest: 90, exId: "Dumbbell_Bench_Press" },
         { name: "One-Arm Dumbbell Row", sets: 3, reps: "10", rest: 75, exId: "One-Arm_Dumbbell_Row" },
         { name: "Plank", sets: 3, reps: "20–30 s", rest: 45, exId: "Plank" }
       ]},
-      { title: "Día B · Bisagra y tracción", items: [
+      { title: "Día 2 · Bisagra y tracción", items: [
         { name: "Romanian Deadlift", sets: 3, reps: "8", rest: 90, exId: "Romanian_Deadlift" },
         { name: "Wide-Grip Lat Pulldown", sets: 3, reps: "8–10", rest: 90, exId: "Wide-Grip_Lat_Pulldown" },
         { name: "Dumbbell Shoulder Press", sets: 3, reps: "8–10", rest: 75, exId: "Dumbbell_Shoulder_Press" },
         { name: "Superman", sets: 3, reps: "10", rest: 45, exId: "Superman" }
       ]},
-      { title: "Día C · Unilateral y tronco", items: [
+      { title: "Día 3 · Unilateral y tronco", items: [
         { name: "Dumbbell Lunges", sets: 3, reps: "8/lado", rest: 75, exId: "Dumbbell_Lunges" },
         { name: "Hyperextensions (Back Extensions)", sets: 3, reps: "10", rest: 60, exId: "Hyperextensions_Back_Extensions" },
         { name: "Side Lateral Raise", sets: 3, reps: "12", rest: 45, exId: "Side_Lateral_Raise" },
@@ -438,19 +438,19 @@ window.NBroutinesStock = [
     goal: "Progresión lineal en sentadilla, press y peso muerto, con un ejercicio de tracción cada día.",
     evidence: "La fuerza máxima mejora sobre todo con cargas altas, series de 1 a 6 repeticiones y descansos de 2 a 3 minutos en ejercicios multiarticulares. Criterio ACSM de progresión para fuerza.",
     daysPlan: [
-      { title: "Día A", items: [
+      { title: "Día 1", items: [
         { name: "Barbell Squat", sets: 4, reps: "5", rest: 180, exId: "Barbell_Squat" },
         { name: "Barbell Bench Press - Medium Grip", sets: 4, reps: "5", rest: 150, exId: "Barbell_Bench_Press_-_Medium_Grip" },
         { name: "Bent Over Barbell Row", sets: 4, reps: "6", rest: 120, exId: "Bent_Over_Barbell_Row" },
         { name: "Plank", sets: 3, reps: "30 s", rest: 45, exId: "Plank" }
       ]},
-      { title: "Día B", items: [
+      { title: "Día 2", items: [
         { name: "Barbell Deadlift", sets: 3, reps: "5", rest: 180, exId: "Barbell_Deadlift" },
         { name: "Standing Military Press", sets: 4, reps: "5", rest: 150, exId: "Standing_Military_Press" },
         { name: "Pullups", sets: 4, reps: "6–8", rest: 120, exId: "Pullups" },
         { name: "Face Pull", sets: 3, reps: "12", rest: 45, exId: "Face_Pull" }
       ]},
-      { title: "Día C", items: [
+      { title: "Día 3", items: [
         { name: "Goblet Squat", sets: 4, reps: "6", rest: 150, exId: "Goblet_Squat" },
         { name: "Incline Dumbbell Press", sets: 3, reps: "6–8", rest: 120, exId: "Incline_Dumbbell_Press" },
         { name: "Romanian Deadlift", sets: 3, reps: "6–8", rest: 120, exId: "Romanian_Deadlift" },
@@ -815,29 +815,106 @@ const COACH = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBA
 
 const PLANS = [
   { id: "eval", eyebrow: "Entrada", name: "Evaluación", price: "39", unit: "una vez", featured: false,
-    simple: "Una revisión de movimiento para saber por dónde empezar.",
-    detail: ["40 minutos: metas, horario, lesiones y equipo.", "Se reembolsa si contrata 8 semanas o más.", "También hay una llamada de 20 minutos sin costo."] },
-  { id: "base", eyebrow: "Digital", name: "NiuBision Base", price: "97", unit: "al mes", featured: false,
-    simple: "Usted entrena solo. El plan queda escrito y se ajusta una vez al mes.",
-    detail: ["Rutina 3 o 4 días, unos 45 minutos.", "Fotos y video de cada ejercicio.", "Un ajuste mensual.", "Mensajes en 24 a 48 horas laborables.", "Sin videollamada."] },
+    simple: "Una sesión de 40 minutos para medir por dónde está y qué plan le corresponde. No es un mes de entrenamiento.",
+    forWho: "Si es la primera vez con NiuBision o lleva tiempo sin un programa claro.",
+    includes: "Metas, horario real, lesiones, equipo y un plan de partida por escrito.",
+    not: "No incluye meses de coaching, videollamada semanal ni sesiones de gimnasio.",
+    detail: [
+      "40 minutos: metas, horario, historial de lesiones y qué equipo tiene.",
+      "Sale con una recomendación: Base, Estándar, Premium o sesión presencial.",
+      "Si contrata 8 semanas o más, se descuentan estos 39 USD.",
+      "Hay una llamada de 20 minutos sin costo si solo quiere preguntar antes de pagar.",
+      "IVU no incluido."
+    ] },
+  { id: "base", eyebrow: "Digital · el mínimo", name: "NiuBision Base", price: "97", unit: "al mes", featured: false,
+    simple: "Usted entrena solo con un plan escrito. Un ajuste al mes. Sin llamada ni check-in semanal.",
+    forWho: "Quien ya sabe entrenar y solo necesita el programa y un empujón mensual.",
+    includes: "Rutina 3 o 4 días, unos 45 minutos, con fotos y video de cada ejercicio.",
+    not: "No hay videollamada, no hay corrección de técnica por video ni chat diario.",
+    detail: [
+      "Rutina 3 o 4 días por semana, unos 45 minutos por sesión.",
+      "Fotos y video de cada ejercicio en la app.",
+      "Un ajuste del programa cada mes, no cada semana.",
+      "Mensajes respondidos en 24 a 48 horas laborables.",
+      "Sin videollamada. Sin check-in semanal. Sin corrección de técnica por video.",
+      "IVU no incluido. Pago por PayPal o ATH Móvil."
+    ] },
   { id: "estandar", eyebrow: "El plan de la mayoría", name: "NiuBision Estándar", price: "127", unit: "al mes", featured: true,
-    simple: "El trabajo, todas las semanas. Plan, check-in, hábitos de entrenamiento y corrección de técnica.",
-    detail: ["Todo lo de Base.", "Biblioteca de hábitos de entrenamiento y recuperación.", "Check-in semanal en la app.", "Chat de lunes a viernes.", "Corrección de técnica por video 2 veces al mes."] },
+    simple: "El trabajo, todas las semanas: plan, check-in, hábitos y corrección de técnica por video.",
+    forWho: "Quien quiere que alguien revise la semana y corrija la técnica, sin una llamada cada siete días.",
+    includes: "Todo lo de Base, más check-in semanal, hábitos y 2 videos de técnica al mes.",
+    not: "No incluye videollamada semanal. Eso es Premium.",
+    detail: [
+      "Todo lo de Base: plan escrito, fotos y video de ejercicios.",
+      "Check-in semanal en la app (adherencia, energía, molestia).",
+      "Biblioteca de hábitos de entrenamiento y recuperación. No es un plan de alimentación.",
+      "Chat de lunes a viernes por WhatsApp.",
+      "Corrección de técnica por video: 2 envíos al mes.",
+      "Sin videollamada semanal.",
+      "IVU no incluido."
+    ] },
   { id: "premium", eyebrow: "Dirección cercana", name: "NiuBision Premium", price: "197", unit: "al mes", featured: false,
-    simple: "Estándar más una videollamada semanal de 25 a 30 minutos.",
-    detail: ["Todo lo de Estándar.", "Videollamada semanal.", "Respuesta el mismo día laborable.", "Cupo de 8 personas."] },
-  { id: "estandar12", eyebrow: "Compromiso", name: "NiuBision Estándar · 12 semanas", price: "349", unit: "pago único", featured: false,
-    simple: "Tres meses de Estándar. Cerca de 97 dólares al mes.",
-    detail: ["Mismo contenido que Estándar.", "Ahorro de cerca del 10 por ciento."] },
+    simple: "Estándar más una videollamada semanal de 25 a 30 minutos y respuesta el mismo día laborable.",
+    forWho: "Quien necesita hablar cada semana y ajustar el plan en vivo. Cupo de 8 personas.",
+    includes: "Todo Estándar + 1 videollamada de 25–30 min por semana.",
+    not: "No es una sesión de gimnasio. La llamada no sustituye el pack presencial.",
+    detail: [
+      "Todo lo de Estándar, incluido el check-in y 2 videos de técnica al mes.",
+      "Una videollamada semanal de 25 a 30 minutos (se agenda en la app).",
+      "Respuesta el mismo día laborable.",
+      "Cupo máximo de 8 clientes Premium a la vez.",
+      "IVU no incluido."
+    ] },
+  { id: "estandar12", eyebrow: "Compromiso · ahorro", name: "NiuBision Estándar · 12 semanas", price: "349", unit: "pago único", featured: false,
+    simple: "Tres meses de Estándar pagados de una vez. 349 USD en total: cerca de 97 USD al mes (ahorro de ~10%).",
+    forWho: "Quien ya decidió 12 semanas y quiere pagar menos que mes a mes (127 × 3 = 381).",
+    includes: "El mismo servicio que Estándar durante 12 semanas corridas.",
+    not: "No se prorratea si abandona a mitad. No incluye llamadas Premium.",
+    detail: [
+      "Mismo contenido que Estándar durante 12 semanas.",
+      "Un solo pago de 349 USD en vez de 381 USD (3 meses a 127).",
+      "Ahorro de cerca del 10 por ciento.",
+      "El período empieza el día del pago.",
+      "IVU no incluido."
+    ] },
   { id: "premium12", eyebrow: "Mejor valor de llamada", name: "NiuBision Premium · 12 semanas", price: "529", unit: "pago único", featured: false,
-    simple: "Tres meses de Premium. Cerca de 147 dólares al mes.",
-    detail: ["Mismo contenido que Premium.", "Ahorro de cerca del 16 por ciento."] },
+    simple: "Tres meses de Premium pagados de una vez. 529 USD en total: cerca de 147 USD al mes (ahorro de ~16%).",
+    forWho: "Quien va a usar la videollamada semanal durante 12 semanas.",
+    includes: "El mismo servicio que Premium, incluidas las llamadas, durante 12 semanas.",
+    not: "No se prorratea. Sigue el cupo de 8.",
+    detail: [
+      "Mismo contenido que Premium durante 12 semanas.",
+      "Un solo pago de 529 USD en vez de 591 USD (3 meses a 197).",
+      "Ahorro de cerca del 16 por ciento.",
+      "12 videollamadas semanales en ese bloque; se agenda cada una.",
+      "IVU no incluido."
+    ] },
   { id: "presencial", eyebrow: "Presencial", name: "Sesión en gimnasio", price: "55", unit: "sesión suelta", featured: false,
-    simple: "55 minutos. La sesión ejecuta el plan; no lo sustituye.",
-    detail: ["Pack 8: 400 USD (caduca en 8 semanas).", "Pack 12: 540 USD (caduca en 10 semanas).", "Domicilio radio corto: 70 USD.", "Pareja: 80 USD.", "Reprogramar con 12 horas.", "No incluyen IVU."] },
-  { id: "ai", eyebrow: "Add-on", name: "Rutina con IA", price: "12", unit: "por rutina", featured: false,
-    simple: "Una rutina armada con la biblioteca NiuBision, según meta, días y equipo. El entrenador puede revisarla.",
-    detail: ["12 USD cada vez que genere una rutina.", "No sustituye Base, Estándar ni Premium.", "No es nutrición ni diagnóstico.", "El crédito queda en este teléfono después del pago."] }
+    simple: "55 minutos con el entrenador en el gimnasio. Ejecuta el plan digital; no lo sustituye.",
+    forWho: "Quien quiere que le cuenten las series en persona, o un pack de sesiones con fecha de caducidad.",
+    includes: "55 minutos presenciales. Packs, domicilio y pareja tienen otro precio, abajo.",
+    not: "Una sesión suelta no incluye el plan escrito mensual de Base, Estándar o Premium.",
+    detail: [
+      "Sesión suelta: 55 USD · 55 minutos.",
+      "Pack 8 sesiones: 400 USD. Caduca a las 8 semanas.",
+      "Pack 12 sesiones: 540 USD. Caduca a las 10 semanas.",
+      "Domicilio (radio corto): 70 USD la sesión.",
+      "Pareja: 80 USD la sesión.",
+      "Reprogramar con al menos 12 horas. Si avisa tarde, la sesión se descuenta.",
+      "No incluyen IVU."
+    ] },
+  { id: "ai", eyebrow: "Complemento", name: "Rutina con IA", price: "12", unit: "por rutina", featured: false,
+    simple: "Un programa armado con la biblioteca NiuBision, según meta, días y equipo. 12 USD cada vez.",
+    forWho: "Quien ya está en un plan y quiere otra rutina, o probar un programa para que el entrenador lo revise.",
+    includes: "Una rutina generada y un crédito en este teléfono.",
+    not: "No es un mes de coaching. No es nutrición ni diagnóstico. No sustituye Base, Estándar ni Premium.",
+    detail: [
+      "12 USD por cada rutina que genere; no es un pago mensual.",
+      "Elige meta, días, minutos y si entrena en gimnasio o en casa.",
+      "El entrenador puede revisarla y ajustarla.",
+      "No prescribe dieta. No diagnostica lesiones.",
+      "IVU no incluido."
+    ] }
 ];
 
 const HABITS_DAY = [
@@ -1270,6 +1347,36 @@ function allRoutines() {
 function findRoutine(id) {
   return allRoutines().find((r) => r.id === id) || allRoutines()[0];
 }
+function bandOf(r) {
+  const l = String((r && r.level) || "").toLowerCase();
+  if (/avanz/.test(l)) return "avanzado";
+  if (/inter/.test(l) && !/inicio/.test(l)) return "intermedio";
+  if (/inicio|begin/.test(l)) return "principiante";
+  if (/inter/.test(l)) return "intermedio";
+  return "principiante";
+}
+function routinesByBand(band) {
+  return allRoutines().filter((r) => {
+    const l = String(r.level || "").toLowerCase();
+    if (band === "principiante") return /inicio|begin/.test(l);
+    if (band === "avanzado") return /avanz/.test(l);
+    return /inter/.test(l) || (!/inicio/.test(l) && !/avanz/.test(l) && !/begin/.test(l));
+  });
+}
+function currentBand() {
+  const saved = (state.profile && state.profile.level) || store.get("nb_level", "");
+  if (saved) return saved;
+  return bandOf(activeRoutine());
+}
+function assignRoutine(id) {
+  const r = findRoutine(id);
+  if (!r) return;
+  if (state.role === "coach" && currentClient()) currentClient().routine = r.id;
+  else state.profile.routine = r.id;
+  state.profile.level = bandOf(r);
+  store.set("nb_level", state.profile.level);
+  persist();
+}
 function icon(name) {
   const map = {
     home: "M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z",
@@ -1406,26 +1513,26 @@ function buildAiRoutine(opts) {
   const used = new Set();
   const templates = {
     2: [
-      { title: "Día A · Empuje y pierna", slots: [["squat", "quad", "goblet"], ["bench", "chest", "press"], ["row", "back"], ["shoulder", "press"], ["plank", "abdominal"]] },
-      { title: "Día B · Bisagra y tracción", slots: [["deadlift", "romanian", "hinge"], ["pulldown", "lat", "row"], ["lunge", "split"], ["raise", "shoulder"], ["superman", "back"]] }
+      { title: "Día 1 · Empuje y pierna", slots: [["squat", "quad", "goblet"], ["bench", "chest", "press"], ["row", "back"], ["shoulder", "press"], ["plank", "abdominal"]] },
+      { title: "Día 2 · Bisagra y tracción", slots: [["deadlift", "romanian", "hinge"], ["pulldown", "lat", "row"], ["lunge", "split"], ["raise", "shoulder"], ["superman", "back"]] }
     ],
     3: [
-      { title: "Día A · Sentadilla y empuje", slots: [["squat", "quad"], ["bench", "chest"], ["row", "back"], ["plank", "abdominal"]] },
-      { title: "Día B · Bisagra y tracción", slots: [["deadlift", "romanian"], ["pulldown", "lat"], ["shoulder", "press"], ["superman", "back"]] },
-      { title: "Día C · Unilateral y tronco", slots: [["lunge", "split"], ["hip", "glute"], ["curl", "bicep"], ["extension", "tricep"], ["plank", "abdominal"]] }
+      { title: "Día 1 · Sentadilla y empuje", slots: [["squat", "quad"], ["bench", "chest"], ["row", "back"], ["plank", "abdominal"]] },
+      { title: "Día 2 · Bisagra y tracción", slots: [["deadlift", "romanian"], ["pulldown", "lat"], ["shoulder", "press"], ["superman", "back"]] },
+      { title: "Día 3 · Unilateral y tronco", slots: [["lunge", "split"], ["hip", "glute"], ["curl", "bicep"], ["extension", "tricep"], ["plank", "abdominal"]] }
     ],
     4: [
-      { title: "Día A · Pierna", slots: [["squat", "quad"], ["lunge", "split"], ["romanian", "hamstring"], ["calf", "raise"]] },
-      { title: "Día B · Empuje", slots: [["bench", "chest"], ["shoulder", "press"], ["tricep", "extension"], ["raise", "lateral"]] },
-      { title: "Día C · Tracción", slots: [["row", "back"], ["pulldown", "lat"], ["curl", "bicep"], ["face", "rear"]] },
-      { title: "Día D · Cadera y tronco", slots: [["hip", "glute"], ["deadlift", "romanian"], ["plank", "abdominal"], ["superman", "back"]] }
+      { title: "Día 1 · Pierna", slots: [["squat", "quad"], ["lunge", "split"], ["romanian", "hamstring"], ["calf", "raise"]] },
+      { title: "Día 2 · Empuje", slots: [["bench", "chest"], ["shoulder", "press"], ["tricep", "extension"], ["raise", "lateral"]] },
+      { title: "Día 3 · Tracción", slots: [["row", "back"], ["pulldown", "lat"], ["curl", "bicep"], ["face", "rear"]] },
+      { title: "Día 4 · Cadera y tronco", slots: [["hip", "glute"], ["deadlift", "romanian"], ["plank", "abdominal"], ["superman", "back"]] }
     ],
     5: [
-      { title: "Día A · Cuádriceps", slots: [["squat", "quad"], ["lunge", "split"], ["extension", "leg"]] },
-      { title: "Día B · Empuje", slots: [["bench", "chest"], ["shoulder", "press"], ["tricep"]] },
-      { title: "Día C · Espalda", slots: [["row", "back"], ["pulldown", "lat"], ["face"]] },
-      { title: "Día D · Bisagra", slots: [["deadlift", "romanian"], ["hip", "glute"], ["curl", "leg"]] },
-      { title: "Día E · Brazos y tronco", slots: [["curl", "bicep"], ["extension", "tricep"], ["plank", "abdominal"], ["raise", "lateral"]] }
+      { title: "Día 1 · Cuádriceps", slots: [["squat", "quad"], ["lunge", "split"], ["extension", "leg"]] },
+      { title: "Día 2 · Empuje", slots: [["bench", "chest"], ["shoulder", "press"], ["tricep"]] },
+      { title: "Día 3 · Espalda", slots: [["row", "back"], ["pulldown", "lat"], ["face"]] },
+      { title: "Día 4 · Bisagra", slots: [["deadlift", "romanian"], ["hip", "glute"], ["curl", "leg"]] },
+      { title: "Día 5 · Brazos y tronco", slots: [["curl", "bicep"], ["extension", "tricep"], ["plank", "abdominal"], ["raise", "lateral"]] }
     ]
   };
   const daysPlan = (templates[days] || templates[3]).map((d) => {
@@ -2683,16 +2790,18 @@ function openWaiver(after) {
     <p class="muted">Obligatorio antes de escoger o pagar cualquier servicio. Léalo entero.</p>
     <pre class="contract">${WAIVER_TEXT}</pre>
     <input class="field" id="wName" placeholder="Nombre completo" value="${(state.profile.name || (state.health && state.health.name) || "").replace(/"/g,"&quot;")}">
-    <p class="muted">Firme con el dedo.</p>
-    <canvas id="wPad" width="640" height="180"></canvas>
-    <div class="work-tools"><button class="btn small ghost" id="clrW">Borrar firma</button></div>
+    <p class="muted">Firme con el dedo en el recuadro.</p>
+    <canvas id="sigPad" width="640" height="180"></canvas>
+    <div class="work-tools">
+      <button class="btn small ghost" id="clrSig">Borrar firma</button>
+    </div>
     <label class="habit"><input type="checkbox" id="wRead"> Leí el relevo y acepto asumir el riesgo del ejercicio.</label>
     <label class="habit"><input type="checkbox" id="wAge"> Soy mayor de edad o firmo como padre, madre o tutor.</label>
     <button class="btn primary" id="wGo">Firmar relevo</button>
     <button class="btn ghost" id="closeSheet">Ahora no</button>
   </div>`;
   document.body.appendChild(modal);
-  const canvas = $("#wPad");
+  const canvas = $("#sigPad");
   const ctx = canvas.getContext("2d");
   ctx.strokeStyle = "#f7f1e8"; ctx.lineWidth = 2; ctx.lineCap = "round";
   let draw = false, dirty = false;
@@ -2701,10 +2810,13 @@ function openWaiver(after) {
     const pt = e.touches ? e.touches[0] : e;
     return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
   };
-  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); draw = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-  canvas.addEventListener("pointermove", (e) => { if (!draw) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty = true; });
-  window.addEventListener("pointerup", () => { draw = false; });
-  $("#clrW").onclick = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; };
+  const start = (e) => { e.preventDefault(); draw = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const move = (e) => { if (!draw) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty = true; };
+  const end = () => { draw = false; };
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+  $("#clrSig").onclick = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; };
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   $("#wGo").onclick = () => {
     const name = cleanName($("#wName").value);
@@ -3000,10 +3112,26 @@ function displayName(it) {
   return (ex && ex.name) || it.name;
 }
 
+function workPickerHtml(band, list, currentId) {
+  const labels = [["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
+  return `<div class="card">
+    <h3>Nivel y rutina de hoy</h3>
+    <p class="muted">Principiante, intermedio o avanzado. Solo se listan las rutinas de ese nivel.</p>
+    <div class="filters">${labels.map(([id,l]) => `<button type="button" data-level="${id}" class="${band===id?"on":""}">${l}</button>`).join("")}</div>
+    <select id="pickRt">${list.map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===currentId?"selected":""}>${escapeHtml(r.name)} · ${escapeHtml(r.level)} · ${r.days} días</option>`).join("")}</select>
+  </div>`;
+}
+
 function workView() {
   const rt = activeRoutine();
+  const band = currentBand();
+  const pool = routinesByBand(band);
+  const list = pool.length ? pool : allRoutines();
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
-    return `<section class="screen"><p class="tagline">Hoy</p><h2>No hay rutina asignada</h2><p class="muted">El coach debe asignar un programa.</p></section>`;
+    return `<section class="screen"><p class="tagline">Hoy</p><h2>No hay rutina asignada</h2>
+      <p class="muted">Elija un nivel y una rutina para hoy.</p>
+      ${workPickerHtml(band, list, "")}
+    </section>`;
   }
   const di = dayIndex(rt) % rt.daysPlan.length;
   const day = rt.daysPlan[di];
@@ -3015,7 +3143,8 @@ function workView() {
   return `<section class="screen">
     <p class="tagline">${state.role === "coach" && currentClient() ? currentClient().name + " · " : ""}${rt.name}</p>
     <h2 style="font-family:var(--display);font-size:26px">${day.title}</h2>
-    <p class="muted">${doneSets} de ${totalSets} series</p>
+    <p class="muted">${doneSets} de ${totalSets} series · ${escapeHtml(rt.level || "")} · ${rt.days} días</p>
+    ${workPickerHtml(band, list, rt.id)}
     <div class="progress"><span style="width:${pct}%"></span></div>
     ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <div class="row two">
@@ -3069,6 +3198,24 @@ function beep(freq, ms) {
 
 function bindWork() {
   const rt = activeRoutine();
+  $$("[data-level]").forEach((b) => b.onclick = () => {
+    const band = b.dataset.level;
+    state.profile.level = band;
+    store.set("nb_level", band);
+    const pool = routinesByBand(band);
+    const keep = rt && pool.some((x) => x.id === rt.id);
+    if (!keep && pool[0]) assignRoutine(pool[0].id);
+    else persist();
+    toast("Nivel: " + b.textContent);
+    render();
+  });
+  const pick = $("#pickRt");
+  if (pick) pick.onchange = () => {
+    assignRoutine(pick.value);
+    toast("Rutina lista");
+    render();
+  };
+  if (!rt || !rt.daysPlan || !rt.daysPlan.length) return;
   const saveFromDom = () => {
     const ses = loadSession(rt);
     ses.items.forEach((it, i) => it.sets.forEach((s, si) => {
@@ -3301,15 +3448,31 @@ function socialView() {
 function pricesView() {
   return `<section class="screen">
     <p class="tagline">Servicios</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Tres maneras de trabajar</h2>
+    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
+    <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un complemento de rutina con IA. Los precios están en USD. El IVU no está incluido. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
+    <div class="card">
+      <h3>Cómo elegir</h3>
+      <ul class="include">
+        <li><strong>Evaluación 39</strong> — primera vez. 40 minutos. Si luego toma 8 semanas o más, se descuenta.</li>
+        <li><strong>Base 97/mes</strong> — ya sabe entrenar. Plan escrito y un ajuste al mes. Sin llamada.</li>
+        <li><strong>Estándar 127/mes</strong> — el de la mayoría. Check-in semanal y 2 videos de técnica al mes.</li>
+        <li><strong>Premium 197/mes</strong> — Estándar más una videollamada semanal. Cupo de 8.</li>
+        <li><strong>12 semanas</strong> — el mismo servicio, un solo pago, con ahorro. No se prorratea.</li>
+        <li><strong>Gimnasio 55</strong> — sesión presencial. Ejecuta el plan; no lo sustituye. Packs caducan.</li>
+        <li><strong>IA 12</strong> — una rutina extra. No es un mes de coaching.</li>
+      </ul>
+    </div>
     <div class="card compare">
       <div class="h"></div><div class="h">Base</div><div class="h">Estándar</div><div class="h">Premium</div>
-      <div>Precio</div><div>97</div><div>127</div><div>197</div>
+      <div>Precio</div><div>97 USD/mes</div><div>127 USD/mes</div><div>197 USD/mes</div>
       <div>Plan escrito</div><div>sí</div><div>sí</div><div>sí</div>
-      <div>Hábitos</div><div>—</div><div>sí</div><div>sí</div>
+      <div>Ajuste</div><div>1 / mes</div><div>según check-in</div><div>llamada semanal</div>
+      <div>Hábitos en la app</div><div>—</div><div>sí</div><div>sí</div>
       <div>Check-in</div><div>—</div><div>semanal</div><div>semanal</div>
       <div>Video técnica</div><div>—</div><div>2 / mes</div><div>2 / mes</div>
-      <div>Videollamada</div><div>—</div><div>—</div><div>1 / sem</div>
+      <div>Chat WhatsApp</div><div>24–48 h</div><div>lun–vie</div><div>mismo día</div>
+      <div>Videollamada</div><div>—</div><div>—</div><div>25–30 min / sem</div>
+      <div>Cupo</div><div>abierto</div><div>abierto</div><div>8 personas</div>
     </div>
     ${PLANS.map((p) => `
       <article class="plan ${p.featured ? "featured" : ""}">
@@ -3317,17 +3480,25 @@ function pricesView() {
         <h3>${p.name}</h3>
         <div class="price">${p.price} USD <small>${p.unit}</small></div>
         <p>${p.simple}</p>
+        ${p.forWho ? `<p class="muted" style="margin-top:8px"><strong>Para quién.</strong> ${p.forWho}</p>` : ""}
+        ${p.includes ? `<p class="muted"><strong>Incluye.</strong> ${p.includes}</p>` : ""}
+        ${p.not ? `<p class="warn" style="font-size:13px;margin-top:6px"><strong>No incluye.</strong> ${p.not}</p>` : ""}
         <ul class="include">${p.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
         ${state.role === "guest" ? `<button class="btn primary" data-need="${escAttr(p.name)}">Pedir código para contratar</button>` : `<button class="btn primary" data-want="${p.name} ${p.price} USD">Cuestionario y contrato</button>`}
       </article>`).join("")}
-    <p class="muted">Los precios no incluyen IVU.</p>
-    <article class="plan">
-      <div class="eyebrow">Complemento</div>
-      <h3>Rutina con IA</h3>
-      <div class="price">12 USD <small>una vez</small></div>
-      <p>Un programa a medida con la biblioteca NiuBision. El entrenador puede revisarlo. No sustituye Base, Estándar ni Premium.</p>
-      ${state.role === "guest" ? `<button class="btn ghost" data-need="Rutina con IA 12 USD">Pedir código para contratar</button>` : `<button class="btn primary" id="openAiPrice">Pagar 12 USD y generar</button>`}
-    </article>
+    <div class="card">
+      <h3>Preguntas que suelen quedar</h3>
+      <p><strong>¿El IVU va aparte?</strong></p>
+      <p class="muted">Sí. Los números de esta pantalla no incluyen IVU.</p>
+      <p style="margin-top:10px"><strong>¿Cómo se paga?</strong></p>
+      <p class="muted">PayPal (${escapeHtml(payCfg().paypal || "miguel.morales9@gmail.com")}) o ATH Móvil (${escapeHtml(payCfg().ath || "7874544038")}). NiuBision no guarda tarjetas.</p>
+      <p style="margin-top:10px"><strong>¿Cuándo recibo el código?</strong></p>
+      <p class="muted">Después de pagar. Son 6 dígitos. Se pegan en la portada, en «Pegar código del coach».</p>
+      <p style="margin-top:10px"><strong>¿Puedo empezar sin relevo?</strong></p>
+      <p class="muted">No. El relevo y el cuestionario de salud van antes del contrato.</p>
+      <p style="margin-top:10px"><strong>¿El pack presencial caduca?</strong></p>
+      <p class="muted">Sí. Pack 8 en 8 semanas. Pack 12 en 10 semanas. Reprogramar con 12 horas.</p>
+    </div>
     <div class="card">
       <h3>Cómo pagar</h3>
       <p class="muted">PayPal y ATH Móvil. El IVU no está incluido. Después del contrato se abre esta misma lista.</p>
@@ -4331,7 +4502,7 @@ function bindRoutinesCoach() {
       days: 3, minutes: 45, level: "Inicio", place: "Gimnasio",
       goal: "",
       evidence: "Describa el criterio (frecuencia, volumen, población). Evite mitos.",
-      daysPlan: [{ title: "Day A", items: [{ name: "Goblet Squat", sets: 3, reps: "8–10", rest: 90, exId: "Goblet_Squat" }] }]
+      daysPlan: [{ title: "Día 1", items: [{ name: "Goblet Squat", sets: 3, reps: "8–10", rest: 90, exId: "Goblet_Squat" }] }]
     };
     render();
   };
