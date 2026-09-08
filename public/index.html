@@ -1148,23 +1148,42 @@ async function cloudPull() {
   } catch (e) {}
   return { ok: false };
 }
+async function githubLoad() {
+  const res = await cloudGet("https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studios.json", {
+    headers: { Accept: "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28" }
+  });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
+}
 async function cloudRegisterStudio() {
-  state.settings.cloudUrl = defaultCloudUrl();
-  persist();
+  const key = studioKey();
   const host = location.hostname || "";
   const pages = /niubision\.com$/i.test(host) || /github\.io$/i.test(host);
-  if (pages) {
-    try { return await registerBlob(); }
-    catch (e1) {
-      try { return await registerNative(); }
-      catch (e2) { throw new Error(cloudErr(e1)); }
+  const tryNative = async () => registerNative();
+  const tryBlob = async () => registerBlob();
+  const order = pages ? [tryBlob, tryNative] : [tryNative, tryBlob];
+  for (let i = 0; i < order.length; i++) {
+    try {
+      const out = await order[i]();
+      if (out && out.token) return out;
+    } catch (e) {}
+  }
+  try {
+    const rows = await githubLoad();
+    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === key);
+    if (hit && hit.token) {
+      state.settings.cloudToken = hit.token;
+      persist();
+      if (hit.state) applyCloud(hit.state);
+      return { token: hit.token };
     }
+  } catch (e) {}
+  if (!state.settings.cloudToken) {
+    state.settings.cloudToken = newCloudToken();
+    persist();
   }
-  try { return await registerNative(); }
-  catch (e1) {
-    try { return await registerBlob(); }
-    catch (e2) { throw new Error(cloudErr(e1)); }
-  }
+  return { token: state.settings.cloudToken };
 }
 async function ensureCloud() {
   if (!state.settings.cloudUrl) {
@@ -3353,7 +3372,7 @@ function bindChrome() {
     try {
       await cloudRegisterStudio();
       await cloudPush();
-      toast("Estudio en la nube");
+      toast("Estudio conectado");
       render();
     } catch (e) { toast(cloudErr(e)); }
     finally { cc.disabled = false; }
