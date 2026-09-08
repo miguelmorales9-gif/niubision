@@ -2823,8 +2823,10 @@ function openWaiver(after) {
     if (!$("#wRead").checked || !$("#wAge").checked) return toast("Marque las dos casillas");
     if (!name) return toast("Escriba su nombre");
     if (!dirty) return toast("Firme en el recuadro");
-    state.waiver = { name, date: todayKey(), signature: canvas.toDataURL("image/png") };
+    state.waiver = { name, date: todayKey(), signature: canvas.toDataURL("image/png"), text: WAIVER_TEXT };
     state.profile.name = state.profile.name || name;
+    const who = (state.clients || []).find((x) => cleanName(x.name) === name);
+    if (who) who.waiver = { name, date: state.waiver.date, signature: state.waiver.signature, text: WAIVER_TEXT };
     persist();
     modal.remove();
     toast("Relevo firmado");
@@ -2966,7 +2968,7 @@ function openContract(planLabel) {
     c.plan = short;
     c.startDate = todayKey();
     c.health = state.health;
-    c.waiver = state.waiver ? { name: state.waiver.name, date: state.waiver.date } : null;
+    c.waiver = state.waiver ? { name: state.waiver.name, date: state.waiver.date, signature: state.waiver.signature, text: state.waiver.text || WAIVER_TEXT } : null;
     normalizeClient(c);
     state.settings.clientId = c.id;
     persist();
@@ -3881,7 +3883,9 @@ function dossierHtml(filterName) {
   const clients = want ? state.clients.filter((c) => match(c.name)) : state.clients;
   const contracts = (state.contracts || []).filter((k) => match(k.name));
   const health = state.health && match(state.health.name) ? state.health : (!want ? state.health : null);
-  const waiver = state.waiver && match(state.waiver.name) ? state.waiver : (!want ? state.waiver : null);
+  const waiver = (state.waiver && match(state.waiver.name) ? state.waiver : null)
+    || (clients[0] && clients[0].waiver)
+    || (!want ? state.waiver : null);
   const qRows = health ? HEALTH_ITEMS.map((q) => `<tr><td>${escapeHtml(q.t)}</td><td><strong>${escapeHtml(health[q.id] || "—")}</strong></td></tr>`).join("") : "";
   const cBlocks = contracts.map((k) => `
     <section class="pg">
@@ -3903,7 +3907,8 @@ function dossierHtml(filterName) {
   table{width:100%;border-collapse:collapse;font-size:13px}
   td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;vertical-align:top}
   th{background:#f3eee4}
-  .sig{max-width:280px;border:1px solid #ccc}
+  .sig{max-width:320px;width:100%;height:auto;border:1px solid #ccc;background:#0e0c14}
+  pre.doc{white-space:pre-wrap;font-family:Georgia,serif;font-size:12px;line-height:1.45;border:1px solid #ccc;padding:12px;background:#faf8f4}
   .pg{page-break-inside:avoid;margin-bottom:18px}
   @media print { button{display:none} body{margin:12mm} }
 </style></head><body>
@@ -3915,7 +3920,11 @@ function dossierHtml(filterName) {
   </section>
   <section class="pg">
     <h2>Relevo de responsabilidad</h2>
-    ${waiver ? `<p><b>Firmante:</b> ${escapeHtml(waiver.name)}<br><b>Fecha:</b> ${escapeHtml(waiver.date)}</p>${waiver.signature ? `<img class="sig" src="${waiver.signature}" alt="Firma relevo">` : ""}` : "<p>No hay relevo en este teléfono.</p>"}
+    ${waiver ? `<p><b>Firmante:</b> ${escapeHtml(waiver.name)}<br><b>Fecha:</b> ${escapeHtml(waiver.date)}</p>
+    <pre class="doc">${escapeHtml(waiver.text || WAIVER_TEXT)}</pre>
+    <p><b>Firma manuscrita</b></p>
+    ${waiver.signature ? `<img class="sig" src="${waiver.signature}" alt="Firma del relevo">` : "<p>Sin imagen de firma.</p>"}
+    <p class="meta">El firmante declaró haber leído el relevo, aceptar el riesgo del ejercicio y ser mayor de edad o firmar como padre, madre o tutor.</p>` : "<p>No hay relevo en este teléfono.</p>"}
   </section>
   <section class="pg">
     <h2>Cuestionario de salud</h2>
@@ -3973,12 +3982,69 @@ function wrapLine(s, max) {
   if (!out.length) out.push("");
   return out;
 }
-function downloadTextPdf(filterName) {
+function pdfU8(s) {
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 255;
+  return out;
+}
+function pdfJoin(parts) {
+  let n = 0;
+  parts.forEach((p) => { n += p.length; });
+  const out = new Uint8Array(n);
+  let o = 0;
+  parts.forEach((p) => { out.set(p, o); o += p.length; });
+  return out;
+}
+function signatureToJpeg(dataUrl) {
+  return new Promise((resolve) => {
+    if (!dataUrl) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = img.width || 640;
+        c.height = img.height || 180;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, c.width, c.height);
+        const p = data.data;
+        for (let i = 0; i < p.length; i += 4) {
+          const lum = (p[i] + p[i + 1] + p[i + 2]) / 3;
+          if (p[i + 3] > 24 && lum > 70) {
+            p[i] = p[i + 1] = p[i + 2] = 28;
+            p[i + 3] = 255;
+          } else {
+            p[i] = p[i + 1] = p[i + 2] = 255;
+            p[i + 3] = 255;
+          }
+        }
+        ctx.putImageData(data, 0, 0);
+        const jpeg = c.toDataURL("image/jpeg", 0.88);
+        const b64 = jpeg.split(",")[1] || "";
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        resolve({ bytes, width: c.width, height: c.height });
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+async function downloadTextPdf(filterName) {
   const want = (filterName || "").trim().toLowerCase();
   const match = (n) => !want || String(n || "").toLowerCase() === want;
   const lines = [];
-  const add = (s) => wrapLine(s, 92).forEach((x) => lines.push(x));
-  add("NIUBISION  —  EXPEDIENTE PARA ARCHIVO");
+  const add = (s) => wrapLine(s, 88).forEach((x) => lines.push(x));
+  const addDoc = (text) => {
+    String(text || "").split(/\n/).forEach((ln) => {
+      if (!String(ln).trim()) { lines.push(""); return; }
+      wrapLine(ln, 88).forEach((x) => lines.push(x));
+    });
+  };
+  add("NIUBISION  -  EXPEDIENTE PARA ARCHIVO");
   add("Generado: " + todayKey());
   add("");
   add("1. CLIENTES");
@@ -3993,11 +4059,20 @@ function downloadTextPdf(filterName) {
     add("");
   });
   add("2. RELEVO DE RESPONSABILIDAD");
-  const w = state.waiver && match(state.waiver.name) ? state.waiver : (!want ? state.waiver : null);
+  const w = (state.waiver && match(state.waiver.name) ? state.waiver : null)
+    || (clients[0] && clients[0].waiver)
+    || (!want ? state.waiver : null);
   if (w) {
     add("Firmante: " + w.name);
     add("Fecha: " + w.date);
-    add("Estado: firmado en la aplicacion.");
+    add("");
+    addDoc(w.text || WAIVER_TEXT);
+    add("");
+    add("El firmante declaro haber leido este documento, aceptar el riesgo del ejercicio");
+    add("y ser mayor de edad o firmar como padre, madre o tutor.");
+    add("Firma manuscrita:");
+    lines.push("[[SIG:waiver]]");
+    add("");
   } else add("No hay relevo guardado en este telefono para esta ficha.");
   add("");
   add("3. CUESTIONARIO DE SALUD");
@@ -4005,61 +4080,123 @@ function downloadTextPdf(filterName) {
   if (h) {
     add("Nombre: " + h.name);
     add("Fecha: " + h.date);
-    add("Telefono: " + (h.phone || "—"));
-    add("Contacto de emergencia: " + (h.emer || "—"));
+    add("Telefono: " + (h.phone || "-"));
+    add("Contacto de emergencia: " + (h.emer || "-"));
     add("Autorizacion medica declarada: " + (h.clearance ? "si" : "no"));
     if (h.notes) add("Notas: " + h.notes);
-    HEALTH_ITEMS.forEach((q, i) => add((i + 1) + ". [" + (h[q.id] || "—") + "] " + q.t));
+    HEALTH_ITEMS.forEach((q, i) => add((i + 1) + ". [" + (h[q.id] || "-") + "] " + q.t));
   } else add("No hay cuestionario guardado en este telefono para esta ficha.");
   add("");
   add("4. CONTRATOS");
   const ks = (state.contracts || []).filter((k) => match(k.name));
   if (!ks.length) add("No hay contratos firmados en esta ficha.");
-  ks.forEach((k) => {
+  ks.forEach((k, i) => {
     add("Cliente: " + k.name);
     add("Servicio: " + k.plan);
     add("Fecha de firma: " + k.date);
     add("Bandera de salud: " + (k.flagged ? "si" : "no"));
+    add("Firma manuscrita del contrato:");
+    lines.push("[[SIG:contract" + i + "]]");
     add("");
   });
   add("Documento de archivo local. NiuBision.");
 
+  const sigs = {};
+  if (w && w.signature) sigs.waiver = await signatureToJpeg(w.signature);
+  for (let i = 0; i < ks.length; i++) {
+    if (ks[i].signature) sigs["contract" + i] = await signatureToJpeg(ks[i].signature);
+  }
+
   const pages = [];
-  let y = 760, buf = ["BT /F1 10 Tf"];
-  const flush = () => { buf.push("ET"); pages.push(buf.join("\n")); buf = ["BT /F1 10 Tf"]; y = 760; };
+  let y = 760, buf = ["BT /F1 10 Tf 0 0 0 rg"];
+  const flush = () => { buf.push("ET"); pages.push(buf.join("\n")); buf = ["BT /F1 10 Tf 0 0 0 rg"]; y = 760; };
   lines.forEach((ln) => {
+    const m = String(ln).match(/^\[\[SIG:([^\]]+)\]\]$/);
+    if (m) {
+      if (sigs[m[1]]) {
+        if (y < 120) flush();
+        buf.push("ET");
+        const img = sigs[m[1]];
+        const dw = 260;
+        const dh = Math.max(48, Math.round(dw * (img.height / img.width)));
+        buf.push("q");
+        buf.push(dw + " 0 0 " + dh + " 40 " + (y - dh) + " cm");
+        buf.push("/Im" + m[1] + " Do");
+        buf.push("Q");
+        buf.push("BT /F1 10 Tf 0 0 0 rg");
+        y -= dh + 16;
+      }
+      return;
+    }
     if (y < 50) flush();
-    buf.push(`1 0 0 1 40 ${y} Tm (${pdfEscape(ln)}) Tj`);
+    buf.push("1 0 0 1 40 " + y + " Tm (" + pdfEscape(ln) + ") Tj");
     y -= 13;
   });
   flush();
 
-  const fontId = 3 + pages.length * 2;
+  const imgKeys = Object.keys(sigs).filter((k) => sigs[k]);
+  const pageCount = pages.length;
+  const fontId = 3 + pageCount * 2;
+  const imgStart = fontId + 1;
+  const imgId = {};
+  imgKeys.forEach((k, i) => { imgId[k] = imgStart + i; });
+  const xos = imgKeys.map((k) => "/Im" + k + " " + imgId[k] + " 0 R").join(" ");
+  const res = "/Font << /F1 " + fontId + " 0 R >>" + (xos ? " /XObject << " + xos + " >>" : "");
   const objs = [];
-  objs[0] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj";
-  const kids = pages.map((_, i) => `${3 + i * 2} 0 R`).join(" ");
-  objs[1] = `2 0 obj << /Type /Pages /Kids [${kids}] /Count ${pages.length} >> endobj`;
+  objs[1] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
+  const kids = pages.map((_, i) => (3 + i * 2) + " 0 R").join(" ");
+  objs[2] = "2 0 obj << /Type /Pages /Kids [" + kids + "] /Count " + pageCount + " >> endobj\n";
   pages.forEach((stream, i) => {
     const pageId = 3 + i * 2;
     const contId = pageId + 1;
-    objs.push(`${pageId} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contId} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >> endobj`);
-    objs.push(`${contId} 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`);
+    objs[pageId] = pageId + " 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents " + contId + " 0 R /Resources << " + res + " >> >> endobj\n";
+    objs[contId] = contId + " 0 obj << /Length " + stream.length + " >> stream\n" + stream + "\nendstream endobj\n";
   });
-  objs.push(`${fontId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj`);
+  objs[fontId] = fontId + " 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj\n";
+  const numbered = [null];
+  for (let i = 1; i <= fontId; i++) numbered[i] = objs[i] || "";
+  imgKeys.forEach((k) => {
+    const img = sigs[k];
+    const id = imgId[k];
+    numbered[id] = {
+      head: id + " 0 obj << /Type /XObject /Subtype /Image /Width " + img.width + " /Height " + img.height + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + img.bytes.length + " >> stream\n",
+      body: img.bytes,
+      tail: "\nendstream endobj\n"
+    };
+  });
 
-  let pdf = "%PDF-1.4\n";
-  const offs = [0];
-  objs.forEach((o) => { offs.push(pdf.length); pdf += o + "\n"; });
-  const xref = pdf.length;
-  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i < offs.length; i++) pdf += String(offs[i]).padStart(10, "0") + " 00000 n \n";
-  pdf += `trailer << /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  const blob = new Blob([pdf], { type: "application/pdf" });
+  const chunks = [pdfU8("%PDF-1.4\n")];
+  const offsets = [0];
+  let pos = 9;
+  const maxObj = numbered.length - 1;
+  for (let i = 1; i <= maxObj; i++) {
+    offsets[i] = pos;
+    const o = numbered[i];
+    if (!o) {
+      const empty = i + " 0 obj << >> endobj\n";
+      chunks.push(pdfU8(empty));
+      pos += empty.length;
+    } else if (typeof o === "string") {
+      chunks.push(pdfU8(o));
+      pos += o.length;
+    } else {
+      const head = pdfU8(o.head);
+      const tail = pdfU8(o.tail);
+      chunks.push(head, o.body, tail);
+      pos += head.length + o.body.length + tail.length;
+    }
+  }
+  const xrefPos = pos;
+  let xref = "xref\n0 " + (maxObj + 1) + "\n0000000000 65535 f \n";
+  for (let i = 1; i <= maxObj; i++) xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+  xref += "trailer << /Size " + (maxObj + 1) + " /Root 1 0 R >>\nstartxref\n" + xrefPos + "\n%%EOF";
+  chunks.push(pdfU8(xref));
+  const blob = new Blob([pdfJoin(chunks)], { type: "application/pdf" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = (filterName ? "ficha-" + filterName.replace(/\s+/g, "-") : "expediente-niubision") + ".pdf";
   a.click();
-  toast("PDF descargado");
+  toast("PDF con relevo y firma");
 }
 
 function bindMotion() {
