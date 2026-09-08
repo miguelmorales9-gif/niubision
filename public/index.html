@@ -914,21 +914,27 @@ function persist() {
 }
 function defaultCloudUrl() {
   try {
-    return new URL("/api", location.origin).href.replace(/\/$/, "");
-  } catch (e) {
-    return "";
-  }
+    const href = String(location.href || "");
+    if (/^https?:/i.test(href)) return new URL("/api", href).origin + "/api";
+  } catch (e) {}
+  try {
+    const o = String(location.origin || "");
+    if (o && o !== "null") return o.replace(/\/$/, "") + "/api";
+  } catch (e) {}
+  return "/api";
 }
 function cloudUrl() {
-  const raw = (state.settings.cloudUrl || defaultCloudUrl()).trim().replace(/\/$/, "");
-  if (!raw) return "";
+  let raw = String(state.settings.cloudUrl || "").trim().replace(/\/$/, "");
+  if (!raw) raw = defaultCloudUrl();
+  if (!raw) raw = "/api";
+  if (raw.charAt(0) === "/") return raw;
   try {
-    const u = new URL(raw, location.origin);
-    const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
-    if (u.protocol === "https:") return u.origin + u.pathname.replace(/\/$/, "");
-    if (u.protocol === "http:" && local) return u.origin + u.pathname.replace(/\/$/, "");
-    return "";
-  } catch (e) { return ""; }
+    const u = new URL(raw, location.href || defaultCloudUrl());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return defaultCloudUrl();
+    return (u.origin + u.pathname).replace(/\/$/, "");
+  } catch (e) {
+    return defaultCloudUrl();
+  }
 }
 function cloudPayload() {
   return {
@@ -2172,8 +2178,8 @@ function homeView() {
       </div>
       <div class="card">
         <h3>Nube NiuBision</h3>
-        <p class="muted">${state.settings.cloudToken ? "Estudio conectado. Los cambios de clientes, pagos y rutinas se suben solos a la nube." : "El servidor de NiuBision está listo. Pulse conectar para guardar el estudio fuera de este teléfono."}</p>
-        <p class="muted">Servidor: ${escapeHtml(state.settings.cloudUrl || defaultCloudUrl())}</p>
+        <p class="muted">${state.settings.cloudToken ? "Estudio conectado. Los cambios de clientes, pagos y rutinas se suben solos a la nube." : "Pulse conectar. Si la URL está vacía, se usa el servidor de NiuBision."}</p>
+        <input class="field" id="cloudUrl" placeholder="URL del servidor" value="${escAttr(state.settings.cloudUrl || defaultCloudUrl())}">
         <button class="btn primary" id="cloudConnect">${state.settings.cloudToken ? "Reconectar estudio" : "Conectar estudio a la nube"}</button>
         <button class="btn ghost" id="cloudNow">Subir y bajar ahora</button>
       </div>
@@ -3204,22 +3210,28 @@ function bindChrome() {
   });
   const cc = $("#cloudConnect");
   if (cc) cc.onclick = async () => {
-    state.settings.cloudUrl = defaultCloudUrl();
+    const typed = ($("#cloudUrl") && $("#cloudUrl").value || "").trim();
+    state.settings.cloudUrl = typed || defaultCloudUrl();
     persist();
+    if (!cloudUrl()) return toast("Escriba la URL del servidor");
+    cc.disabled = true;
     try {
       await cloudRegisterStudio();
       await cloudPush();
       toast("Estudio en la nube");
       render();
     } catch (e) { toast(e.message || "No hay servidor aún"); }
+    finally { cc.disabled = false; }
   };
   const cn = $("#cloudNow");
   if (cn) cn.onclick = async () => {
-    state.settings.cloudUrl = defaultCloudUrl();
+    const typed = ($("#cloudUrl") && $("#cloudUrl").value || "").trim();
+    state.settings.cloudUrl = typed || defaultCloudUrl();
     persist();
+    if (!cloudUrl()) return toast("Escriba la URL del servidor");
     const p = await cloudPull();
     await cloudPush();
-    toast(p.ok ? "Sincronizado" : "Sin servidor. Intente reconectar");
+    toast(p.ok ? "Sincronizado" : "Sin servidor. Revise la URL");
     render();
   };
   const rp = $("#resetPin");
