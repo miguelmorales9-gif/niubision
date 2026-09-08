@@ -1159,11 +1159,8 @@ function waLink(text) {
 function payCfg() {
   const p = (state.settings && state.settings.pay) || {};
   return {
-    paypal: String(p.paypal || "").trim(),
-    ath: String(p.ath || state.settings.wa || "").trim(),
-    google: String(p.google || "").trim(),
-    samsung: String(p.samsung || "").trim(),
-    touch: String(p.touch || "").trim()
+    paypal: String(p.paypal || PAYPAL_DEST).trim(),
+    ath: String(p.ath || ATH_DEST).trim()
   };
 }
 function escAttr(s) {
@@ -1199,6 +1196,8 @@ function hasPin() {
   return !!(state.pinHash || (state.pin && String(state.pin).length >= 4));
 }
 const STUDIO_PIN = "9798";
+const PAYPAL_DEST = "miguel.morales9@gmail.com";
+const ATH_DEST = "7874544038";
 async function ensureStudioPin() {
   if (hasPin()) return;
   await setPin(STUDIO_PIN);
@@ -1425,7 +1424,7 @@ function paypalSafe(raw) {
 function paySecureHtml() {
   return `<div class="pay-secure">
     <span class="k">Seguridad en pagos digitales</span>
-    <p>NiuBision no pide ni guarda números de tarjeta, PIN, CVV ni claves de ATH Móvil. El dinero se mueve en PayPal, ATH Móvil, Google Pay, Samsung Pay o el lector Touch Pay.</p>
+    <p>NiuBision no pide ni guarda números de tarjeta, PIN, CVV ni claves de ATH Móvil. El dinero se mueve en PayPal o ATH Móvil.</p>
     <ul>
       <li>Confirme el monto antes de salir de la app.</li>
       <li>Pague solo con estos botones. Nadie del estudio le pedirá su clave.</li>
@@ -1472,10 +1471,7 @@ function payMethods(planLabel) {
   const pp = paypalSafe(cfg.paypal);
   return [
     { id: "paypal", mark: "PP", cls: "paypal", name: "PayPal", hint: pp.ok ? "Cobro cifrado de " + info.amount + " USD · " + maskDest(cfg.paypal, "paypal") : "El estudio aún no puso un PayPal válido" },
-    { id: "ath", mark: "ATH", cls: "ath", name: "ATH Móvil", hint: athNum ? "Enviar al que " + maskDest(cfg.ath, "ath") : "Ponga el número ATH en el estudio" },
-    { id: "google", mark: "G", cls: "gpay", name: "Google Pay", hint: cfg.google ? "Wallet · " + maskDest(cfg.google, "google") : "Avisa al coach y paga en Google Pay" },
-    { id: "samsung", mark: "S", cls: "spay", name: "Samsung Pay", hint: cfg.samsung ? "Wallet · " + maskDest(cfg.samsung, "samsung") : "Avisa al coach y paga en Samsung Pay" },
-    { id: "touch", mark: "TAP", cls: "tpay", name: "Touch Pay", hint: "Presencial: tap en el lector. No se digita la tarjeta aquí." }
+    { id: "ath", mark: "ATH", cls: "ath", name: "ATH Móvil", hint: athNum ? "Enviar al que " + maskDest(cfg.ath, "ath") : "Ponga el número ATH en el estudio" }
   ];
 }
 function payButtonsHtml(planLabel) {
@@ -1500,15 +1496,12 @@ function recordPay(planLabel, method, status) {
   return row;
 }
 function payLabel(id) {
-  return ({ paypal: "PayPal", ath: "ATH Móvil", google: "Google Pay", samsung: "Samsung Pay", touch: "Touch Pay" })[id] || id;
+  return ({ paypal: "PayPal", ath: "ATH Móvil" })[id] || id;
 }
 function payDestHint(method) {
   const cfg = payCfg();
   if (method === "paypal") return maskDest(cfg.paypal, "paypal") || "PayPal del estudio";
-  if (method === "ath") return maskDest(cfg.ath, "ath") || "ATH Móvil del estudio";
-  if (method === "google") return maskDest(cfg.google, "google") || "Google Pay del estudio";
-  if (method === "samsung") return maskDest(cfg.samsung, "samsung") || "Samsung Pay del estudio";
-  return cfg.touch ? maskDest(cfg.touch, "touch") : "lector presencial";
+  return maskDest(cfg.ath, "ath") || "ATH Móvil del estudio";
 }
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
@@ -1525,7 +1518,7 @@ function showPayReceipt(row) {
     <h2>Pago iniciado</h2>
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}</p>
-    <p class="muted">Esto no es un cargo de tarjeta en NiuBision. El cobro lo confirma PayPal, ATH Móvil o la wallet. El coach marca «recibido» cuando vea el dinero.</p>
+    <p class="muted">Esto no es un cargo de tarjeta en NiuBision. El cobro lo confirma PayPal o ATH Móvil. El coach marca «recibido» cuando vea el dinero.</p>
     <button class="btn primary" id="closeSheet">Entendido</button>
   </div>`;
   document.body.appendChild(modal);
@@ -1561,25 +1554,6 @@ async function runPay(method, planLabel) {
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
     return;
-  }
-  if (method === "google") {
-    if (cfg.google) await copyText(cfg.google);
-    window.open("https://pay.google.com/", "_blank", "noopener,noreferrer");
-    notifyPay(planLabel, "Google Pay");
-    showPayReceipt(row);
-    return;
-  }
-  if (method === "samsung") {
-    if (cfg.samsung) await copyText(cfg.samsung);
-    notifyPay(planLabel, "Samsung Pay");
-    toast("Abra Samsung Pay en este teléfono. No envíe el PIN.");
-    showPayReceipt(row);
-    return;
-  }
-  if (method === "touch") {
-    notifyPay(planLabel, "Touch Pay");
-    toast("Touch Pay es presencial. La tarjeta no se escribe en la app.");
-    showPayReceipt(row);
   }
 }
 function openPayConfirm(method, planLabel) {
@@ -2166,13 +2140,10 @@ function homeView() {
       </div>
       <div class="card">
         <h3>Métodos de pago</h3>
-        <p class="muted">El cliente los ve al firmar. NiuBision no cobra tarjetas: el dinero sale en PayPal, ATH Móvil o la wallet. Use solo paypal.me, un email de PayPal o https://paypal.com. No pida PIN ni CVV por chat.</p>
+        <p class="muted">El cliente los ve al firmar. NiuBision no cobra tarjetas: el dinero sale en PayPal o ATH Móvil. No pida PIN ni CVV por chat.</p>
         ${paySecureHtml()}
-        <input class="field" id="payPaypal" placeholder="PayPal: email o paypal.me/suusuario" value="${escAttr((state.settings.pay||{}).paypal)}">
-        <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr((state.settings.pay||{}).ath)}">
-        <input class="field" id="payGoogle" placeholder="Google Pay: email o teléfono" value="${escAttr((state.settings.pay||{}).google)}">
-        <input class="field" id="paySamsung" placeholder="Samsung Pay: email o teléfono" value="${escAttr((state.settings.pay||{}).samsung)}">
-        <input class="field" id="payTouch" placeholder="Touch Pay: nota o lector (opcional)" value="${escAttr((state.settings.pay||{}).touch)}">
+        <input class="field" id="payPaypal" placeholder="PayPal: email o paypal.me/suusuario" value="${escAttr(payCfg().paypal)}">
+        <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr(payCfg().ath)}">
         <button class="btn primary" id="savePay">Guardar métodos de pago</button>
       </div>
       <div class="card">
@@ -2573,7 +2544,7 @@ function pricesView() {
     <p class="muted">Los precios no incluyen IVU.</p>
     <div class="card">
       <h3>Cómo pagar</h3>
-      <p class="muted">PayPal, ATH Móvil, Google Pay, Samsung Pay y Touch Pay. El IVU no está incluido. Después del contrato se abre esta misma lista.</p>
+      <p class="muted">PayPal y ATH Móvil. El IVU no está incluido. Después del contrato se abre esta misma lista.</p>
       ${paySecureHtml()}
       ${payButtonsHtml((state.profile && state.profile.plan) || "NiuBision Estándar")}
       ${state.role !== "guest" ? `<button class="btn ghost" id="openPay">Pagar un plan ya contratado</button>` : ""}
@@ -3183,10 +3154,7 @@ function bindChrome() {
     if (paypal && !paypalSafe(paypal).ok) return toast("PayPal inválido. Use paypal.me, un email o un enlace https://paypal.com");
     state.settings.pay = {
       paypal,
-      ath: ($("#payAth") && $("#payAth").value || "").trim(),
-      google: ($("#payGoogle") && $("#payGoogle").value || "").trim(),
-      samsung: ($("#paySamsung") && $("#paySamsung").value || "").trim(),
-      touch: ($("#payTouch") && $("#payTouch").value || "").trim()
+      ath: ($("#payAth") && $("#payAth").value || "").trim()
     };
     persist();
     toast("Métodos de pago guardados");
@@ -3522,6 +3490,11 @@ async function boot() {
     store.set("nb_pin_init_9798", 1);
   } else {
     await ensureStudioPin();
+  }
+  if (!store.get("nb_pay_v2")) {
+    state.settings.pay = { paypal: PAYPAL_DEST, ath: ATH_DEST };
+    store.set("nb_pay_v2", 1);
+    persist();
   }
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
