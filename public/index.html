@@ -912,29 +912,37 @@ function persist() {
   store.set("nb_notes", state.notes);
   scheduleCloudPush();
 }
+const NB_CLOUD = "https://crudcrud.com/api/f2ae561b786c47b4b997bf8fd804f0d8";
 function defaultCloudUrl() {
   try {
     const href = String(location.href || "");
-    if (/^https?:/i.test(href)) return new URL("/api", href).origin + "/api";
+    const host = location.hostname || "";
+    if (/niubision\.com$/i.test(host) || /github\.io$/i.test(host)) return NB_CLOUD;
+    if (/^https?:/i.test(href) && host && host !== "null") return new URL("/api", href).origin + "/api";
   } catch (e) {}
-  try {
-    const o = String(location.origin || "");
-    if (o && o !== "null") return o.replace(/\/$/, "") + "/api";
-  } catch (e) {}
-  return "/api";
+  return NB_CLOUD;
 }
 function cloudUrl() {
   let raw = String(state.settings.cloudUrl || "").trim().replace(/\/$/, "");
   if (!raw) raw = defaultCloudUrl();
-  if (!raw) raw = "/api";
+  if (!raw) raw = NB_CLOUD;
   if (raw.charAt(0) === "/") return raw;
   try {
-    const u = new URL(raw, location.href || defaultCloudUrl());
-    if (u.protocol !== "http:" && u.protocol !== "https:") return defaultCloudUrl();
+    const u = new URL(raw, location.href || NB_CLOUD);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return NB_CLOUD;
     return (u.origin + u.pathname).replace(/\/$/, "");
   } catch (e) {
-    return defaultCloudUrl();
+    return NB_CLOUD;
   }
+}
+function useCrudCloud() {
+  const u = cloudUrl();
+  return /crudcrud\.com/i.test(u) || /niubision\.com$/i.test(location.hostname || "") || /github\.io$/i.test(location.hostname || "");
+}
+function newCloudToken() {
+  const a = new Uint8Array(32);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 function cloudPayload() {
   return {
@@ -982,11 +990,29 @@ function applyCloud(d) {
 }
 let cloudTimer = null;
 function scheduleCloudPush() {
-  if (!cloudUrl() || !state.settings.cloudToken) return;
+  if (!state.settings.cloudToken) return;
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(() => cloudPush().catch(() => {}), 1200);
 }
+async function crudStudios() {
+  const res = await fetch(NB_CLOUD + "/studios");
+  if (!res.ok) throw new Error("La nube no responde");
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
 async function cloudPush() {
+  if (useCrudCloud()) {
+    if (!state.settings.cloudToken) return { ok: false };
+    const rows = await crudStudios();
+    const row = rows.find((r) => r.token === state.settings.cloudToken);
+    if (!row || !row._id) return { ok: false };
+    const res = await fetch(NB_CLOUD + "/studios/" + row._id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studioKey: row.studioKey, token: row.token, state: cloudPayload() })
+    });
+    return { ok: res.ok };
+  }
   const url = cloudUrl();
   if (!url || !state.settings.cloudToken) return { ok: false };
   const res = await fetch(url + "/state", {
@@ -998,6 +1024,27 @@ async function cloudPush() {
   return { ok: res.ok, data };
 }
 async function cloudPull() {
+  if (useCrudCloud()) {
+    if (!state.settings.cloudToken) return { ok: false };
+    const rows = await crudStudios();
+    const row = rows.find((r) => r.token === state.settings.cloudToken);
+    if (!row || !row.state) return { ok: false };
+    applyCloud(row.state);
+    store.set("nb_clients", state.clients);
+    store.set("nb_profile", state.profile);
+    store.set("nb_history", state.history);
+    store.set("nb_checkins", state.checkins);
+    store.set("nb_habits", state.habits);
+    store.set("nb_weighins", state.weighins);
+    store.set("nb_measures", state.measures);
+    store.set("nb_notes", state.notes);
+    store.set("nb_routines_custom", state.customRoutines);
+    store.set("nb_routine_edits", state.routineEdits);
+    store.set("nb_health", state.health);
+    store.set("nb_contracts", state.contracts);
+    store.set("nb_settings", state.settings);
+    return { ok: true, data: { state: row.state } };
+  }
   const url = cloudUrl();
   if (!url || !state.settings.cloudToken) return { ok: false };
   const res = await fetch(url + "/state", {
@@ -1023,6 +1070,29 @@ async function cloudPull() {
   return { ok: res.ok, data };
 }
 async function cloudRegisterStudio() {
+  if (useCrudCloud()) {
+    const key = studioKey();
+    const rows = await crudStudios();
+    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === key);
+    if (hit && hit.token) {
+      state.settings.cloudToken = hit.token;
+      state.settings.cloudId = hit._id;
+      persist();
+      return { token: hit.token };
+    }
+    const token = newCloudToken();
+    const res = await fetch(NB_CLOUD + "/studios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studioKey: key, token, state: cloudPayload() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || "No se pudo crear el estudio");
+    state.settings.cloudToken = token;
+    state.settings.cloudId = data._id;
+    persist();
+    return { token };
+  }
   const url = cloudUrl();
   if (!url) throw new Error("Falta la URL del servidor");
   const res = await fetch(url + "/studio", {
@@ -1041,7 +1111,6 @@ async function ensureCloud() {
     state.settings.cloudUrl = defaultCloudUrl();
     persist();
   }
-  if (!cloudUrl()) return { ok: false };
   try {
     if (!state.settings.cloudToken) await cloudRegisterStudio();
     await cloudPush();
@@ -1051,6 +1120,19 @@ async function ensureCloud() {
   }
 }
 async function cloudRedeem(code) {
+  if (useCrudCloud()) {
+    const parts = String(code || "").replace(/\s+/g, "").split("|");
+    const key = (parts[0] === "NB2" ? parts[1] : parts[0] || "").toUpperCase();
+    if (!/^[A-HJ-NP-Z2-9]{5}$/.test(key)) return { ok: false };
+    const rows = await crudStudios();
+    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === key);
+    if (!hit || !hit.token) return { ok: false };
+    state.settings.cloudToken = hit.token;
+    state.settings.cloudId = hit._id;
+    persist();
+    await cloudPull();
+    return { ok: true, data: { token: hit.token } };
+  }
   const url = cloudUrl();
   if (!url) return { ok: false };
   const res = await fetch(url + "/redeem", {
