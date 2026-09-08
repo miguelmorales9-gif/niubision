@@ -1464,7 +1464,7 @@ function saveAiRoutine(rt, client) {
   persist();
 }
 function printReceipt(row) {
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr></table><p class='muted' style='margin-top:18px'>IVU no incluido. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>IVU no incluido. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
   const w = window.open("", "_blank");
   if (!w) { toast("Permita ventanas emergentes para el recibo"); return; }
   w.document.write(html);
@@ -1751,6 +1751,11 @@ function bindStudioOps() {
       const p = (state.payments || []).find((x) => x.id === b.dataset.gotpay);
       if (p) {
         p.status = "recibido";
+        const cl = state.clients.find((x) => x.id === p.clientId) || (state.clients || []).find((x) => x.name === p.name);
+        if (cl && !/rutina con ia/i.test(p.plan || "")) {
+          p.accessCode = ensureAccessCode(cl);
+          cl.unpaid = false;
+        }
         persist();
         toast("Pago recibido");
         openReceipt(p);
@@ -2203,7 +2208,29 @@ function recordPay(planLabel, method, status) {
     if (meta.weeks) c.endDate = addDaysIso(c.startDate, meta.weeks * 7);
     c.sessionsTotal = meta.sessions || c.sessionsTotal || 0;
     c.sessionsUsed = 0;
+    c.unpaid = false;
+    row.accessCode = ensureAccessCode(c);
+    row.clientId = c.id;
     normalizeClient(c);
+  } else if (!/rutina con ia/i.test(planLabel) && who) {
+    let created = (state.clients || []).find((x) => cleanName(x.name) === cleanName(who));
+    if (!created) {
+      created = {
+        id: "c" + Date.now(),
+        name: who,
+        plan: info.name || planLabel,
+        routine: state.profile.routine || "full-inicio",
+        sex: state.profile.sex,
+        age: state.profile.age,
+        phone: state.profile.phone
+      };
+      state.clients.push(created);
+    }
+    created.unpaid = false;
+    created.startDate = todayKey();
+    normalizeClient(created);
+    row.accessCode = ensureAccessCode(created);
+    row.clientId = created.id;
   }
   persist();
   return row;
@@ -2219,8 +2246,20 @@ function payDestHint(method) {
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
   const who = state.profile.name || (state.health && state.health.name) || "Cliente";
-  const text = `Pago NiuBision (iniciado)\n${who}\n${planLabel}\n${info.amount ? info.amount + " USD" : ""}\nMétodo: ${method}\nSin tarjetas ni PIN en la app.`;
-  window.open(waLink(text), "_blank");
+  const c = selfClient() || currentClient();
+  const bits = [
+    "Pago NiuBision (iniciado)",
+    who,
+    planLabel,
+    info.amount ? info.amount + " USD" : "",
+    "Método: " + method
+  ];
+  if (state.profile.sex) bits.push("Sexo: " + state.profile.sex);
+  if (state.profile.age) bits.push("Edad: " + state.profile.age);
+  if (state.profile.phone) bits.push("Tel: " + state.profile.phone);
+  if (c && c.accessCode) bits.push("Código de acceso: " + c.accessCode);
+  bits.push("Sin tarjetas ni PIN en la app.");
+  window.open(waLink(bits.filter(Boolean).join("\n")), "_blank");
 }
 function showPayReceipt(row) {
   const modal = document.createElement("div");
@@ -2231,6 +2270,8 @@ function showPayReceipt(row) {
     <h2>Pago iniciado</h2>
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}</p>
+    ${row.accessCode ? `<p style="font-family:var(--display);font-size:36px;letter-spacing:.12em;text-align:center;margin:10px 0">${escapeHtml(row.accessCode)}</p>
+    <p class="muted">Este es su código de acceso. Escríbalo en «Pegar código del coach» si entra desde otro teléfono.</p>` : ""}
     <p class="muted">Esto no es un cargo de tarjeta en NiuBision. El cobro lo confirma PayPal o ATH Móvil. El coach marca «recibido» cuando vea el dinero.</p>
     <button class="btn primary" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" id="closeSheet">Entendido</button>
@@ -3277,7 +3318,7 @@ function pricesView() {
         <div class="price">${p.price} USD <small>${p.unit}</small></div>
         <p>${p.simple}</p>
         <ul class="include">${p.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
-        ${state.role === "guest" ? `<button class="btn primary" id="needCode">Pedir código para contratar</button>` : `<button class="btn primary" data-want="${p.name} ${p.price} USD">Cuestionario y contrato</button>`}
+        ${state.role === "guest" ? `<button class="btn primary" data-need="${escAttr(p.name)}">Pedir código para contratar</button>` : `<button class="btn primary" data-want="${p.name} ${p.price} USD">Cuestionario y contrato</button>`}
       </article>`).join("")}
     <p class="muted">Los precios no incluyen IVU.</p>
     <article class="plan">
@@ -3285,7 +3326,7 @@ function pricesView() {
       <h3>Rutina con IA</h3>
       <div class="price">12 USD <small>una vez</small></div>
       <p>Un programa a medida con la biblioteca NiuBision. El entrenador puede revisarlo. No sustituye Base, Estándar ni Premium.</p>
-      ${state.role === "guest" ? `<button class="btn ghost" id="needCode">Pedir código para contratar</button>` : `<button class="btn primary" id="openAiPrice">Pagar 12 USD y generar</button>`}
+      ${state.role === "guest" ? `<button class="btn ghost" data-need="Rutina con IA 12 USD">Pedir código para contratar</button>` : `<button class="btn primary" id="openAiPrice">Pagar 12 USD y generar</button>`}
     </article>
     <div class="card">
       <h3>Cómo pagar</h3>
@@ -3303,7 +3344,7 @@ function peopleView() {
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Clientes</h2>
-    <p class="muted">Añada clientes reales. El código se pega en la portada, en «Tengo un código». Un enlace file:// no viaja a otro teléfono.</p>
+    <p class="muted">Añada clientes reales. El código son 6 dígitos. Envíelo por WhatsApp cuando el cliente haya pagado. En la portada toca «Pegar código del coach».</p>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos firmados</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}${k.flagged?" · bandera de salud":""}${k.payMethod?" · "+escapeHtml(k.payMethod):""}</div></div><button class="btn small ghost" data-delk="${k.id}">Eliminar</button></div>`).join("")}</div>` : ""}
     ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().slice(0,12).map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method)}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.plan)} · ${escapeHtml(p.date)} · ${escapeHtml(p.status || "iniciado")}</div></div>${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" data-gotpay="${p.id}">Marcar recibido</button>`}</div>`).join("")}</div>` : ""}
     ${state.health ? `<div class="card"><h3>Cuestionario de salud</h3><p class="muted">${escapeHtml(state.health.name)} · ${escapeHtml(state.health.date)} · ${HEALTH_ITEMS.some((q)=>state.health[q.id]==="sí") ? "hay al menos un sí" : "todas las respuestas no"}</p><button class="btn small ghost" id="delHealth">Eliminar cuestionario</button></div>` : ""}
@@ -3314,7 +3355,8 @@ function peopleView() {
       const st = clientStatus(c);
       return `<div class="card">
         <strong>${escapeHtml(c.name)}</strong>
-        <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
+        <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}${c.phone ? " · " + escapeHtml(c.phone) : ""}${c.sex ? " · " + escapeHtml(c.sex) : ""}${c.age ? " · " + escapeHtml(String(c.age)) + " años" : ""}</div>
+        ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : `<p class="muted" style="margin:6px 0">Sin código hasta el pago</p>`}
         <p class="${statusClass(st)}" style="margin:6px 0 10px">${escapeHtml(vigencyHtml(c))}</p>
         <select data-assign="${c.id}">${allRoutines().map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===c.routine?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}</select>
         <button class="btn small ghost" data-link="${c.id}">Copiar código</button>
@@ -3331,6 +3373,9 @@ function peopleView() {
     <div class="actions">
       <input class="search" id="newName" placeholder="Nombre">
       <select id="newPlan">${["Base","Estándar","Premium","Estándar · 12 semanas","Premium · 12 semanas","Pack 8","Pack 12"].map((p)=>`<option>${p}</option>`).join("")}</select>
+      <select id="newSex" class="field"><option value="">Sexo (opcional)</option><option>Hombre</option><option>Mujer</option><option>Prefiero no decir</option></select>
+      <input class="field" id="newAge" inputmode="numeric" placeholder="Edad (opcional)">
+      <input class="field" id="newPhone" inputmode="tel" placeholder="Teléfono (opcional)">
       <button class="btn primary" id="addClient">Añadir cliente</button>
     </div>
     <div class="card">
@@ -3445,6 +3490,25 @@ function openCheckin() {
   };
 }
 
+function newAccessCode() {
+  const used = new Set((state.clients || []).map((c) => String(c.accessCode || "")));
+  let n = "";
+  for (let i = 0; i < 60; i++) {
+    n = String(100000 + Math.floor(Math.random() * 900000));
+    if (!used.has(n)) return n;
+  }
+  return n;
+}
+function ensureAccessCode(c) {
+  if (!c) return "";
+  if (!/^\d{6}$/.test(String(c.accessCode || ""))) c.accessCode = newAccessCode();
+  return String(c.accessCode);
+}
+function findByAccessCode(code) {
+  const t = String(code || "").replace(/\D/g, "");
+  if (t.length !== 6) return null;
+  return (state.clients || []).find((c) => String(c.accessCode) === t) || null;
+}
 function studioKey() {
   if (!state.settings.studioKey) {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -3456,13 +3520,20 @@ function studioKey() {
   return state.settings.studioKey;
 }
 function clientCode(c) {
-  return `NB2|${studioKey()}|${cleanName(c.name)}|${cleanName(c.plan)}|${String(c.routine || "").replace(/\|/g, "-").slice(0, 64)}`;
+  return ensureAccessCode(c);
 }
 function parseClientCode(raw) {
   const t = (raw || "").trim().replace(/\s+/g, "");
   if (!t) return null;
+  const m6 = (raw || "").match(/\b(\d{6})\b/) || t.match(/(\d{6})/);
+  if (m6 && t.indexOf("|") < 0) {
+    const code = m6[1];
+    const c = findByAccessCode(code);
+    if (c) return { name: c.name, plan: c.plan, routine: c.routine || "full-inicio", accessCode: code, clientId: c.id, sex: c.sex, age: c.age, phone: c.phone };
+    return { accessCode: code, pending: true };
+  }
   const p = t.split("|");
-  if (p[0] === "NB2" && p.length >= 5) {
+  if ((p[0] === "NB2" || p[0] === "NB1") && p.length >= 5) {
     const key = p[1];
     if (!/^[A-HJ-NP-Z2-9]{5}$/.test(key)) return null;
     if (state.settings.studioKey && key !== state.settings.studioKey) return null;
@@ -3482,6 +3553,10 @@ function applyClientAssign(a) {
   if (a.name) state.profile.name = a.name;
   if (a.plan) state.profile.plan = a.plan;
   if (a.routine) state.profile.routine = a.routine;
+  if (a.accessCode) state.profile.accessCode = a.accessCode;
+  if (a.sex) state.profile.sex = a.sex;
+  if (a.age) state.profile.age = a.age;
+  if (a.phone) state.profile.phone = a.phone;
   state.profile.unlocked = true;
   persist();
   return true;
@@ -3505,15 +3580,17 @@ function copyText(text) {
   return Promise.resolve(false);
 }
 function showShare(c) {
-  const code = clientCode(c);
-  const msg = `NiuBision\nCliente: ${c.name}\nPlan: ${c.plan}\nRutina: ${c.routine}\n\nCódigo:\n${code}\n\nAbra NiuBision, mantenga el logo, toque «Tengo un código» y péguelo.`;
+  const code = ensureAccessCode(c);
+  persist();
+  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra niubision.com, mantenga el logo y toque «Pegar código del coach». Escriba esos 6 dígitos.`;
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
     <div class="handle"></div>
     <p class="tagline">${escapeHtml(c.name)}</p>
     <h2>Código del cliente</h2>
-    <p class="muted">En un archivo local Chrome no copia rutas file://. Este código sí se puede pegar en el otro teléfono.</p>
+    <p class="muted">Envíe estos 6 dígitos por WhatsApp cuando el cliente haya pagado.</p>
+    <p style="font-family:var(--display);font-size:42px;letter-spacing:.12em;text-align:center;margin:12px 0">${escapeHtml(code)}</p>
     <textarea id="shareBox" class="field" style="min-height:120px">${escapeHtml(msg)}</textarea>
     <button class="btn primary" id="copyShare">Copiar</button>
     <button class="btn ghost" id="waShare">WhatsApp</button>
@@ -3526,6 +3603,60 @@ function showShare(c) {
   $("#waShare").onclick = () => window.open(waLink(msg), "_blank");
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
 }
+function openNeedCode(planLabel) {
+  const plan = planLabel || (state.profile && state.profile.plan) || "NiuBision Estándar";
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Solicitud</p>
+    <h2>Pedir código</h2>
+    <p class="muted">El entrenador recibe sus datos por WhatsApp. El código de 6 dígitos se lo envían cuando el servicio esté pagado.</p>
+    <input class="field" id="leadName" placeholder="Nombre y apellido" value="${escAttr((state.profile && state.profile.name) || "")}">
+    <select id="leadSex" class="field">
+      <option value="">Sexo</option>
+      <option value="Hombre">Hombre</option>
+      <option value="Mujer">Mujer</option>
+      <option value="Prefiero no decir">Prefiero no decir</option>
+    </select>
+    <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad">
+    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono 7874544038">
+    <p class="muted">Plan de interés: ${escapeHtml(plan)}</p>
+    <button class="btn primary" id="leadSend">Enviar por WhatsApp</button>
+    <button class="btn ghost" id="closeSheet">Cerrar</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  $("#leadSend").onclick = () => {
+    const name = cleanName($("#leadName", modal).value || "");
+    const sex = ($("#leadSex", modal).value || "").trim();
+    const age = parseInt($("#leadAge", modal).value, 10);
+    const phone = ($("#leadPhone", modal).value || "").replace(/\D/g, "");
+    if (!name || name.split(" ").length < 1) return toast("Escriba su nombre");
+    if (!sex) return toast("Indique el sexo");
+    if (!(age >= 14 && age <= 90)) return toast("Edad entre 14 y 90");
+    if (phone.length < 10) return toast("Teléfono de 10 dígitos");
+    state.profile.name = name;
+    state.profile.sex = sex;
+    state.profile.age = age;
+    state.profile.phone = phone;
+    state.profile.plan = plan;
+    state.pendingPlan = plan;
+    let c = (state.clients || []).find((x) => cleanName(x.name) === name || String(x.phone || "") === phone);
+    if (!c) {
+      c = { id: "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, unpaid: true };
+      state.clients.push(c);
+    } else {
+      c.sex = sex; c.age = age; c.phone = phone; c.plan = c.plan || plan;
+    }
+    persist();
+    const msg = `NiuBision — pedir código\nNombre: ${name}\nSexo: ${sex}\nEdad: ${age}\nTeléfono: ${phone}\nPlan: ${plan}\n\nAñadir al estudio. El código de 6 dígitos se envía cuando pague.`;
+    window.open(waLink(msg), "_blank");
+    modal.remove();
+    toast("Solicitud enviada. El código llega al pagar.");
+    startOnboard(plan);
+  };
+}
 function openCodeEntry() {
   const modal = document.createElement("div");
   modal.className = "modal";
@@ -3533,8 +3664,8 @@ function openCodeEntry() {
     <div class="handle"></div>
     <p class="tagline">Cliente</p>
     <h2>Tengo un código</h2>
-    <p class="muted">Péguelo tal como se lo enviaron. Empieza por NB2|</p>
-    <textarea id="codeIn" class="field" placeholder="NB2|CLAVE|Nombre|Estándar|full-inicio"></textarea>
+    <p class="muted">Son 6 dígitos. Se lo envían por WhatsApp cuando el servicio está pagado.</p>
+    <input class="field" id="codeIn" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
     <button class="btn primary" id="useCode">Entrar con este código</button>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
@@ -3542,16 +3673,34 @@ function openCodeEntry() {
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   $("#useCode").onclick = async () => {
     const raw = $("#codeIn").value;
-    const a = parseClientCode(raw);
-    if (!a) return toast("Código no válido");
+    let a = parseClientCode(raw);
+    if (a && a.pending) {
+      toast("Buscando el código…");
+      try { await cloudRedeem(a.accessCode); } catch (e) {}
+      try {
+        const rows = await githubLoad();
+        for (let i = 0; i < rows.length; i++) {
+          const list = (rows[i].state && rows[i].state.clients) || [];
+          const hit = list.find((x) => String(x.accessCode) === a.accessCode);
+          if (hit) {
+            if (rows[i].state) applyCloud(rows[i].state);
+            persist();
+            a = parseClientCode(a.accessCode);
+            break;
+          }
+        }
+      } catch (e) {}
+      a = parseClientCode(raw);
+    }
+    if (!a || a.pending) return toast("Código no válido o aún no está pagado");
     modal.remove();
     applyClientAssign(a);
     state.splash = false;
     store.set("nb_seen_cover", true);
     state.view = "home";
-    if (cloudUrl()) await cloudRedeem(raw).catch(() => {});
+    if (cloudUrl()) await cloudRedeem(a.accessCode || raw).catch(() => {});
     render();
-    toast("Asignación aplicada");
+    toast("Bienvenido a NiuBision");
   };
 }
 
@@ -3775,7 +3924,7 @@ function bindChrome() {
   $$("[data-f]").forEach((b) => b.onclick = () => { state.filter = b.dataset.f; render(); });
   $$("[data-ex]").forEach((c) => c.onclick = () => openExercise(c.dataset.ex));
   $$("[data-want]").forEach((b) => b.onclick = () => startOnboard(b.dataset.want));
-  $$("#needCode").forEach((b) => b.onclick = () => { state.role = null; persist(); render(); openCodeEntry(); });
+  $$("[data-need]").forEach((b) => b.onclick = () => openNeedCode(b.dataset.need));
   $$("[data-pick]").forEach((b) => b.onclick = () => {
     state.settings.clientId = b.dataset.pick; persist(); render();
   });
@@ -3871,7 +4020,7 @@ function bindChrome() {
   });
   $$("[data-wa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.wa);
-    if (c) window.open(waLink(`NiuBision\nCliente: ${c.name}\nPlan: ${c.plan}\nRutina: ${c.routine}\n\nCódigo:\n${clientCode(c)}\n\nAbra la app, toque «Tengo un código» y péguelo.`), "_blank");
+    if (c) window.open(waLink(`NiuBision\nHola ${c.name}.\n${c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n"}Plan: ${c.plan}\n\nAbra niubision.com, mantenga el logo y toque «Pegar código del coach».`), "_blank");
   });
   $$("[data-delc]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.delc);
@@ -3917,7 +4066,13 @@ function bindChrome() {
     if (!name) return toast("Escriba un nombre");
     const plan = $("#newPlan").value;
     if (/premium/i.test(plan) && !/12 semanas/i.test(plan) && premiumCount() >= 8) return toast("Cupo Premium lleno (8)");
-    const row = { id: "c" + Date.now(), name, plan, routine: "full-inicio" };
+    const row = { id: "c" + Date.now(), name, plan, routine: "full-inicio", unpaid: true };
+    const sex = ($("#newSex") && $("#newSex").value) || "";
+    const age = parseInt($("#newAge") && $("#newAge").value, 10);
+    const phone = ($("#newPhone") && $("#newPhone").value || "").replace(/\D/g, "");
+    if (sex) row.sex = sex;
+    if (age >= 14 && age <= 90) row.age = age;
+    if (phone.length >= 10) row.phone = phone;
     normalizeClient(row);
     state.clients.push(row);
     persist(); render();
