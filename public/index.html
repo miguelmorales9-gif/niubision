@@ -936,8 +936,22 @@ function cloudUrl() {
   }
 }
 function useCrudCloud() {
-  const u = cloudUrl();
-  return /crudcrud\.com/i.test(u) || /niubision\.com$/i.test(location.hostname || "") || /github\.io$/i.test(location.hostname || "");
+  return true;
+}
+function cloudErr(e) {
+  const m = String((e && e.message) || e || "");
+  if (/failed to fetch|networkerror|load failed|network request|fetch/i.test(m)) {
+    return "Sin conexión a la nube. Revise internet o desactive el bloqueo de anuncios.";
+  }
+  return m || "No se pudo conectar la nube";
+}
+async function cloudGet(url, opts) {
+  return fetch(url, Object.assign({
+    mode: "cors",
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "origin"
+  }, opts || {}));
 }
 function newCloudToken() {
   const a = new Uint8Array(32);
@@ -995,116 +1009,123 @@ function scheduleCloudPush() {
   cloudTimer = setTimeout(() => cloudPush().catch(() => {}), 1200);
 }
 async function crudStudios() {
-  const res = await fetch(NB_CLOUD + "/studios");
+  const res = await cloudGet(NB_CLOUD + "/studios");
   if (!res.ok) throw new Error("La nube no responde");
   const rows = await res.json().catch(() => []);
   return Array.isArray(rows) ? rows : [];
 }
+async function registerCrud() {
+  const key = studioKey();
+  let rows = [];
+  try { rows = await crudStudios(); } catch (e) { rows = []; }
+  const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === key);
+  if (hit && hit.token) {
+    state.settings.cloudToken = hit.token;
+    state.settings.cloudId = hit._id;
+    persist();
+    return { token: hit.token };
+  }
+  const token = newCloudToken();
+  const res = await cloudGet(NB_CLOUD + "/studios", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ studioKey: key, token, state: cloudPayload() })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || "No se pudo crear el estudio");
+  state.settings.cloudToken = token;
+  state.settings.cloudId = data._id;
+  persist();
+  return { token };
+}
+async function registerNative() {
+  const bases = [];
+  try {
+    const href = String(location.href || "");
+    if (/^https?:/i.test(href)) bases.push(new URL("/api", href).origin + "/api");
+  } catch (e) {}
+  bases.push("/api");
+  let last = "No se pudo crear el estudio";
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/studio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ studioKey: studioKey(), auth: state.pinHash || "local" })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        state.settings.cloudToken = data.token;
+        persist();
+        return data;
+      }
+      if (data.error) last = data.error;
+    } catch (e) {
+      last = cloudErr(e);
+    }
+  }
+  throw new Error(last);
+}
 async function cloudPush() {
-  if (useCrudCloud()) {
-    if (!state.settings.cloudToken) return { ok: false };
+  if (!state.settings.cloudToken) return { ok: false };
+  try {
     const rows = await crudStudios();
     const row = rows.find((r) => r.token === state.settings.cloudToken);
-    if (!row || !row._id) return { ok: false };
-    const res = await fetch(NB_CLOUD + "/studios/" + row._id, {
+    if (row && row._id) {
+      const res = await cloudGet(NB_CLOUD + "/studios/" + row._id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ studioKey: row.studioKey, token: row.token, state: cloudPayload() })
+      });
+      if (res.ok) return { ok: true };
+    }
+  } catch (e) {}
+  try {
+    const url = cloudUrl();
+    if (!url || /crudcrud/i.test(url) || /niubision\.com/i.test(url)) return { ok: false };
+    const res = await cloudGet(url + "/state", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studioKey: row.studioKey, token: row.token, state: cloudPayload() })
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + state.settings.cloudToken },
+      body: JSON.stringify(cloudPayload())
     });
     return { ok: res.ok };
+  } catch (e) {
+    return { ok: false };
   }
-  const url = cloudUrl();
-  if (!url || !state.settings.cloudToken) return { ok: false };
-  const res = await fetch(url + "/state", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + state.settings.cloudToken },
-    body: JSON.stringify(cloudPayload())
-  });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, data };
 }
 async function cloudPull() {
-  if (useCrudCloud()) {
-    if (!state.settings.cloudToken) return { ok: false };
+  if (!state.settings.cloudToken) return { ok: false };
+  try {
     const rows = await crudStudios();
     const row = rows.find((r) => r.token === state.settings.cloudToken);
-    if (!row || !row.state) return { ok: false };
-    applyCloud(row.state);
-    store.set("nb_clients", state.clients);
-    store.set("nb_profile", state.profile);
-    store.set("nb_history", state.history);
-    store.set("nb_checkins", state.checkins);
-    store.set("nb_habits", state.habits);
-    store.set("nb_weighins", state.weighins);
-    store.set("nb_measures", state.measures);
-    store.set("nb_notes", state.notes);
-    store.set("nb_routines_custom", state.customRoutines);
-    store.set("nb_routine_edits", state.routineEdits);
-    store.set("nb_health", state.health);
-    store.set("nb_contracts", state.contracts);
-    store.set("nb_settings", state.settings);
-    return { ok: true, data: { state: row.state } };
-  }
-  const url = cloudUrl();
-  if (!url || !state.settings.cloudToken) return { ok: false };
-  const res = await fetch(url + "/state", {
-    headers: { Authorization: "Bearer " + state.settings.cloudToken }
-  });
-  const data = await res.json().catch(() => ({}));
-  if (res.ok && data.state) {
-    applyCloud(data.state);
-    store.set("nb_clients", state.clients);
-    store.set("nb_profile", state.profile);
-    store.set("nb_history", state.history);
-    store.set("nb_checkins", state.checkins);
-    store.set("nb_habits", state.habits);
-    store.set("nb_weighins", state.weighins);
-    store.set("nb_measures", state.measures);
-    store.set("nb_notes", state.notes);
-    store.set("nb_routines_custom", state.customRoutines);
-    store.set("nb_routine_edits", state.routineEdits);
-    store.set("nb_health", state.health);
-    store.set("nb_contracts", state.contracts);
-    store.set("nb_settings", state.settings);
-  }
-  return { ok: res.ok, data };
+    if (row && row.state) {
+      applyCloud(row.state);
+      store.set("nb_clients", state.clients);
+      store.set("nb_profile", state.profile);
+      store.set("nb_history", state.history);
+      store.set("nb_checkins", state.checkins);
+      store.set("nb_habits", state.habits);
+      store.set("nb_weighins", state.weighins);
+      store.set("nb_measures", state.measures);
+      store.set("nb_notes", state.notes);
+      store.set("nb_routines_custom", state.customRoutines);
+      store.set("nb_routine_edits", state.routineEdits);
+      store.set("nb_health", state.health);
+      store.set("nb_contracts", state.contracts);
+      store.set("nb_settings", state.settings);
+      return { ok: true, data: { state: row.state } };
+    }
+  } catch (e) {}
+  return { ok: false };
 }
 async function cloudRegisterStudio() {
-  if (useCrudCloud()) {
-    const key = studioKey();
-    const rows = await crudStudios();
-    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === key);
-    if (hit && hit.token) {
-      state.settings.cloudToken = hit.token;
-      state.settings.cloudId = hit._id;
-      persist();
-      return { token: hit.token };
-    }
-    const token = newCloudToken();
-    const res = await fetch(NB_CLOUD + "/studios", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studioKey: key, token, state: cloudPayload() })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || data.error || "No se pudo crear el estudio");
-    state.settings.cloudToken = token;
-    state.settings.cloudId = data._id;
-    persist();
-    return { token };
-  }
-  const url = cloudUrl();
-  if (!url) throw new Error("Falta la URL del servidor");
-  const res = await fetch(url + "/studio", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ studioKey: studioKey(), auth: state.pinHash || "local" })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "No se pudo crear el estudio");
-  state.settings.cloudToken = data.token;
+  state.settings.cloudUrl = NB_CLOUD;
   persist();
-  return data;
+  try { return await registerCrud(); }
+  catch (e1) {
+    try { return await registerNative(); }
+    catch (e2) { throw new Error(cloudErr(e1)); }
+  }
 }
 async function ensureCloud() {
   if (!state.settings.cloudUrl) {
@@ -3302,7 +3323,7 @@ function bindChrome() {
       await cloudPush();
       toast("Estudio en la nube");
       render();
-    } catch (e) { toast(e.message || "No hay servidor aún"); }
+    } catch (e) { toast(cloudErr(e)); }
     finally { cc.disabled = false; }
   };
   const cn = $("#cloudNow");
