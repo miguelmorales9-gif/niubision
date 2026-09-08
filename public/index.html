@@ -240,6 +240,9 @@ img { background: transparent; }
 .pay-secure ul { margin:6px 0 0 16px; }
 
 .pay-secure li { margin:4px 0; }
+.totp-box { text-align:center; margin:8px 0 12px; }
+.totp-box img { width:220px; height:220px; margin:10px auto; background:#fff; border-radius:14px; padding:10px; display:block; }
+.totp-secret { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.14em; font-size:13px; color:var(--cream); word-break:break-all; }
 
 @property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 @property --glow { syntax: "<number>"; inherits: false; initial-value: 0.4; }
@@ -1195,6 +1198,12 @@ function newSalt() {
 function hasPin() {
   return !!(state.pinHash || (state.pin && String(state.pin).length >= 4));
 }
+const STUDIO_PIN = "9798";
+async function ensureStudioPin() {
+  if (hasPin()) return;
+  await setPin(STUDIO_PIN);
+  store.set("nb_pin_init_9798", 1);
+}
 async function setPin(plain) {
   const p = String(plain || "").trim();
   state.pin = p;
@@ -1249,7 +1258,6 @@ async function checkPin(plain) {
   return true;
 }
 function resetStudioPin() {
-  if (!confirm("¿Borrar la clave de este teléfono? Los clientes y contratos se quedan. Luego crea una clave nueva.")) return false;
   state.pin = "";
   state.pinHash = "";
   state.pinSalt = "";
@@ -1259,7 +1267,128 @@ function resetStudioPin() {
   store.set("nb_pin_fails", 0);
   store.set("nb_pin_lock", 0);
   persist();
-  return true;
+}
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+function base32Encode(bytes) {
+  let bits = 0, val = 0, out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    val = (val << 8) | bytes[i];
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(val >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+  return out;
+}
+function base32Decode(str) {
+  const s = String(str || "").toUpperCase().replace(/=+$/g, "").replace(/[^A-Z2-7]/g, "");
+  let bits = 0, val = 0, out = [];
+  for (let i = 0; i < s.length; i++) {
+    const idx = B32.indexOf(s[i]);
+    if (idx < 0) continue;
+    val = (val << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((val >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(out);
+}
+async function hmacSha1(keyBytes, msgBytes) {
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, msgBytes));
+}
+async function totpAt(secret, ms) {
+  const key = base32Decode(secret);
+  const counter = Math.floor(ms / 1000 / 30);
+  const buf = new ArrayBuffer(8);
+  new DataView(buf).setUint32(4, counter >>> 0, false);
+  const hmac = await hmacSha1(key, new Uint8Array(buf));
+  const off = hmac[hmac.length - 1] & 0xf;
+  const bin = ((hmac[off] & 0x7f) << 24) | ((hmac[off + 1] & 0xff) << 16) | ((hmac[off + 2] & 0xff) << 8) | (hmac[off + 3] & 0xff);
+  return String(bin % 1000000).padStart(6, "0");
+}
+async function totpOk(code) {
+  const secret = store.get("nb_totp_secret", "");
+  const c = String(code || "").replace(/\D/g, "");
+  if (!secret || !/^\d{6}$/.test(c)) return false;
+  for (const d of [-1, 0, 1]) {
+    if ((await totpAt(secret, Date.now() + d * 30000)) === c) return true;
+  }
+  return false;
+}
+function totpEnrolled() { return !!store.get("nb_totp_on", false); }
+function totpSecret() {
+  let s = store.get("nb_totp_secret", "");
+  if (!s) {
+    const a = new Uint8Array(20);
+    crypto.getRandomValues(a);
+    s = base32Encode(a);
+    store.set("nb_totp_secret", s);
+  }
+  return s;
+}
+function totpOtpauth() {
+  return "otpauth://totp/" + encodeURIComponent("NiuBision:Estudio") +
+    "?secret=" + totpSecret() + "&issuer=" + encodeURIComponent("NiuBision") + "&period=30&digits=6";
+}
+function totpQrSrc() {
+  return "https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&margin=8&data=" + encodeURIComponent(totpOtpauth());
+}
+function openPinRecover() {
+  const enrolled = totpEnrolled();
+  const secret = totpSecret();
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = enrolled ? `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Google Authenticator</p>
+    <h2>Cambiar clave</h2>
+    <p class="muted">Abra Google Authenticator y escriba el código de 6 dígitos de NiuBision. Luego defina la clave nueva.</p>
+    <input class="field" id="recCode" inputmode="numeric" maxlength="6" placeholder="Código de Authenticator" autocomplete="one-time-code">
+    <input class="field" id="recA" inputmode="numeric" maxlength="8" placeholder="Nueva clave (4 a 8 dígitos)" autocomplete="new-password">
+    <input class="field" id="recB" inputmode="numeric" maxlength="8" placeholder="Repetir clave nueva" autocomplete="new-password">
+    <button class="btn primary" id="recGo">Verificar y guardar</button>
+    <button class="btn ghost" id="closeSheet">Cancelar</button>
+  </div>` : `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Google Authenticator</p>
+    <h2>Activar el estudio</h2>
+    <p class="muted">En el teléfono abra <strong>Google Authenticator</strong> → añadir → escanear el QR. Si no escanea, escriba la clave a mano.</p>
+    <div class="totp-box">
+      <img src="${totpQrSrc()}" alt="QR de Google Authenticator">
+      <p class="totp-secret">${secret}</p>
+    </div>
+    <input class="field" id="enrollCode" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos de la app" autocomplete="one-time-code">
+    <button class="btn primary" id="enrollGo">Activar Authenticator</button>
+    <button class="btn ghost" id="closeSheet">Cancelar</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const enroll = modal.querySelector("#enrollGo");
+  if (enroll) enroll.onclick = async () => {
+    if (!(await totpOk($("#enrollCode").value))) return toast("Código incorrecto. Revise la hora del teléfono.");
+    store.set("nb_totp_on", true);
+    modal.remove();
+    toast("Google Authenticator activado");
+    openPinRecover();
+  };
+  const go = modal.querySelector("#recGo");
+  if (go) go.onclick = async () => {
+    if (!(await totpOk($("#recCode").value))) return toast("Código de Authenticator incorrecto");
+    const a = ($("#recA").value || "").trim();
+    const b = ($("#recB").value || "").trim();
+    if (!/^\d{4,8}$/.test(a)) return toast("Use 4 a 8 dígitos");
+    if (a !== b) return toast("Las claves no coinciden");
+    await setPin(a);
+    store.set("nb_pin_fails", 0);
+    store.set("nb_pin_lock", 0);
+    modal.remove();
+    toast("Clave actualizada");
+  };
 }
 function maskDest(s, kind) {
   const t = String(s || "").trim();
@@ -1647,44 +1776,32 @@ function enterClient(view) {
   render();
 }
 function openCoachGate() {
-  const has = hasPin();
+  const has = true;
   pinLocked();
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
     <div class="handle"></div>
     <p class="tagline">Estudio</p>
-    <h2>${has ? "Clave del coach" : "Crear clave del estudio"}</h2>
-    <p class="muted">${has ? "Solo usted entra aquí. El cliente no ve este panel." : "La primera vez defina una clave de 4 a 8 dígitos. Guárdela. Sin ella no hay modo coach."}</p>
+    <h2>Clave del coach</h2>
+    <p class="muted">Solo usted entra aquí. El cliente no ve este panel.</p>
     <input class="field" id="pinA" inputmode="numeric" maxlength="8" placeholder="Clave" autocomplete="off">
-    ${has ? "" : '<input class="field" id="pinB" inputmode="numeric" maxlength="8" placeholder="Repetir clave" autocomplete="off">'}
-    <button class="btn primary" id="pinGo">${has ? "Entrar" : "Guardar clave y entrar"}</button>
-    ${has ? '<button class="btn ghost" id="pinReset">Olvidé la clave</button>' : ""}
+    <button class="btn primary" id="pinGo">Entrar</button>
+    <button class="btn ghost" id="pinReset">Olvidé la clave</button>
     <button class="btn ghost" id="closeSheet">Cancelar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   const pr = modal.querySelector("#pinReset");
   if (pr) pr.onclick = () => {
-    if (!resetStudioPin()) return;
     modal.remove();
-    toast("Clave borrada. Cree una nueva.");
-    openCoachGate();
+    openPinRecover();
   };
   modal.querySelector("#pinGo").onclick = async () => {
     const a = ($("#pinA").value || "").trim();
     if (!/^\d{4,8}$/.test(a)) return toast("Use 4 a 8 dígitos");
     try {
-      if (!has) {
-        const b = ($("#pinB").value || "").trim();
-        if (a !== b) return toast("Las claves no coinciden");
-        if (state.settings.studioKeyFromClient) {
-          state.settings.studioKey = "";
-          state.settings.studioKeyFromClient = false;
-        }
-        studioKey();
-        await setPin(a);
-      } else if (!(await checkPin(a))) {
+      if (!(await checkPin(a))) {
         if (!pinLocked() && (store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
         return;
       }
@@ -3118,14 +3235,7 @@ function bindChrome() {
     render();
   };
   const rp = $("#resetPin");
-  if (rp) rp.onclick = async () => {
-    const a = prompt("Nueva clave (4 a 8 dígitos)");
-    if (!a || !/^\d{4,8}$/.test(a)) return;
-    const b = prompt("Repita la clave");
-    if (a !== b) return toast("No coinciden");
-    await setPin(a);
-    toast("Clave actualizada");
-  };
+  if (rp) rp.onclick = () => openPinRecover();
   const exp = $("#exportData");
   if (exp) exp.onclick = () => {
     const blob = new Blob([JSON.stringify({
@@ -3407,7 +3517,12 @@ async function boot() {
   applyHash();
   if (state.splash) warmupIntro();
   pinLocked();
-  if (state.pin != null && state.pin !== "") state.pin = String(state.pin);
+  if (!store.get("nb_pin_init_9798")) {
+    await setPin(STUDIO_PIN);
+    store.set("nb_pin_init_9798", 1);
+  } else {
+    await ensureStudioPin();
+  }
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
   }
