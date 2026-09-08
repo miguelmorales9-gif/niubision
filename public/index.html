@@ -912,13 +912,22 @@ function persist() {
   store.set("nb_notes", state.notes);
   scheduleCloudPush();
 }
+function defaultCloudUrl() {
+  try {
+    return new URL("/api", location.origin).href.replace(/\/$/, "");
+  } catch (e) {
+    return "";
+  }
+}
 function cloudUrl() {
-  const raw = (state.settings.cloudUrl || "").trim().replace(/\/$/, "");
+  const raw = (state.settings.cloudUrl || defaultCloudUrl()).trim().replace(/\/$/, "");
   if (!raw) return "";
   try {
-    const u = new URL(raw);
-    if (u.protocol !== "https:") return "";
-    return u.origin + u.pathname.replace(/\/$/, "");
+    const u = new URL(raw, location.origin);
+    const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    if (u.protocol === "https:") return u.origin + u.pathname.replace(/\/$/, "");
+    if (u.protocol === "http:" && local) return u.origin + u.pathname.replace(/\/$/, "");
+    return "";
   } catch (e) { return ""; }
 }
 function cloudPayload() {
@@ -1020,6 +1029,20 @@ async function cloudRegisterStudio() {
   state.settings.cloudToken = data.token;
   persist();
   return data;
+}
+async function ensureCloud() {
+  if (!state.settings.cloudUrl) {
+    state.settings.cloudUrl = defaultCloudUrl();
+    persist();
+  }
+  if (!cloudUrl()) return { ok: false };
+  try {
+    if (!state.settings.cloudToken) await cloudRegisterStudio();
+    await cloudPush();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e && e.message };
+  }
 }
 async function cloudRedeem(code) {
   const url = cloudUrl();
@@ -1784,7 +1807,8 @@ function openCoachGate() {
       return;
     }
     modal.remove();
-    state.role = "coach"; state.view = "home"; persist(); render();
+    state.role = "coach"; state.view = "home"; persist();
+    ensureCloud().finally(() => render());
   };
 }
 
@@ -2148,10 +2172,9 @@ function homeView() {
       </div>
       <div class="card">
         <h3>Nube NiuBision</h3>
-        <p class="muted">La app web vive en GitHub Pages. Los expedientes salen de este teléfono cuando pega la URL del servidor y pulsa conectar.</p>
-        <input class="field" id="cloudUrl" placeholder="https://su-servidor.example.com" value="${escAttr(state.settings.cloudUrl || "")}">
-        <p class="muted">${state.settings.cloudToken ? "Estudio conectado. Los cambios se suben solos." : "Aún no hay token de nube."}</p>
-        <button class="btn primary" id="cloudConnect">Guardar URL y conectar estudio</button>
+        <p class="muted">${state.settings.cloudToken ? "Estudio conectado. Los cambios de clientes, pagos y rutinas se suben solos a la nube." : "El servidor de NiuBision está listo. Pulse conectar para guardar el estudio fuera de este teléfono."}</p>
+        <p class="muted">Servidor: ${escapeHtml(state.settings.cloudUrl || defaultCloudUrl())}</p>
+        <button class="btn primary" id="cloudConnect">${state.settings.cloudToken ? "Reconectar estudio" : "Conectar estudio a la nube"}</button>
         <button class="btn ghost" id="cloudNow">Subir y bajar ahora</button>
       </div>
     </section>`;
@@ -3179,12 +3202,9 @@ function bindChrome() {
     toast("Pago marcado recibido");
     render();
   });
-  const cu = $("#cloudUrl");
   const cc = $("#cloudConnect");
   if (cc) cc.onclick = async () => {
-    const raw = ($("#cloudUrl").value || "").trim();
-    if (raw && !raw.startsWith("https://")) return toast("La nube solo acepta https://");
-    state.settings.cloudUrl = raw;
+    state.settings.cloudUrl = defaultCloudUrl();
     persist();
     try {
       await cloudRegisterStudio();
@@ -3195,11 +3215,11 @@ function bindChrome() {
   };
   const cn = $("#cloudNow");
   if (cn) cn.onclick = async () => {
-    state.settings.cloudUrl = (cu && cu.value || state.settings.cloudUrl || "").trim();
+    state.settings.cloudUrl = defaultCloudUrl();
     persist();
     const p = await cloudPull();
     await cloudPush();
-    toast(p.ok ? "Sincronizado" : "Sin servidor. Revise la URL");
+    toast(p.ok ? "Sincronizado" : "Sin servidor. Intente reconectar");
     render();
   };
   const rp = $("#resetPin");
@@ -3230,7 +3250,7 @@ function bindChrome() {
         if (d.settings) {
           const s = d.settings;
           if (s.cloudToken) delete s.cloudToken;
-          if (s.cloudUrl && !String(s.cloudUrl).startsWith("https://")) s.cloudUrl = "";
+          if (s.cloudUrl && !(String(s.cloudUrl).startsWith("https://") || String(s.cloudUrl).startsWith("http://127.0.0.1") || String(s.cloudUrl).startsWith("http://localhost"))) s.cloudUrl = "";
           if (s.pay && s.pay.paypal && !paypalSafe(s.pay.paypal).ok) s.pay.paypal = "";
           state.settings = Object.assign({}, state.settings, s);
         }
@@ -3433,6 +3453,10 @@ function afterPaint() {
   if (state.view === "work") bindWork();
   if (state.view === "rutinas") bindRoutinesCoach();
   bindChrome();
+  if (state.role === "coach" && !state._cloudTried) {
+    state._cloudTried = true;
+    ensureCloud().then((r) => { if (r && r.ok && state.view === "home") render(); });
+  }
 }
 function render() {
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
@@ -3494,6 +3518,10 @@ async function boot() {
   if (!store.get("nb_pay_v2")) {
     state.settings.pay = { paypal: PAYPAL_DEST, ath: ATH_DEST };
     store.set("nb_pay_v2", 1);
+    persist();
+  }
+  if (!state.settings.cloudUrl) {
+    state.settings.cloudUrl = defaultCloudUrl();
     persist();
   }
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
