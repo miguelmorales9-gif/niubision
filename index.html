@@ -1090,12 +1090,41 @@ function persist() {
   }
 }
 const JB_CLOUD = "https://jsonblob.com/api/jsonBlob";
+const CR_CLOUD = "https://crudcrud.com/api/25e3d135532e4964b496a8f7141e838d";
+const NB_CLOUD = {
+  key: "NIUBI",
+  token: "nb-cloud-v1",
+  id: "6aa19e22bc2cf903e84afdff"
+};
+function adoptCloud(id, kind, token) {
+  if (id) {
+    state.settings.cloudId = id;
+    store.set("nb_blob_id", id);
+  }
+  if (kind) state.settings.cloudKind = kind;
+  if (token) state.settings.cloudToken = token;
+  state.settings.studioKey = NB_CLOUD.key;
+  state.settings.cloudUrl = CR_CLOUD;
+  store.set("nb_settings", state.settings);
+}
+function isPagesHost() {
+  try {
+    return /niubision\.com$/i.test(location.hostname || "") || /github\.io$/i.test(location.hostname || "");
+  } catch (e) { return true; }
+}
+function isCrudId(id) {
+  return /^[a-f0-9]{24}$/i.test(String(id || ""));
+}
+function crudUrl(id) {
+  return CR_CLOUD + "/studios" + (id ? "/" + encodeURIComponent(id) : "");
+}
 function defaultCloudUrl() {
+  if (isPagesHost()) return CR_CLOUD;
   try {
     const href = String(location.href || "");
     if (/^https?:/i.test(href)) return new URL("/api", href).origin + "/api";
   } catch (e) {}
-  return "/api";
+  return CR_CLOUD;
 }
 function cloudUrl() {
   const raw = String(state.settings.cloudUrl || "").trim().replace(/\/$/, "");
@@ -1226,16 +1255,48 @@ function mergeRemoteReports(payload, remoteClients) {
 let clientPushTimer = null;
 function scheduleClientPush() {
   if (state.role !== "client") return;
-  const blobId = (state.settings && state.settings.cloudId) || store.get("nb_blob_id");
-  if (!blobId) return;
   clearTimeout(clientPushTimer);
   clientPushTimer = setTimeout(() => cloudPushClient().catch(() => {}), 900);
 }
 async function cloudPushClient() {
-  const blobId = (state.settings && state.settings.cloudId) || store.get("nb_blob_id");
-  if (!blobId) return { ok: false };
   const report = clientReportPayload();
   if (!report.accessCode && !report.clientId) return { ok: false };
+  const attachIn = (list) => {
+    const code = report.accessCode;
+    return (list || []).find((c) => (report.clientId && c.id === report.clientId) || (code && String(c.accessCode) === code));
+  };
+  try {
+    const rows = await crudList();
+    let row = null;
+    const want = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
+    if (want) row = rows.find((r) => r._id === want) || null;
+    if (!row) {
+      row = rows.find((r) => attachIn((r.state && r.state.clients) || []));
+    }
+    if (row && row._id) {
+      const clients = (row.state && row.state.clients) || [];
+      const hit = attachIn(clients);
+      if (!hit) return { ok: false };
+      attachReport(hit, report);
+      row.state.updatedAt = Date.now();
+      const body = Object.assign({}, row);
+      delete body._id;
+      const put = await cloudGet(crudUrl(row._id), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (put.ok) {
+        state.settings.cloudId = row._id;
+        state.settings.cloudKind = "crud";
+        store.set("nb_settings", state.settings);
+        store.set("nb_blob_id", row._id);
+        return { ok: true };
+      }
+    }
+  } catch (e) {}
+  const blobId = (!isCrudId(state.settings && state.settings.cloudId) && ((state.settings && state.settings.cloudId) || store.get("nb_blob_id"))) || "";
+  if (!blobId) return { ok: false };
   try {
     const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
     const row = await res.json().catch(() => null);
@@ -1281,6 +1342,71 @@ function lastWorkHtml(c) {
     ${kgTxt ? `<p class="muted">Peso: ${escapeHtml(String(kgTxt))} lb</p>` : ""}
     ${chk ? `<p class="muted">Check-in: energía ${escapeHtml(String(chk.energy || chk.energia || "—"))}${chk.pain || chk.molestia ? " · molestia " + escapeHtml(String(chk.pain || chk.molestia)) : ""}</p>` : ""}
   </div>`;
+}
+async function crudList() {
+  const res = await cloudGet(crudUrl(), { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error("Nube no disponible");
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
+}
+function crudBody(extra) {
+  const row = Object.assign({
+    studioKey: studioKey(),
+    token: state.settings.cloudToken || newCloudToken(),
+    state: cloudPayload(),
+    updatedAt: Date.now()
+  }, extra || {});
+  delete row._id;
+  return row;
+}
+async function registerCrud() {
+  const key = studioKey();
+  const token = state.settings.cloudToken || NB_CLOUD.token;
+  const body = crudBody({ token });
+  const known = NB_CLOUD.id;
+  if (known) {
+    const got = await cloudGet(crudUrl(known), { headers: { Accept: "application/json" } });
+    if (got.ok) {
+      const row = await got.json().catch(() => null);
+      if (row && row.state && Array.isArray(row.state.clients)) {
+        mergeRemoteReports(body.state, row.state.clients);
+      }
+      const put = await cloudGet(crudUrl(known), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(Object.assign({}, body, { token: (row && row.token) || token }))
+      });
+      if (put.ok) {
+        adoptCloud(known, "crud", (row && row.token) || token);
+        persist();
+        return { token: state.settings.cloudToken, id: known };
+      }
+    }
+  }
+  const rows = await crudList().catch(() => []);
+  const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(key).toUpperCase()) || rows[0];
+  if (hit && hit._id) {
+    const put = await cloudGet(crudUrl(hit._id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(Object.assign({}, body, { token: hit.token || token }))
+    });
+    if (!put.ok) throw new Error("No se pudo actualizar el estudio");
+    adoptCloud(hit._id, "crud", hit.token || token);
+    persist();
+    return { token: state.settings.cloudToken, id: hit._id };
+  }
+  const res = await cloudGet(crudUrl(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  const id = data && data._id;
+  if (!res.ok || !id) throw new Error("No se pudo crear el estudio");
+  adoptCloud(id, "crud", token);
+  persist();
+  return { token, id };
 }
 async function registerNative() {
   const bases = [];
@@ -1352,7 +1478,37 @@ async function registerBlob() {
 async function cloudPush() {
   if (!state.settings.cloudToken) return { ok: false };
   const payload = cloudPayload();
-  const blobId = state.settings.cloudId || store.get("nb_blob_id");
+  const crudId = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
+  if (crudId || state.settings.cloudKind === "crud") {
+    try {
+      let id = crudId;
+      if (!id) {
+        const rows = await crudList();
+        const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(studioKey()).toUpperCase());
+        if (hit && hit._id) id = hit._id;
+      }
+      if (id) {
+        const got = await cloudGet(crudUrl(id), { headers: { Accept: "application/json" } });
+        const row = await got.json().catch(() => null);
+        if (got.ok && row && row.state && Array.isArray(row.state.clients)) {
+          mergeRemoteReports(payload, row.state.clients);
+        }
+        const body = crudBody({ token: state.settings.cloudToken, state: payload });
+        const res = await cloudGet(crudUrl(id), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          state.settings.cloudId = id;
+          state.settings.cloudKind = "crud";
+          store.set("nb_settings", state.settings);
+          return { ok: true };
+        }
+      }
+    } catch (e) {}
+  }
+  const blobId = (!isCrudId(state.settings.cloudId) && (state.settings.cloudId || store.get("nb_blob_id"))) || "";
   if (blobId) {
     try {
       const got = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
@@ -1382,8 +1538,48 @@ async function cloudPush() {
   }
 }
 async function cloudPull() {
-  if (!state.settings.cloudToken) return { ok: false };
-  const blobId = state.settings.cloudId || store.get("nb_blob_id");
+  if (!state.settings.cloudToken && !state.settings.cloudId) return { ok: false };
+  const save = (rowState) => {
+    applyCloud(rowState);
+    store.set("nb_clients", state.clients);
+    store.set("nb_profile", state.profile);
+    store.set("nb_history", state.history);
+    store.set("nb_checkins", state.checkins);
+    store.set("nb_habits", state.habits);
+    store.set("nb_weighins", state.weighins);
+    store.set("nb_measures", state.measures);
+    store.set("nb_notes", state.notes);
+    store.set("nb_routines_custom", state.customRoutines);
+    store.set("nb_routine_edits", state.routineEdits);
+    store.set("nb_health", state.health);
+    store.set("nb_contracts", state.contracts);
+    store.set("nb_payments", state.payments || []);
+    store.set("nb_appointments", state.appointments || []);
+    store.set("nb_videos", state.videos || []);
+    store.set("nb_ai_credits", state.aiCredits || 0);
+    store.set("nb_settings", state.settings);
+  };
+  try {
+    let id = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
+    if (!id) {
+      const rows = await crudList();
+      const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(studioKey()).toUpperCase());
+      if (hit && hit._id) {
+        id = hit._id;
+        state.settings.cloudId = id;
+        state.settings.cloudKind = "crud";
+      }
+    }
+    if (id) {
+      const res = await cloudGet(crudUrl(id), { headers: { Accept: "application/json" } });
+      const row = await res.json().catch(() => null);
+      if (res.ok && row && row.state) {
+        save(row.state);
+        return { ok: true, data: { state: row.state } };
+      }
+    }
+  } catch (e) {}
+  const blobId = (!isCrudId(state.settings.cloudId) && (state.settings.cloudId || store.get("nb_blob_id"))) || "";
   if (blobId) {
     try {
       const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
@@ -1460,43 +1656,28 @@ async function githubLoad() {
   return Array.isArray(data) ? data : [];
 }
 async function cloudRegisterStudio() {
-  const key = studioKey();
-  const host = location.hostname || "";
-  const pages = /niubision\.com$/i.test(host) || /github\.io$/i.test(host);
-  const tryNative = async () => registerNative();
-  const tryBlob = async () => registerBlob();
-  const order = pages ? [tryBlob, tryNative] : [tryNative, tryBlob];
-  for (let i = 0; i < order.length; i++) {
+  let last = "No se pudo conectar la nube";
+  try {
+    const out = await registerCrud();
+    if (out && out.token) return out;
+  } catch (e) { last = cloudErr(e); }
+  if (!isPagesHost()) {
     try {
-      const out = await order[i]();
+      const out = await registerNative();
       if (out && out.token) return out;
-    } catch (e) {}
+    } catch (e) { last = cloudErr(e); }
   }
   try {
-    const rows = await githubLoad();
-    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === key);
-    if (hit && hit.token) {
-      state.settings.cloudToken = hit.token;
-      persist();
-      if (hit.state) applyCloud(hit.state);
-      return { token: hit.token };
-    }
-  } catch (e) {}
-  if (!state.settings.cloudToken) {
-    state.settings.cloudToken = newCloudToken();
-    persist();
-  }
-  return { token: state.settings.cloudToken };
+    const out = await registerBlob();
+    if (out && out.token) return out;
+  } catch (e) { last = cloudErr(e); }
+  throw new Error(last);
 }
 async function ensureCloud() {
-  if (!state.settings.cloudUrl) {
-    state.settings.cloudUrl = defaultCloudUrl();
-    persist();
-  }
   try {
-    if (!state.settings.cloudToken) await cloudRegisterStudio();
-    await cloudPush();
-    return { ok: true };
+    await cloudRegisterStudio();
+    const p = await cloudPush();
+    return { ok: !!p.ok };
   } catch (e) {
     return { ok: false, error: e && e.message };
   }
@@ -1516,8 +1697,44 @@ async function lookupAccess(code) {
   if (digits.length !== 6) return null;
   const local = findByAccessCode(digits);
   if (local) return local;
+  const remember = (id, kind) => {
+    if (!id) return;
+    store.set("nb_blob_id", id);
+    if (state.settings) {
+      state.settings.cloudId = id;
+      if (kind) state.settings.cloudKind = kind;
+      state.settings.studioKey = NB_CLOUD.key;
+    }
+  };
+  try {
+    const res = await cloudGet(crudUrl(NB_CLOUD.id), { headers: { Accept: "application/json" } });
+    const row = await res.json().catch(() => null);
+    const list = (row && row.state && row.state.clients) || [];
+    const hit = list.find((x) => String(x.accessCode) === digits);
+    if (hit) {
+      remember(NB_CLOUD.id, "crud");
+      return hit;
+    }
+  } catch (e) {}
+  try {
+    const rows = await crudList();
+    for (let i = 0; i < rows.length; i++) {
+      const list = (rows[i].state && rows[i].state.clients) || [];
+      const hit = list.find((x) => String(x.accessCode) === digits);
+      if (hit) {
+        if (rows[i]._id) {
+          store.set("nb_blob_id", rows[i]._id);
+          if (state.settings) {
+            state.settings.cloudId = rows[i]._id;
+            state.settings.cloudKind = "crud";
+          }
+        }
+        return hit;
+      }
+    }
+  } catch (e) {}
   const blobId = (state.settings && state.settings.cloudId) || store.get("nb_blob_id");
-  if (blobId) {
+  if (blobId && !isCrudId(blobId)) {
     try {
       const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
       const row = await res.json().catch(() => null);
@@ -1548,6 +1765,7 @@ async function lookupAccess(code) {
   try {
     const res = await cloudGet("/studios.json?v=" + Date.now(), { headers: { Accept: "application/json" } });
     const data = await res.json().catch(() => null);
+    if (data && data.cloudId) remember(data.cloudId, data.kind || "crud");
     const list = Array.isArray(data) ? data : ((data && data.clients) || []);
     const hit = list.find((x) => String(x.accessCode) === digits);
     if (hit) return hit;
@@ -3314,11 +3532,11 @@ function openStudioSettings() {
       <button class="btn primary" id="savePay">Guardar métodos de pago</button>
     </div>
     <div class="card">
-      <h3>Nube NiuBision</h3>
-      <p class="muted">${state.settings.cloudToken ? "Estudio conectado." : "Pulse conectar para subir clientes y pagos."}</p>
-      <input class="field" id="cloudUrl" placeholder="URL del servidor" value="${escAttr(state.settings.cloudUrl || defaultCloudUrl())}">
-      <button class="btn primary" id="cloudConnect">${state.settings.cloudToken ? "Reconectar estudio" : "Conectar estudio a la nube"}</button>
-      <button class="btn ghost" id="cloudNow">Subir y bajar ahora</button>
+      <h3>Nube del estudio</h3>
+      <p class="muted">Una sola nube para todos los teléfonos. Guarda clientes, pagos y el trabajo que cada cliente cierra.</p>
+      <p class="${state.settings.cloudId ? "ok" : "muted"}">${state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."}</p>
+      <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
+      <button class="btn ghost" id="cloudNow">Sincronizar ahora</button>
     </div>
     <div class="card">
       <h3>Clave del estudio</h3>
@@ -3345,25 +3563,28 @@ function openStudioSettings() {
   };
   const cc = $("#cloudConnect", modal);
   if (cc) cc.onclick = async () => {
-    const typed = ($("#cloudUrl", modal) && $("#cloudUrl", modal).value || "").trim();
-    state.settings.cloudUrl = typed || defaultCloudUrl();
-    persist();
     cc.disabled = true;
+    cc.textContent = "Conectando…";
     try {
       await cloudRegisterStudio();
-      await cloudPush();
-      toast("Estudio conectado");
+      const p = await cloudPush();
+      toast(p.ok ? "Nube conectada. Los clientes ya pueden sincronizar." : "Conectó, pero no subió. Intente otra vez.");
+      modal.remove();
+      render();
     } catch (e) { toast(cloudErr(e)); }
     finally { cc.disabled = false; }
   };
   const cn = $("#cloudNow", modal);
   if (cn) cn.onclick = async () => {
-    const typed = ($("#cloudUrl", modal) && $("#cloudUrl", modal).value || "").trim();
-    state.settings.cloudUrl = typed || defaultCloudUrl();
-    persist();
-    const p2 = await cloudPull();
-    await cloudPush();
-    toast(p2.ok ? "Sincronizado" : "Sin servidor. Revise la URL");
+    cn.disabled = true;
+    try {
+      if (!state.settings.cloudId) await cloudRegisterStudio();
+      const p2 = await cloudPull();
+      const p = await cloudPush();
+      toast((p2.ok || p.ok) ? "Sincronizado" : "No hay nube todavía. Pulse Conectar.");
+      if (p2.ok) { modal.remove(); render(); }
+    } catch (e) { toast(cloudErr(e)); }
+    finally { cn.disabled = false; }
   };
   const rp = $("#resetPin", modal);
   if (rp) rp.onclick = () => { modal.remove(); openPinRecover(); };
@@ -4207,14 +4428,11 @@ function findByAccessCode(code) {
   return (state.clients || []).find((c) => String(c.accessCode) === t) || null;
 }
 function studioKey() {
-  if (!state.settings.studioKey) {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let s = "";
-    for (let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    state.settings.studioKey = s;
+  if (state.settings.studioKey !== NB_CLOUD.key) {
+    state.settings.studioKey = NB_CLOUD.key;
     store.set("nb_settings", state.settings);
   }
-  return state.settings.studioKey;
+  return NB_CLOUD.key;
 }
 function clientCode(c) {
   return (c && /^\d{6}$/.test(String(c.accessCode || ""))) ? String(c.accessCode) : "";
@@ -4225,7 +4443,7 @@ function encodeTicket(c) {
     n: c.name, p: c.plan, r: c.routine || "full-inicio",
     a: ensureAccessCode(c), k: studioKey(),
     s: c.sex || "", g: c.age || "", t: c.phone || "", i: c.id || "",
-    b: (state.settings && state.settings.cloudId) || store.get("nb_blob_id") || ""
+    b: (state.settings && state.settings.cloudId) || store.get("nb_blob_id") || NB_CLOUD.id
   };
   try {
     return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
@@ -5030,29 +5248,26 @@ function bindChrome() {
   });
   const cc = $("#cloudConnect");
   if (cc) cc.onclick = async () => {
-    const typed = ($("#cloudUrl") && $("#cloudUrl").value || "").trim();
-    state.settings.cloudUrl = typed || defaultCloudUrl();
-    persist();
-    if (!cloudUrl()) return toast("Escriba la URL del servidor");
     cc.disabled = true;
     try {
       await cloudRegisterStudio();
-      await cloudPush();
-      toast("Estudio conectado");
+      const p = await cloudPush();
+      toast(p.ok ? "Nube conectada. Los clientes ya pueden sincronizar." : "Conectó, pero no subió. Intente otra vez.");
       render();
     } catch (e) { toast(cloudErr(e)); }
     finally { cc.disabled = false; }
   };
   const cn = $("#cloudNow");
   if (cn) cn.onclick = async () => {
-    const typed = ($("#cloudUrl") && $("#cloudUrl").value || "").trim();
-    state.settings.cloudUrl = typed || defaultCloudUrl();
-    persist();
-    if (!cloudUrl()) return toast("Escriba la URL del servidor");
-    const p = await cloudPull();
-    await cloudPush();
-    toast(p.ok ? "Sincronizado" : "Sin servidor. Revise la URL");
-    render();
+    cn.disabled = true;
+    try {
+      if (!state.settings.cloudId) await cloudRegisterStudio();
+      const p2 = await cloudPull();
+      const p = await cloudPush();
+      toast((p2.ok || p.ok) ? "Sincronizado" : "No hay nube todavía. Pulse Conectar.");
+      if (p2.ok || p.ok) render();
+    } catch (e) { toast(cloudErr(e)); }
+    finally { cn.disabled = false; }
   };
   const rp = $("#resetPin");
   if (rp) rp.onclick = () => openPinRecover();
@@ -5395,8 +5610,9 @@ async function boot() {
   }
   if (!state.settings.cloudUrl) {
     state.settings.cloudUrl = defaultCloudUrl();
-    persist();
   }
+  adoptCloud(state.settings.cloudId || NB_CLOUD.id, "crud", state.settings.cloudToken || NB_CLOUD.token);
+  persist();
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
   }
