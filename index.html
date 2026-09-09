@@ -1100,6 +1100,7 @@ function cloudPayload() {
 }
 function applyCloud(d) {
   if (!d || typeof d !== "object") return;
+  if (state.role === "client") return;
   if (d.clients) state.clients = d.clients;
   if (d.history) state.history = d.history;
   if (d.checkins) state.checkins = d.checkins;
@@ -1348,26 +1349,46 @@ async function ensureCloud() {
   }
 }
 async function cloudRedeem(code) {
-  const url = cloudUrl();
+  const hit = await lookupAccess(code);
+  if (!hit) return { ok: false };
+  upsertClientFromAssign({
+    name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
+    accessCode: String(hit.accessCode || code).replace(/\D/g, "").slice(0, 6),
+    clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+  });
+  return { ok: true, data: { client: hit } };
+}
+async function lookupAccess(code) {
+  const digits = String(code || "").replace(/\D/g, "");
+  if (digits.length !== 6) return null;
+  const local = findByAccessCode(digits);
+  if (local) return local;
+  const blobId = (state.settings && state.settings.cloudId) || store.get("nb_blob_id");
+  if (blobId) {
+    try {
+      const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
+      const row = await res.json().catch(() => null);
+      const list = (row && row.state && row.state.clients) || [];
+      const hit = list.find((x) => String(x.accessCode) === digits);
+      if (hit) return hit;
+    } catch (e) {}
+  }
   try {
-    let res = await cloudGet((url || "/api") + "/redeem?code=" + encodeURIComponent(code), { headers: { Accept: "application/json" } });
-    let data = await res.json().catch(() => ({}));
-    if (!(res.ok && data.token) && url) {
-      res = await cloudGet(url + "/redeem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ code })
-      });
-      data = await res.json().catch(() => ({}));
-    }
-    if (res.ok && data.token) {
-      state.settings.cloudToken = data.token;
-      persist();
-      await cloudPull();
-      return { ok: true, data };
+    const rows = await githubLoad();
+    for (let i = 0; i < rows.length; i++) {
+      const list = (rows[i].state && rows[i].state.clients) || [];
+      const hit = list.find((x) => String(x.accessCode) === digits);
+      if (hit) return hit;
     }
   } catch (e) {}
-  return { ok: false };
+  try {
+    const res = await cloudGet("/studios.json?v=" + Date.now(), { headers: { Accept: "application/json" } });
+    const data = await res.json().catch(() => null);
+    const list = Array.isArray(data) ? data : ((data && data.clients) || []);
+    const hit = list.find((x) => String(x.accessCode) === digits);
+    if (hit) return hit;
+  } catch (e) {}
+  return null;
 }
 function allRoutines() {
   const stock = (window.NBroutinesStock || window.NBroutines || []).map((r) => {
@@ -2406,7 +2427,10 @@ function notifyPay(planLabel, method) {
   if (state.profile.sex) bits.push("Sexo: " + state.profile.sex);
   if (state.profile.age) bits.push("Edad: " + state.profile.age);
   if (state.profile.phone) bits.push("Tel: " + state.profile.phone);
-  if (c && c.accessCode) bits.push("Código de acceso: " + c.accessCode);
+  if (c && c.accessCode) {
+    bits.push("Código de acceso: " + c.accessCode);
+    bits.push("Enlace: " + appOrigin() + "#t=" + encodeTicket(c));
+  }
   bits.push("Sin tarjetas ni PIN en la app.");
   window.open(waLink(bits.filter(Boolean).join("\n")), "_blank");
 }
@@ -2530,11 +2554,30 @@ function openPaySheet(planLabel) {
 }
 
 function applyHash() {
-  const h = new URLSearchParams(location.hash.replace(/^#/, ""));
-  if (h.get("rol") === "coach") { /* el coach no entra por enlace */ }
-  const raw = location.hash.replace(/^#/, "");
-  const assigned = parseClientCode(raw.startsWith("NB1|") ? raw : location.hash);
-  if (assigned) applyClientAssign(assigned);
+  const raw = String(location.hash || "").replace(/^#/, "");
+  if (!raw) return;
+  const params = new URLSearchParams(raw.indexOf("=") >= 0 ? raw : "");
+  const blob = params.get("n") || params.get("nube");
+  if (blob) {
+    store.set("nb_blob_id", blob);
+    if (state.settings) state.settings.cloudId = blob;
+  }
+  const ticket = params.get("t") || params.get("ticket");
+  if (ticket) {
+    const decoded = decodeTicket(ticket);
+    if (decoded) { applyClientAssign(decoded); state.splash = false; return; }
+  }
+  const code = params.get("c") || params.get("code");
+  if (code) {
+    const a = parseClientCode(code);
+    if (a && !a.pending) { applyClientAssign(a); state.splash = false; }
+    else state._pendingCode = String(code).replace(/\D/g, "").slice(0, 6);
+    return;
+  }
+  if (/^NB[12]\|/i.test(raw)) {
+    const assigned = parseClientCode(raw);
+    if (assigned) { applyClientAssign(assigned); state.splash = false; }
+  }
 }
 
 function renderGate() {
@@ -2865,32 +2908,20 @@ function openWaiver(after) {
   </div>`;
   document.body.appendChild(modal);
   const canvas = $("#sigPad");
-  const ctx = canvas.getContext("2d");
-  ctx.strokeStyle = "#f7f1e8"; ctx.lineWidth = 2; ctx.lineCap = "round";
-  let draw = false, dirty = false;
-  const pos = (e) => {
-    const r = canvas.getBoundingClientRect();
-    const pt = e.touches ? e.touches[0] : e;
-    return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
-  };
-  const start = (e) => { e.preventDefault(); draw = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-  const move = (e) => { if (!draw) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty = true; };
-  const end = () => { draw = false; };
-  canvas.addEventListener("pointerdown", start);
-  canvas.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", end);
-  $("#clrSig").onclick = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; };
-  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const pad = bindSigPad(canvas);
+  $("#clrSig").onclick = () => pad.clear();
+  modal.querySelector("#closeSheet").onclick = () => { pad.unbind(); modal.remove(); };
   $("#wGo").onclick = () => {
     const name = cleanName($("#wName").value);
     if (!$("#wRead").checked || !$("#wAge").checked) return toast("Marque las dos casillas");
     if (!name) return toast("Escriba su nombre");
-    if (!dirty) return toast("Firme en el recuadro");
+    if (!pad.dirty()) return toast("Firme en el recuadro");
     state.waiver = { name, date: todayKey(), signature: canvas.toDataURL("image/png"), text: WAIVER_TEXT };
     state.profile.name = state.profile.name || name;
     const who = (state.clients || []).find((x) => cleanName(x.name) === name);
     if (who) who.waiver = { name, date: state.waiver.date, signature: state.waiver.signature, text: WAIVER_TEXT };
     persist();
+    pad.unbind();
     modal.remove();
     toast("Relevo firmado");
     if (typeof after === "function") after();
@@ -2988,27 +3019,14 @@ function openContract(planLabel) {
   </div>`;
   document.body.appendChild(modal);
   const canvas = $("#sigPad");
-  const ctx = canvas.getContext("2d");
-  ctx.strokeStyle = "#f7f1e8"; ctx.lineWidth = 2; ctx.lineCap = "round";
-  let draw = false, dirty = false;
-  const pos = (e) => {
-    const r = canvas.getBoundingClientRect();
-    const pt = e.touches ? e.touches[0] : e;
-    return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
-  };
-  const start = (e) => { e.preventDefault(); draw = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-  const move = (e) => { if (!draw) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty = true; };
-  const end = () => { draw = false; };
-  canvas.addEventListener("pointerdown", start);
-  canvas.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", end);
-  $("#clrSig").onclick = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; };
-  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const pad = bindSigPad(canvas);
+  $("#clrSig").onclick = () => pad.clear();
+  modal.querySelector("#closeSheet").onclick = () => { pad.unbind(); modal.remove(); };
   $("#signGo").onclick = () => {
     if (!$("#agree").checked) return toast("Marque que acepta");
     const nm = cleanName($("#sigName").value);
     if (!nm) return toast("Escriba el nombre");
-    if (!dirty) return toast("Firme en el recuadro");
+    if (!pad.dirty()) return toast("Firme en el recuadro");
     if (!healthComplete()) return toast("Complete primero el cuestionario");
     const rec = {
       id: "k" + Date.now(),
@@ -3035,6 +3053,7 @@ function openContract(planLabel) {
     normalizeClient(c);
     state.settings.clientId = c.id;
     persist();
+    pad.unbind();
     modal.remove();
     toast("Contrato firmado");
     openPaySheet(planLabel);
@@ -3856,6 +3875,57 @@ function studioKey() {
 function clientCode(c) {
   return ensureAccessCode(c);
 }
+function encodeTicket(c) {
+  if (!c) return "";
+  const obj = {
+    n: c.name, p: c.plan, r: c.routine || "full-inicio",
+    a: ensureAccessCode(c), k: studioKey(),
+    s: c.sex || "", g: c.age || "", t: c.phone || "", i: c.id || ""
+  };
+  try {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  } catch (e) { return ""; }
+}
+function decodeTicket(raw) {
+  try {
+    let b = String(raw || "").replace(/-/g, "+").replace(/_/g, "/");
+    while (b.length % 4) b += "=";
+    const obj = JSON.parse(decodeURIComponent(escape(atob(b))));
+    if (!obj || !obj.a) return null;
+    return {
+      name: cleanName(obj.n),
+      plan: String(obj.p || "").slice(0, 40),
+      routine: String(obj.r || "full-inicio").slice(0, 64),
+      accessCode: String(obj.a).replace(/\D/g, "").slice(0, 6),
+      clientId: obj.i, sex: obj.s, age: obj.g, phone: obj.t
+    };
+  } catch (e) { return null; }
+}
+function appOrigin() {
+  try {
+    if (/^https?:/i.test(location.origin) && location.hostname && !/localhost|127\.0\.0\.1/i.test(location.hostname)) {
+      return location.origin;
+    }
+  } catch (e) {}
+  return "https://niubision.com";
+}
+function upsertClientFromAssign(a) {
+  if (!a || !a.name) return null;
+  let c = (state.clients || []).find((x) => (a.accessCode && String(x.accessCode) === a.accessCode) || cleanName(x.name) === cleanName(a.name));
+  if (!c) {
+    c = { id: a.clientId || ("c" + Date.now()), name: a.name, plan: a.plan || "Estándar", routine: a.routine || "full-inicio", accessCode: a.accessCode };
+    state.clients = state.clients || [];
+    state.clients.push(c);
+  }
+  if (a.plan) c.plan = a.plan;
+  if (a.routine) c.routine = a.routine;
+  if (a.accessCode) c.accessCode = a.accessCode;
+  if (a.sex) c.sex = a.sex;
+  if (a.age) c.age = a.age;
+  if (a.phone) c.phone = a.phone;
+  if (typeof normalizeClient === "function") normalizeClient(c);
+  return c;
+}
 function parseClientCode(raw) {
   const t = (raw || "").trim().replace(/\s+/g, "");
   if (!t) return null;
@@ -3870,19 +3940,23 @@ function parseClientCode(raw) {
   if ((p[0] === "NB2" || p[0] === "NB1") && p.length >= 5) {
     const key = p[1];
     if (!/^[A-HJ-NP-Z2-9]{5}$/.test(key)) return null;
-    if (state.settings.studioKey && key !== state.settings.studioKey) return null;
     if (!state.settings.studioKey) {
       state.settings.studioKey = key;
       state.settings.studioKeyFromClient = true;
       persist();
     }
-    const routine = p.slice(4).join("|").slice(0, 64).replace(/[<>]/g, "");
-    return { name: cleanName(p[2]), plan: cleanName(p[3]).slice(0, 40), routine };
+    const last = p[p.length - 1];
+    const hasCode = /^\d{6}$/.test(last);
+    const routine = (hasCode ? p.slice(4, -1) : p.slice(4)).join("|").slice(0, 64).replace(/[<>]/g, "");
+    return { name: cleanName(p[2]), plan: cleanName(p[3]).slice(0, 40), routine, accessCode: hasCode ? last : "" };
   }
+  const tick = decodeTicket(t);
+  if (tick) return tick;
   return null;
 }
 function applyClientAssign(a) {
   if (!a) return false;
+  upsertClientFromAssign(a);
   state.role = "client";
   if (a.name) state.profile.name = a.name;
   if (a.plan) state.profile.plan = a.plan;
@@ -3913,10 +3987,36 @@ function copyText(text) {
   }
   return Promise.resolve(false);
 }
+function bindSigPad(canvas) {
+  const ctx = canvas.getContext("2d");
+  ctx.strokeStyle = "#f7f1e8"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  let draw = false, dirty = false;
+  const pos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const pt = e.touches ? e.touches[0] : e;
+    return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
+  };
+  const start = (e) => { e.preventDefault(); draw = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const move = (e) => { if (!draw) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty = true; };
+  const end = () => { draw = false; };
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  window.addEventListener("pointerup", end);
+  return {
+    dirty: () => dirty,
+    clear() { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; },
+    unbind() { window.removeEventListener("pointerup", end); }
+  };
+}
 function showShare(c) {
   const code = ensureAccessCode(c);
   persist();
-  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra niubision.com, mantenga el logo y toque «Pegar código del coach». Escriba esos 6 dígitos.`;
+  const ticket = encodeTicket(c);
+  const blob = state.settings.cloudId || store.get("nb_blob_id") || "";
+  const link = appOrigin() + "#t=" + ticket + (blob ? "&n=" + encodeURIComponent(blob) : "");
+  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra este enlace en el teléfono:\n${link}\n\nO entre a niubision.com, mantenga el logo y toque «Pegar código del coach».`;
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -4006,25 +4106,17 @@ function openCodeEntry() {
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   $("#useCode").onclick = async () => {
-    const raw = $("#codeIn").value;
+    const raw = ($("#codeIn").value || "").trim();
     let a = parseClientCode(raw);
     if (a && a.pending) {
       toast("Buscando el código…");
-      try { await cloudRedeem(a.accessCode); } catch (e) {}
-      try {
-        const rows = await githubLoad();
-        for (let i = 0; i < rows.length; i++) {
-          const list = (rows[i].state && rows[i].state.clients) || [];
-          const hit = list.find((x) => String(x.accessCode) === a.accessCode);
-          if (hit) {
-            if (rows[i].state) applyCloud(rows[i].state);
-            persist();
-            a = parseClientCode(a.accessCode);
-            break;
-          }
-        }
-      } catch (e) {}
-      a = parseClientCode(raw);
+      const hit = await lookupAccess(a.accessCode);
+      if (hit) {
+        a = {
+          name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
+          accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+        };
+      }
     }
     if (!a || a.pending) return toast("Código no válido o aún no está pagado");
     modal.remove();
@@ -4032,7 +4124,7 @@ function openCodeEntry() {
     state.splash = false;
     store.set("nb_seen_cover", true);
     state.view = "home";
-    if (cloudUrl()) await cloudRedeem(a.accessCode || raw).catch(() => {});
+    persist();
     render();
     toast("Bienvenido a NiuBision");
   };
@@ -4373,9 +4465,8 @@ function bindChrome() {
   bindMotion();
   const sw = $("#switchRole");
   if (sw) sw.onclick = () => {
-    if (state.role === "client") state.profile.unlocked = false;
     state.role = null;
-    state.splash = false;
+    state.splash = true;
     persist();
     render();
   };
@@ -4475,8 +4566,11 @@ function bindChrome() {
   $$("[data-h]").forEach((el) => el.onchange = () => {
     const day = state.habits[todayKey()] || {};
     day[el.dataset.h] = el.checked;
-    state.habits[todayKey()] = day; persist();
-    render();
+    state.habits[todayKey()] = day;
+    persist();
+    const n = HABITS_DAY.filter((h) => day[h.id]).length;
+    const bar = document.querySelector(".screen .progress > span");
+    if (bar) bar.style.width = Math.round((n / HABITS_DAY.length) * 100) + "%";
   });
   $$("[data-assign]").forEach((s) => s.onchange = () => {
     const c = state.clients.find((x) => x.id === s.dataset.assign);
@@ -4573,14 +4667,6 @@ function bindChrome() {
       const last = (state.contracts || [])[state.contracts.length - 1];
       openPayConfirm(b.dataset.pay, last ? last.plan : ((state.profile && state.profile.plan) || "NiuBision Estándar"));
     };
-  });
-  $$("[data-gotpay]").forEach((b) => b.onclick = () => {
-    const row = (state.payments || []).find((p) => p.id === b.dataset.gotpay);
-    if (!row) return;
-    row.status = "recibido";
-    persist();
-    toast("Pago marcado recibido");
-    render();
   });
   const cc = $("#cloudConnect");
   if (cc) cc.onclick = async () => {
@@ -4905,6 +4991,19 @@ function render() {
 
 async function boot() {
   applyHash();
+  if (state._pendingCode) {
+    try {
+      const hit = await lookupAccess(state._pendingCode);
+      if (hit) {
+        applyClientAssign({
+          name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
+          accessCode: state._pendingCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+        });
+        state.splash = false;
+      }
+    } catch (e) {}
+    state._pendingCode = null;
+  }
   if (state.splash) warmupIntro();
   pinLocked();
   if (!store.get("nb_pin_init_9798")) {
