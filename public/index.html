@@ -189,6 +189,13 @@ img { background: transparent; }
 .ring-card b { display:block; font-family:var(--display); font-size:26px; color:var(--gold); }
 .ring-card span { color:var(--mute); font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
 .dash .card { margin-top:12px; }
+.go-train { font-size:18px; padding:18px 16px; width:100%; }
+.week-line { color:var(--gold); font-size:13px; margin:8px 0 4px; }
+.quiet { display:flex; flex-wrap:wrap; gap:8px 16px; margin:12px 0 8px; }
+.quiet span { color:var(--mute); font-size:13px; }
+.quiet b { color:var(--cream); font-weight:600; }
+.quiet button { background:none; border:0; color:var(--gold); font-size:13px; padding:0; cursor:pointer; }
+.more-fold { margin-top:8px; }
 
 .photo-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
 .photo { border:0; padding:0; background:none; border-radius:12px; overflow:hidden; }
@@ -952,11 +959,9 @@ const PLANS = [
 ];
 
 const HABITS_DAY = [
-  { id: "sleep", t: "Dormí al menos 7 horas", d: "La recuperación del entrenamiento ocurre sobre todo en el sueño." },
-  { id: "train", t: "Completé o moví el cuerpo", d: "La dosis que cuenta es la que se hace." },
-  { id: "log", t: "Anoté cargas o repeticiones", d: "Sin registro no hay sobrecarga progresiva." },
-  { id: "walk", t: "Caminé 10 minutos seguidos o más", d: "Actividad moderada. No es un plan de alimentación." },
-  { id: "pain", t: "No forcé dolor agudo", d: "Molestia muscular de trabajo ≠ pinchazo articular." }
+  { id: "sleep", t: "Dormí 7 horas", d: "La recuperación ocurre en el sueño." },
+  { id: "train", t: "Entrené o me moví", d: "La dosis que cuenta es la que se hace." },
+  { id: "log", t: "Anoté las cargas", d: "Sin registro no hay progreso." }
 ];
 
 const HABIT_LIB = [
@@ -1905,6 +1910,16 @@ function clientOpsCards() {
     </div>`;
 }
 function bindStudioOps() {
+  const stset = $("#studioSettings"); if (stset) stset.onclick = openStudioSettings;
+  const more = $("#toggleMore");
+  if (more) more.onclick = () => {
+    const el = $("#moreStudio");
+    if (!el) return;
+    el.hidden = !el.hidden;
+    more.textContent = el.hidden ? "Peso, medidas y fotos" : "Ocultar";
+  };
+  const hh = $("#habitHome"); if (hh) hh.onclick = () => { state.view = "habit"; render(); };
+  const rw = $("#reschedWa"); if (rw) rw.onclick = () => window.open(waLink(waReady("reschedule")), "_blank");
   const ah = $("#openAgendaHome"); if (ah) ah.onclick = () => openAgenda(currentClient());
   const vh = $("#openVideoHome"); if (vh) vh.onclick = () => openVideoInbox(currentClient());
   const vs = $("#openVideoSelf"); if (vs) vs.onclick = () => openVideoInbox(selfClient());
@@ -1945,6 +1960,12 @@ function bindStudioOps() {
         if (cl && !/rutina con ia/i.test(p.plan || "")) {
           p.accessCode = ensureAccessCode(cl);
           cl.unpaid = false;
+          cl.startDate = cl.startDate || todayKey();
+          const meta = planMeta(cl.plan || p.plan);
+          if (meta.weeks) cl.endDate = addDaysIso(cl.startDate, meta.weeks * 7);
+          if (meta.sessions) cl.sessionsTotal = meta.sessions;
+          cl.sessionsUsed = cl.sessionsUsed || 0;
+          normalizeClient(cl);
         }
         if (/rutina con ia/i.test(p.plan || "")) {
           state.aiCredits = (state.aiCredits || 0) + 1;
@@ -2018,6 +2039,50 @@ function weekPct(rt) {
     return true;
   }).length;
   return { done, total: need, pct: Math.min(100, Math.round((done / need) * 100)) };
+}
+function historyInDays(from, to) {
+  return (state.history || []).filter((h) => {
+    const diff = (Date.now() - new Date(h.date + "T12:00:00")) / 86400000;
+    return diff >= from && diff < to;
+  });
+}
+function weekDelta() {
+  const now = historyInDays(0, 7);
+  const prev = historyInDays(7, 14);
+  const a = now.reduce((n, h) => n + (+h.doneSets || 0), 0);
+  const b = prev.reduce((n, h) => n + (+h.doneSets || 0), 0);
+  if (!a && !b) return "";
+  if (a > b) return "Esta semana +" + (a - b) + " series vs la pasada";
+  if (a < b) return "Esta semana " + (a - b) + " series vs la pasada";
+  return "Esta semana igualó las " + a + " series de la pasada";
+}
+function isoWeekKey() {
+  const d = new Date();
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return mon.getFullYear() + "-w" + String(mon.getMonth() + 1).padStart(2, "0") + "-" + String(mon.getDate()).padStart(2, "0");
+}
+function weekStats() {
+  const hist = historyInDays(0, 7);
+  const sessions = new Set(hist.map((h) => h.date)).size;
+  const sets = hist.reduce((n, h) => n + (+h.doneSets || 0), 0);
+  const pain = (state.checkins || []).filter((c) => {
+    const diff = (Date.now() - new Date(c.date + "T12:00:00")) / 86400000;
+    return diff >= 0 && diff < 7 && c.pain === "sí";
+  }).length;
+  const c = selfClient();
+  return { sessions, sets, pain, left: c ? daysLeft(c) : null };
+}
+function waReady(kind, extra) {
+  extra = extra || {};
+  const who = extra.name || (state.profile && state.profile.name) || (state.health && state.health.name) || "Cliente";
+  const plan = extra.plan || (state.profile && state.profile.plan) || "";
+  if (kind === "pay") return "Miguel, soy " + who + (plan ? ", " + plan : "") + ", ya pagué " + (extra.method || "el plan") + (extra.amount ? " (" + extra.amount + " USD)" : "") + ".";
+  if (kind === "want") return "Miguel, soy " + who + ". Quiero el plan " + (extra.plan || plan || "NiuBision") + ".";
+  if (kind === "video") return "Miguel, soy " + who + ". Video de técnica: " + (extra.ex || "ejercicio") + ".";
+  if (kind === "reschedule") return "Miguel, soy " + who + ". Necesito reprogramar mi cita con 12 horas.";
+  if (kind === "week") return extra.text || "";
+  return "Miguel, soy " + who + ".";
 }
 function weekDots() {
   const names = ["D", "L", "M", "X", "J", "V", "S"];
@@ -2397,17 +2462,10 @@ function recordPay(planLabel, method, status) {
   const last = (state.contracts || [])[state.contracts.length - 1];
   if (last && last.plan === planLabel && !last.payMethod) last.payMethod = method;
   const c = selfClient() || currentClient();
-  if (c && !/rutina con ia/i.test(planLabel)) {
-    c.startDate = todayKey();
-    const meta = planMeta(c.plan || planLabel);
-    c.plan = c.plan || info.name || planLabel;
-    if (meta.weeks) c.endDate = addDaysIso(c.startDate, meta.weeks * 7);
-    c.sessionsTotal = meta.sessions || c.sessionsTotal || 0;
-    c.sessionsUsed = 0;
-    c.unpaid = false;
-    row.accessCode = ensureAccessCode(c);
+  if (c) {
     row.clientId = c.id;
-    normalizeClient(c);
+    if (c.accessCode) row.accessCode = c.accessCode;
+    c.plan = c.plan || info.name || planLabel;
   } else if (!/rutina con ia/i.test(planLabel) && who) {
     let created = (state.clients || []).find((x) => cleanName(x.name) === cleanName(who));
     if (!created) {
@@ -2418,19 +2476,13 @@ function recordPay(planLabel, method, status) {
         routine: state.profile.routine || "full-inicio",
         sex: state.profile.sex,
         age: state.profile.age,
-        phone: state.profile.phone
+        phone: state.profile.phone,
+        unpaid: true
       };
       state.clients.push(created);
     }
-    created.unpaid = false;
-    created.startDate = todayKey();
-    normalizeClient(created);
-    row.accessCode = ensureAccessCode(created);
+    created.unpaid = true;
     row.clientId = created.id;
-  }
-  if (state.role !== "coach" && row.accessCode) {
-    state.profile.unlocked = true;
-    state.profile.accessCode = row.accessCode;
   }
   persist();
   return row;
@@ -2446,23 +2498,11 @@ function payDestHint(method) {
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
   const who = state.profile.name || (state.health && state.health.name) || "Cliente";
-  const c = selfClient() || currentClient();
-  const bits = [
-    "Pago NiuBision (iniciado)",
-    who,
-    planLabel,
-    info.amount ? info.amount + " USD" : "",
-    "Método: " + method
-  ];
-  if (state.profile.sex) bits.push("Sexo: " + state.profile.sex);
-  if (state.profile.age) bits.push("Edad: " + state.profile.age);
+  const line = waReady("pay", { name: who, plan: planLabel, method, amount: info.amount });
+  const bits = [line];
   if (state.profile.phone) bits.push("Tel: " + state.profile.phone);
-  if (c && c.accessCode) {
-    bits.push("Código de acceso: " + c.accessCode);
-    bits.push("Enlace: " + appOrigin() + "#t=" + encodeTicket(c));
-  }
   bits.push("Sin tarjetas ni PIN en la app.");
-  window.open(waLink(bits.filter(Boolean).join("\n")), "_blank");
+  window.open(waLink(bits.join("\n")), "_blank");
 }
 function showPayReceipt(row) {
   closeModals();
@@ -2475,30 +2515,21 @@ function showPayReceipt(row) {
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}</p>
     ${row.accessCode ? `<p style="font-family:var(--display);font-size:36px;letter-spacing:.12em;text-align:center;margin:10px 0">${escapeHtml(row.accessCode)}</p>
-    <p class="muted">Este es su código de acceso. Guárdelo. En otro teléfono: portada → «Pegar código del coach».</p>` : ""}
-    <p class="muted">El cobro lo confirma PayPal o ATH Móvil. Miguel marca «recibido» cuando vea el dinero. Mientras tanto ya puede entrar a entrenar en este teléfono.</p>
+    <p class="muted">Este es su código de acceso. Guárdelo. En otro teléfono: portada → «Pegar código del coach».</p>` : `<p class="muted">Cuando Miguel marque el pago como recibido, le envía el código de 6 dígitos por WhatsApp. Con ese código entra a entrenar.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
-    <button class="btn primary" id="enterNow">Entrar a entrenar</button>
+    ${row.accessCode ? `<button class="btn primary" id="enterNow">Entrar a entrenar</button>` : ""}
     <button class="btn ghost" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" id="closeSheet">Entendido</button>
   </div>`;
   document.body.appendChild(modal);
-  modal.querySelector("#closeSheet").onclick = () => {
-    modal.remove();
-    if (state.role !== "coach" && row.accessCode) {
-      state.role = "client";
-      state.profile.unlocked = true;
-      state.splash = false;
-      state.view = "home";
-      persist();
-      render();
-    }
-  };
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
   const enter = modal.querySelector("#enterNow");
   if (enter) enter.onclick = () => {
     modal.remove();
+    if (!row.accessCode) return;
     state.role = "client";
     state.profile.unlocked = true;
+    state.profile.accessCode = row.accessCode;
     state.splash = false;
     state.view = "home";
     persist();
@@ -3110,127 +3141,214 @@ function nav() {
   return `<nav class="nav ${state.role === "guest" ? "guest" : ""}">${items.map(([id,l]) => `<button data-view="${id}" class="${state.view===id?"on":""}">${icon(id)}${l}</button>`).join("")}</nav>`;
 }
 
+
+function slimClientOps() {
+  const html = clientOpsCards();
+  return html.replace(/<div class="card">\s*<h3>Renovar[\s\S]*?<\/div>/, "");
+}
+function openStudioSettings() {
+  closeModals();
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Estudio</p>
+    <h2>Ajustes</h2>
+    <div class="card">
+      <h3>WhatsApp del estudio</h3>
+      <p class="muted">Los botones de pedir código y video usan este número.</p>
+      <input class="field" id="waNum" placeholder="7874544038" value="${escAttr(state.settings.wa || "7874544038")}">
+      <button class="btn primary" id="saveWa">Guardar número</button>
+    </div>
+    <div class="card">
+      <h3>Métodos de pago</h3>
+      <p class="muted">NiuBision no cobra tarjetas. El dinero sale en PayPal o ATH Móvil.</p>
+      ${paySecureHtml()}
+      <input class="field" id="payPaypal" placeholder="PayPal: email o paypal.me/suusuario" value="${escAttr(payCfg().paypal)}">
+      <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr(payCfg().ath)}">
+      <button class="btn primary" id="savePay">Guardar métodos de pago</button>
+    </div>
+    <div class="card">
+      <h3>Nube NiuBision</h3>
+      <p class="muted">${state.settings.cloudToken ? "Estudio conectado." : "Pulse conectar para subir clientes y pagos."}</p>
+      <input class="field" id="cloudUrl" placeholder="URL del servidor" value="${escAttr(state.settings.cloudUrl || defaultCloudUrl())}">
+      <button class="btn primary" id="cloudConnect">${state.settings.cloudToken ? "Reconectar estudio" : "Conectar estudio a la nube"}</button>
+      <button class="btn ghost" id="cloudNow">Subir y bajar ahora</button>
+    </div>
+    <div class="card">
+      <h3>Clave del estudio</h3>
+      <p class="muted">PIN 9798. Cámbiela solo si necesita recuperar el acceso.</p>
+      <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
+    </div>
+    <button class="btn ghost" id="closeSheet">Cerrar</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const saveWa = $("#saveWa", modal);
+  if (saveWa) saveWa.onclick = () => {
+    state.settings.wa = ($("#waNum", modal).value || "").replace(/[^\d+]/g, "").slice(0, 16);
+    persist();
+    toast("Número guardado");
+  };
+  const savePay = $("#savePay", modal);
+  if (savePay) savePay.onclick = () => {
+    const paypal = ($("#payPaypal", modal) && $("#payPaypal", modal).value || "").trim();
+    if (paypal && !paypalSafe(paypal).ok) return toast("PayPal inválido. Use paypal.me, un email o un enlace https://paypal.com");
+    state.settings.pay = { paypal, ath: ($("#payAth", modal) && $("#payAth", modal).value || "").trim() };
+    persist();
+    toast("Métodos de pago guardados");
+  };
+  const cc = $("#cloudConnect", modal);
+  if (cc) cc.onclick = async () => {
+    const typed = ($("#cloudUrl", modal) && $("#cloudUrl", modal).value || "").trim();
+    state.settings.cloudUrl = typed || defaultCloudUrl();
+    persist();
+    cc.disabled = true;
+    try {
+      await cloudRegisterStudio();
+      await cloudPush();
+      toast("Estudio conectado");
+    } catch (e) { toast(cloudErr(e)); }
+    finally { cc.disabled = false; }
+  };
+  const cn = $("#cloudNow", modal);
+  if (cn) cn.onclick = async () => {
+    const typed = ($("#cloudUrl", modal) && $("#cloudUrl", modal).value || "").trim();
+    state.settings.cloudUrl = typed || defaultCloudUrl();
+    persist();
+    const p2 = await cloudPull();
+    await cloudPush();
+    toast(p2.ok ? "Sincronizado" : "Sin servidor. Revise la URL");
+  };
+  const rp = $("#resetPin", modal);
+  if (rp) rp.onclick = () => { modal.remove(); openPinRecover(); };
+}
+function openWeekRecap(s) {
+  closeModals();
+  const renovar = (s.left != null) ? (s.left < 0 ? "El plan venció." : "Toca renovar en " + s.left + " días.") : "";
+  const line = s.sessions + " sesiones, " + s.sets + " series, " + (s.pain ? s.pain + " check-in con molestia" : "0 molestias") + (renovar ? ". " + renovar : ".");
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Cierre de semana</p>
+    <h2>El trabajo se vio.</h2>
+    <p>${escapeHtml(line)}</p>
+    <p class="muted">Una hoja. El domingo o al tercer día. Compártala si quiere.</p>
+    <button class="btn primary" id="shareWeek">Enviar por WhatsApp</button>
+    <button class="btn ghost" id="closeSheet">Seguir</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  modal.querySelector("#shareWeek").onclick = () => {
+    window.open(waLink(waReady("week", { text: "Miguel, soy " + (state.profile.name || "Cliente") + ". Semana NiuBision: " + line })), "_blank");
+  };
+}
+function maybeWeekRecap(force) {
+  if (state.role !== "client" || state.splash) return;
+  const k = isoWeekKey();
+  if (!force && store.get("nb_week_recap_" + k)) return;
+  const s = weekStats();
+  const sunday = new Date().getDay() === 0;
+  if (!force && s.sessions < 3 && !sunday) return;
+  if (s.sessions === 0) return;
+  store.set("nb_week_recap_" + k, 1);
+  openWeekRecap(s);
+}
+
 function homeView() {
   const rt = activeRoutine();
   const daysPlan = (rt && rt.daysPlan) || [];
   const day = daysPlan.length ? daysPlan[dayIndex(rt) % daysPlan.length] : null;
-  const w = weekPct(rt);
   const st = streak();
   if (state.role === "coach") {
-    const pending = state.checkins.slice(-5).reverse();
     const cur = currentClient();
     return `<section class="screen">
       <p class="tagline">Panel</p>
       <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el trabajo se ve aquí.</h2>
       ${state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${cur && cur.id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>
-      <p class="muted">${cur ? "Hoy y las rutinas aplican a " + escapeHtml(cur.name) + " · " + escapeHtml(cur.plan) : ""} · Clave de códigos: ${escapeHtml(studioKey())}</p>` : "<p class='muted'>Añada el primer cliente en la pestaña Clientes.</p>"}
+      <p class="muted">${cur ? "Hoy y las rutinas aplican a " + escapeHtml(cur.name) + " · " + escapeHtml(cur.plan) : "Toque un cliente."}</p>` : "<p class='muted'>Añada el primer cliente en la pestaña Clientes.</p>"}
       <div class="row three">
         <div class="card stat"><b>${state.clients.length}</b><span>Clientes</span></div>
         <div class="card stat"><b>${state.checkins.length}</b><span>Check-ins</span></div>
         <div class="card stat"><b>${st}</b><span>Racha local</span></div>
       </div>
-      <div class="card">
-        <h3>Últimos check-ins</h3>
-        ${pending.length ? pending.map((c) => `<div class="list-row"><div><strong>${escapeHtml(c.name || "Cliente")}</strong><div class="muted">${escapeHtml(c.date)} · energía ${escapeHtml(c.energy)}/5</div></div><span class="${c.pain==="sí"?"warn":"ok"}">${c.pain==="sí"?"molestia":"ok"}</span></div>`).join("") : "<p class='muted'>Aún no hay check-ins. Cuando el cliente envíe el semanal, aparecerá aquí en este teléfono.</p>"}
-      </div>
       ${coachOpsCards()}
-      <div class="card">
-        <h3>WhatsApp del estudio</h3>
-        <p class="muted">Los botones “Quiero este plan” y “Enviar video” usan este número.</p>
-        <input class="field" id="waNum" placeholder="7874544038" value="${escAttr(state.settings.wa || "7874544038")}">
-        <button class="btn primary" id="saveWa">Guardar número</button>
-        <button class="btn ghost" data-view="price">Ver precios públicos</button>
-        <button class="btn ghost" data-view="rutinas">Abrir biblioteca de rutinas</button>
-        <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
-      </div>
-      <div class="card">
-        <h3>Métodos de pago</h3>
-        <p class="muted">El cliente los ve al firmar. NiuBision no cobra tarjetas: el dinero sale en PayPal o ATH Móvil. No pida PIN ni CVV por chat.</p>
-        ${paySecureHtml()}
-        <input class="field" id="payPaypal" placeholder="PayPal: email o paypal.me/suusuario" value="${escAttr(payCfg().paypal)}">
-        <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr(payCfg().ath)}">
-        <button class="btn primary" id="savePay">Guardar métodos de pago</button>
-      </div>
-      <div class="card">
-        <h3>Nube NiuBision</h3>
-        <p class="muted">${state.settings.cloudToken ? "Estudio conectado. Los cambios de clientes, pagos y rutinas se suben solos a la nube." : "Pulse conectar. Si la URL está vacía, se usa el servidor de NiuBision."}</p>
-        <input class="field" id="cloudUrl" placeholder="URL del servidor" value="${escAttr(state.settings.cloudUrl || defaultCloudUrl())}">
-        <button class="btn primary" id="cloudConnect">${state.settings.cloudToken ? "Reconectar estudio" : "Conectar estudio a la nube"}</button>
-        <button class="btn ghost" id="cloudNow">Subir y bajar ahora</button>
+      <div class="actions">
+        <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
       </div>
     </section>`;
   }
   const dots = weekDots();
-  const hp = habitPctToday();
+  const hn = HABITS_DAY.filter((h) => (state.habits[todayKey()] || {})[h.id]).length;
   const checked = (state.checkins || []).some((c) => {
     const d = new Date(c.date + "T12:00:00");
     return (Date.now() - d) / 86400000 < 7;
   });
-  const prs = prList();
   const prog = sessionProgress(rt);
-  const mins = (rt && rt.minutes) || Math.max(20, (day && day.items ? day.items.length : 0) * 8);
-  const recent = (state.history || []).slice(-4).reverse();
-  const startLabel = prog.done > 0 && prog.left > 0
-    ? `Continuar · ${prog.done}/${prog.total}`
-    : (day ? "Empezar " + day.title.replace(/·.*/, "").trim() : "Empezar sesión");
-  const lines = [
-    "El trabajo se ve. El día se disfruta.",
-    "Una serie más. Eso basta para hoy.",
-    "Constancia antes que intensidad.",
-    "Hoy no se negocia el trabajo."
-  ];
-  const line = lines[new Date().getDate() % lines.length];
+  const delta = weekDelta();
+  const pack = selfClient();
+  const next = pack ? upcomingAppts(pack.id)[0] : null;
+  const vids = pack ? videosMonth(pack.id).length : 0;
+  const stPack = pack ? clientStatus(pack) : "";
+  const startLabel = prog.done > 0 && prog.left > 0 ? ("Continuar · " + prog.done + "/" + prog.total) : "Empezar sesión";
+  const headline = day ? ("Hoy · " + day.title) : "Hoy se entrena";
+  const renew = (stPack === "por vencer" || stPack === "vencido")
+    ? `<div class="card"><h3>Renovar</h3><p class="muted">${stPack === "vencido" ? "El plan venció." : "El plan vence en " + daysLeft(pack) + " días."} Pague para seguir.</p><button class="btn primary" id="renewPlan">Renovar ahora</button></div>`
+    : "";
   return `<section class="screen dash">
     <p class="tagline">${escapeHtml(state.profile.name || "Cliente")} · ${escapeHtml(state.profile.plan || "Estándar")}</p>
-    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">${day ? day.title : "Hoy se entrena"}</h2>
-    <p class="muted">${escapeHtml((rt && rt.name) || "Rutina")} · ${day ? day.items.length : 0} ejercicios · ~${mins} min · racha ${st}</p>
-    <p class="muted" style="color:var(--gold);margin-top:4px">${line}</p>
+    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">${escapeHtml(headline)}</h2>
+    <p class="muted">${escapeHtml((rt && rt.name) || "Rutina")}${day ? " · " + day.items.length + " ejercicios" : ""}</p>
+    ${delta ? `<p class="week-line">${escapeHtml(delta)}</p>` : ""}
     <div class="week">${dots.map((d) => `<span class="dot ${d.on?"on":""} ${d.today?"today":""}">${d.label}</span>`).join("")}</div>
-    <div class="rings">
-      <div class="ring-card"><b>${w.pct}%</b><span>Sesiones</span></div>
-      <div class="ring-card"><b>${hp}%</b><span>Hábitos</span></div>
-      <div class="ring-card"><b>${checked ? "sí" : "no"}</b><span>Check-in</span></div>
-    </div>
-    ${!checked ? `<div class="card"><h3>Check-in de la semana</h3><p class="muted">Treinta segundos. El entrenador ve energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in ahora</button></div>` : ""}
     <div class="actions">
-      <button class="btn primary" data-view="work">${startLabel}</button>
-      ${checked ? `<button class="btn ghost" id="openCheck">Check-in de 30 segundos</button>` : ""}
-      <button class="btn ghost" id="openPay">Pagar el plan</button>
+      <button class="btn primary go-train" data-view="work">${startLabel}</button>
     </div>
-    ${recent.length ? `<div class="card"><h3>Últimas sesiones</h3>${recent.map((h) => `<div class="list-row"><div><strong>${escapeHtml(h.day || "Sesión")}</strong><div class="muted">${escapeHtml(h.date)} · ${h.doneSets}/${h.total} series</div></div></div>`).join("")}</div>` : ""}
-    ${clientOpsCards()}
-    <div class="card">
-      <h3>Peso corporal</h3>
-      <p class="muted">Último registro: ${lastWeight()}. Solo un número para ver tendencia. No es diagnóstico.</p>
-      <div class="row two">
-        <input class="field" id="kgIn" inputmode="decimal" placeholder="lb">
-        <button class="btn primary" id="saveKg">Guardar</button>
+    <div class="quiet">
+      <span>Racha <b>${st}</b></span>
+      <span>Hábitos <b>${hn}/3</b> <button type="button" id="habitHome">abrir</button></span>
+      <span>Videos <b>${vids}/2</b></span>
+      ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
+    </div>
+    ${renew}
+    ${!checked ? `<div class="card"><h3>Check-in de la semana</h3><p class="muted">Treinta segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
+    <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
+    <div id="moreStudio" class="more-fold" hidden>
+      ${(state.history || []).slice(-4).reverse().length ? `<div class="card"><h3>Últimas sesiones</h3>${(state.history || []).slice(-4).reverse().map((h) => `<div class="list-row"><div><strong>${escapeHtml(h.day || "Sesión")}</strong><div class="muted">${escapeHtml(h.date)} · ${h.doneSets}/${h.total} series</div></div></div>`).join("")}</div>` : ""}
+      ${slimClientOps()}
+      <div class="card">
+        <h3>Peso corporal</h3>
+        <p class="muted">Último registro: ${lastWeight()}. Solo un número para ver tendencia. No es diagnóstico.</p>
+        <div class="row two">
+          <input class="field" id="kgIn" inputmode="decimal" placeholder="lb">
+          <button class="btn primary" id="saveKg">Guardar</button>
+        </div>
       </div>
-    </div>
-    <div class="card">
-      <h3>Cargas recientes</h3>
-      ${prs.length ? prs.map((p) => `<div class="list-row"><span>${escapeHtml(p.name)}</span><strong>${escapeHtml(String(p.w))} lb</strong></div>`).join("") : "<p class='muted'>Cuando cierre series con peso, aparecerán aquí.</p>"}
-    </div>
-    <div class="card">
-      <h3>Medidas</h3>
-      <p class="muted">Cintura, cadera y pecho en pulgadas. Es seguimiento de entrenamiento, no nutrición.</p>
-      <div class="row three">
-        <input class="field" id="mWaist" inputmode="decimal" placeholder="Cintura">
-        <input class="field" id="mHip" inputmode="decimal" placeholder="Cadera">
-        <input class="field" id="mChest" inputmode="decimal" placeholder="Pecho">
+      <div class="card">
+        <h3>Cargas recientes</h3>
+        ${prList().length ? prList().map((p) => `<div class="list-row"><span>${escapeHtml(p.name)}</span><strong>${escapeHtml(String(p.w))} lb</strong></div>`).join("") : "<p class='muted'>Cuando cierre series con peso, aparecerán aquí.</p>"}
       </div>
-      <button class="btn ghost" id="saveMeas">Guardar medidas</button>
-      ${(state.measures || []).slice(-3).reverse().map((m) => `<div class="list-row"><span>${m.date}</span><span class="muted">${m.waist}/${m.hip}/${m.chest}</span></div>`).join("")}
-    </div>
-    <div class="card">
-      <h3>Fotos de progreso</h3>
-      <p class="muted">Hasta 6 fotos en este teléfono. Se comprimen. No se publican.</p>
-      <input type="file" id="progPhoto" accept="image/*" class="field">
-      <div class="photo-row">${(state.photos || []).map((p, i) => `<button class="photo" data-delph="${i}"><img src="${p}" alt=""></button>`).join("")}</div>
+      <div class="card">
+        <h3>Medidas</h3>
+        <p class="muted">Cintura, cadera y pecho en pulgadas. Es seguimiento de entrenamiento, no nutrición.</p>
+        <div class="row three">
+          <input class="field" id="mWaist" inputmode="decimal" placeholder="Cintura">
+          <input class="field" id="mHip" inputmode="decimal" placeholder="Cadera">
+          <input class="field" id="mChest" inputmode="decimal" placeholder="Pecho">
+        </div>
+        <button class="btn ghost" id="saveMeas">Guardar medidas</button>
+        ${(state.measures || []).slice(-3).reverse().map((m) => `<div class="list-row"><span>${m.date}</span><span class="muted">${m.waist}/${m.hip}/${m.chest}</span></div>`).join("")}
+      </div>
+      <div class="card">
+        <h3>Fotos de progreso</h3>
+        <p class="muted">Hasta 6 fotos en este teléfono. Se comprimen. No se publican.</p>
+        <input type="file" id="progPhoto" accept="image/*" class="field">
+        <div class="photo-row">${(state.photos || []).map((p, i) => `<button class="photo" data-delph="${i}"><img src="${p}" alt=""></button>`).join("")}</div>
+      </div>
     </div>
   </section>`;
 }
-
 function goldBurst() {
   const wrap = document.createElement("div");
   wrap.className = "burst";
@@ -3308,6 +3426,7 @@ function workView() {
     <p class="tagline">${state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : ""}${escapeHtml(rt.name)}</p>
     <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
     <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ${escapeHtml(rt.level || "")} · ~${rt.minutes || 45} min</p>
+    ${weekDelta() ? `<p class="week-line">${escapeHtml(weekDelta())}</p>` : ""}
     ${workPickerHtml(band, list, rt.id)}
     <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
@@ -3477,7 +3596,7 @@ function bindWork() {
       note: ""
     });
     persist();
-    window.open(waLink(`Video de técnica — ${name}. ${who.name}`.trim()), "_blank");
+    window.open(waLink(waReady("video", { name: who.name, ex: name })), "_blank");
   });
   $$("[data-jumpday]").forEach((b) => b.onclick = () => {
     saveFromDom();
@@ -3610,7 +3729,7 @@ function openDone(done, total) {
     </div>
   </div>`;
   document.body.appendChild(modal);
-  modal.querySelector("#closeSheet").onclick = () => { modal.remove(); render(); };
+  modal.querySelector("#closeSheet").onclick = () => { modal.remove(); maybeWeekRecap(false); render(); };
   modal.querySelector("#toHabits").onclick = () => { modal.remove(); state.view = "habit"; render(); };
 }
 
@@ -3624,6 +3743,7 @@ function libraryView() {
   return `<section class="screen">
     <p class="tagline">Biblioteca</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:10px">Ejercicios</h2>
+    <p class="muted">${state.role === "client" ? "Toque un ejercicio para ver la ficha. El trabajo del día está en Hoy." : "Fichas para armar y enseñar. El trabajo del cliente está en Hoy."}</p>
     <input class="search" id="q" placeholder="Buscar sentadilla, remo, plancha…" value="${escapeHtml(state.query || "")}">
     <div class="filters">${muscles.map(([id,l]) => `<button data-f="${id}" class="${state.filter===id?"on":""}">${l}</button>`).join("")}</div>
     <p class="muted" style="margin:8px 0 12px">${list.length} ejercicios</p>
@@ -3646,7 +3766,7 @@ function habitView() {
   return `<section class="screen">
     <p class="tagline">Entrenamiento y recuperación</p>
     <h2 style="font-family:var(--display);font-size:26px">Hábitos de hoy</h2>
-    <p class="muted">${n} de ${HABITS_DAY.length}. No hay prescripción de alimentos. El DRD no autoriza nutrición desde el entrenamiento personal.</p>
+    <p class="muted">${n} de 3 hoy. Tres checks. La evidencia está abajo. El DRD no autoriza nutrición desde el entrenamiento personal.</p>
     <div class="progress"><span style="width:${Math.round(n/HABITS_DAY.length*100)}%"></span></div>
     ${HABITS_DAY.map((h) => `<label class="habit"><input type="checkbox" data-h="${h.id}" ${day[h.id]?"checked":""}><div><strong>${h.t}</strong><div class="muted">${h.d}</div></div></label>`).join("")}
     <h3 style="margin:22px 0 10px">Biblioteca · qué dice la evidencia</h3>
@@ -4094,6 +4214,7 @@ function showShare(c) {
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
 }
 function openNeedCode(planLabel) {
+  closeModals();
   const plan = planLabel || (state.profile && state.profile.plan) || "NiuBision Estándar";
   const modal = document.createElement("div");
   modal.className = "modal";
@@ -4140,7 +4261,7 @@ function openNeedCode(planLabel) {
       c.sex = sex; c.age = age; c.phone = phone; c.plan = c.plan || plan;
     }
     persist();
-    const msg = `NiuBision — pedir código\nNombre: ${name}\nSexo: ${sex}\nEdad: ${age}\nTeléfono: ${phone}\nPlan: ${plan}\n\nAñadir al estudio. El código de 6 dígitos se envía cuando pague.`;
+    const msg = waReady("want", { name, plan }) + `\nSexo: ${sex}\nEdad: ${age}\nTeléfono: ${phone}\n\nAñadir al estudio. El código de 6 dígitos se envía cuando pague.`;
     window.open(waLink(msg), "_blank");
     modal.remove();
     toast("Solicitud enviada. El código llega al pagar.");
@@ -5007,6 +5128,9 @@ function afterPaint() {
   if (state.role === "coach" && !state._cloudTried) {
     state._cloudTried = true;
     ensureCloud().then((r) => { if (r && r.ok && state.view === "home") render(); });
+  }
+  if (state.role === "client" && state.view === "home" && !state.splash) {
+    setTimeout(() => maybeWeekRecap(false), 700);
   }
 }
 function render() {
