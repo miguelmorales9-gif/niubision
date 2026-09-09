@@ -1,13 +1,14 @@
 {
   "name": "NiuBision",
   "short_name": "NiuBision",
-  "description": "See the work. Enjoy the day.",
+  "description": "Entrenador personal en Puerto Rico. See the work. Enjoy the day.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#121018",
   "theme_color": "#121018",
   "lang": "es",
+  "dir": "ltr",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/__grok/icon-180.png", "sizes": "180x180", "type": "image/png" }
