@@ -1012,6 +1012,9 @@ function toast(msg) {
   t.textContent = msg; t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2200);
 }
+function closeModals() {
+  document.querySelectorAll(".modal").forEach((m) => { try { m.remove(); } catch (e) {} });
+}
 function persist() {
   if (persist._busy) return;
   persist._busy = true;
@@ -1412,7 +1415,7 @@ function allRoutines() {
   return stock.concat(state.customRoutines || []);
 }
 function findRoutine(id) {
-  return allRoutines().find((r) => r.id === id) || allRoutines()[0];
+  return allRoutines().find((r) => r.id === id) || null;
 }
 function bandOf(r) {
   const l = String((r && r.level) || "").toLowerCase();
@@ -1523,7 +1526,13 @@ function ensureStudioOps() {
 }
 function selfClient() {
   if (state.role === "coach") return currentClient();
+  const code = String((state.profile && state.profile.accessCode) || "");
+  if (/^\d{6}$/.test(code)) {
+    const byCode = (state.clients || []).find((c) => String(c.accessCode) === code);
+    if (byCode) return byCode;
+  }
   const n = cleanName(state.profile.name || "");
+  if (!n) return null;
   return (state.clients || []).find((c) => cleanName(c.name) === n) || null;
 }
 function premiumCount() {
@@ -1785,6 +1794,7 @@ function openAiBuilder() {
     openAiPayThenBuild();
     return;
   }
+  closeModals();
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -1862,7 +1872,10 @@ function coachOpsCards() {
     </div>`;
 }
 function clientOpsCards() {
-  const c = selfClient() || { name: state.profile.name, plan: state.profile.plan, startDate: todayKey() };
+  const c = selfClient();
+  if (!c) {
+    return `<div class="card"><h3>Su plan</h3><p class="muted">Entre con el código del coach para ver vigencia, citas y videos.</p></div>`;
+  }
   normalizeClient(c);
   const st = clientStatus(c);
   const next = upcomingAppts(c.id)[0];
@@ -1933,8 +1946,11 @@ function bindStudioOps() {
           p.accessCode = ensureAccessCode(cl);
           cl.unpaid = false;
         }
+        if (/rutina con ia/i.test(p.plan || "")) {
+          state.aiCredits = (state.aiCredits || 0) + 1;
+        }
         persist();
-        toast("Pago recibido");
+        toast(/rutina con ia/i.test(p.plan || "") ? "Pago recibido. Crédito de IA listo" : "Pago recibido");
         openReceipt(p);
         render();
       }
@@ -2380,9 +2396,6 @@ function recordPay(planLabel, method, status) {
   state.payments.push(row);
   const last = (state.contracts || [])[state.contracts.length - 1];
   if (last && last.plan === planLabel && !last.payMethod) last.payMethod = method;
-  if (/rutina con ia/i.test(planLabel)) {
-    state.aiCredits = (state.aiCredits || 0) + 1;
-  }
   const c = selfClient() || currentClient();
   if (c && !/rutina con ia/i.test(planLabel)) {
     c.startDate = todayKey();
@@ -2452,6 +2465,7 @@ function notifyPay(planLabel, method) {
   window.open(waLink(bits.filter(Boolean).join("\n")), "_blank");
 }
 function showPayReceipt(row) {
+  closeModals();
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -2463,6 +2477,7 @@ function showPayReceipt(row) {
     ${row.accessCode ? `<p style="font-family:var(--display);font-size:36px;letter-spacing:.12em;text-align:center;margin:10px 0">${escapeHtml(row.accessCode)}</p>
     <p class="muted">Este es su código de acceso. Guárdelo. En otro teléfono: portada → «Pegar código del coach».</p>` : ""}
     <p class="muted">El cobro lo confirma PayPal o ATH Móvil. Miguel marca «recibido» cuando vea el dinero. Mientras tanto ya puede entrar a entrenar en este teléfono.</p>
+    ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
     <button class="btn primary" id="enterNow">Entrar a entrenar</button>
     <button class="btn ghost" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" id="closeSheet">Entendido</button>
@@ -2511,7 +2526,6 @@ async function runPay(method, planLabel) {
     window.open(href, "_blank", "noopener,noreferrer");
     notifyPay(planLabel, "PayPal");
     showPayReceipt(row);
-    if (/rutina con ia/i.test(planLabel)) setTimeout(openAiBuilder, 400);
     return;
   }
   if (method === "ath") {
@@ -2522,7 +2536,6 @@ async function runPay(method, planLabel) {
     } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
-    if (/rutina con ia/i.test(planLabel)) setTimeout(openAiBuilder, 400);
     return;
   }
 }
@@ -2549,6 +2562,7 @@ function openPayConfirm(method, planLabel) {
   };
 }
 function openPaySheet(planLabel) {
+  closeModals();
   const info = planPriceOf(planLabel);
   const modal = document.createElement("div");
   modal.className = "modal";
@@ -2704,7 +2718,9 @@ function bindSplash() {
       state.splash = false;
       store.set("nb_seen_cover", true);
       store.set("nb_seen_intro", true);
-      renderGate();
+      window.removeEventListener("pointerup", up);
+      wrap.removeEventListener("pointerdown", down);
+      render();
     });
   };
   const step = (on) => {
@@ -2904,6 +2920,7 @@ function startOnboard(planLabel) {
 }
 
 function openWaiver(after) {
+  closeModals();
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -2924,7 +2941,7 @@ function openWaiver(after) {
     <button class="btn ghost" id="closeSheet">Ahora no</button>
   </div>`;
   document.body.appendChild(modal);
-  const canvas = $("#sigPad");
+  const canvas = modal.querySelector("#sigPad");
   const pad = bindSigPad(canvas);
   $("#clrSig").onclick = () => pad.clear();
   modal.querySelector("#closeSheet").onclick = () => { pad.unbind(); modal.remove(); };
@@ -2946,6 +2963,7 @@ function openWaiver(after) {
 }
 
 function openHealth(planLabel) {
+  closeModals();
   const h = state.health || {};
   const modal = document.createElement("div");
   modal.className = "modal";
@@ -2964,7 +2982,7 @@ function openHealth(planLabel) {
         <label class="habit"><input type="radio" name="${q.id}" value="sí" ${h[q.id]==="sí"?"checked":""}> Sí</label>
       </div>
     </div>`).join("")}
-    <textarea id="hNotes" placeholder="Lesiones, medicamentos o detalles (sin prescribir tratamiento)">${h.notes || ""}</textarea>
+    <textarea id="hNotes" placeholder="Lesiones, medicamentos o detalles (sin prescribir tratamiento)">${escapeHtml(h.notes || "")}</textarea>
     <p class="muted">Si contestó “sí” a alguna pregunta, un médico debe autorizar la actividad antes de firmar el contrato.</p>
     <label class="habit"><input type="checkbox" id="hTrue"> Declaro que las respuestas son ciertas.</label>
     <button class="btn primary" id="saveHealth">Guardar cuestionario</button>
@@ -3035,7 +3053,7 @@ function openContract(planLabel) {
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
-  const canvas = $("#sigPad");
+  const canvas = modal.querySelector("#sigPad");
   const pad = bindSigPad(canvas);
   $("#clrSig").onclick = () => pad.clear();
   modal.querySelector("#closeSheet").onclick = () => { pad.unbind(); modal.remove(); };
@@ -3314,7 +3332,7 @@ function workView() {
           <div class="stepper"><button type="button" data-adj="${i}|${si}|w|-">−</button>
           <input class="field" data-w="${i}-${si}" value="${escapeHtml(String(s.w || last || ""))}" inputmode="decimal" placeholder="${escapeHtml(String(last || "lb"))}">
           <button type="button" data-adj="${i}|${si}|w|+">+</button></div>
-          <input class="field" data-r="${i}-${si}" value="${escapeHtml(String(s.r || ""))}" placeholder="reps">
+          <input class="field" data-r="${i}-${si}" value="${escapeHtml(String(s.r || ""))}" placeholder="repeticiones">
           <input type="checkbox" data-d="${i}-${si}" ${s.done?"checked":""}>
         </div>`).join("")}
         <div class="work-tools">
@@ -3381,7 +3399,7 @@ function bindWork() {
   };
   $$("[data-d]").forEach((el) => el.onchange = () => {
     const ses = saveFromDom();
-    el.closest(".set-row").classList.toggle("done", el.checked);
+    el.closest(".set-row") && el.closest(".set-row").classList.toggle("done", el.checked);
     const total = ses.items.reduce((n, it) => n + it.sets.length, 0);
     const done = ses.items.reduce((n, it) => n + it.sets.filter((s) => s.done).length, 0);
     const live = $("#setLive"); if (live) live.textContent = done + " de " + total + " series";
@@ -3420,7 +3438,8 @@ function bindWork() {
     const [i, si, field, dir] = String(b.dataset.adj || "").split("|");
     const input = $(`[data-w="${i}-${si}"]`);
     if (!input) return;
-    const cur = parseFloat(input.value || lastLoad(loadSession(rt).items[Number(i)].exId) || "0") || 0;
+    const it = loadSession(rt).items[Number(i)];
+    const cur = parseFloat(input.value || lastLoad(it && it.exId) || "0") || 0;
     input.value = String(Math.max(0, cur + (dir === "+" ? 5 : -5)));
     saveFromDom();
   });
@@ -3523,12 +3542,6 @@ function bindWork() {
     if (!doneSets) return toast("Cierre al menos una serie");
     state.history.push({ date: todayKey(), routine: rt.id, day: rt.daysPlan[dayIndex(rt) % rt.daysPlan.length].title, doneSets, total });
     persist();
-    const pack = selfClient() || currentClient();
-    if (pack && pack.sessionsTotal && /pack|presencial|sesi[oó]n|domicilio|pareja/i.test(pack.plan || "")) {
-      pack.sessionsUsed = Math.min((+pack.sessionsUsed || 0) + 1, +pack.sessionsTotal);
-      normalizeClient(pack);
-      persist();
-    }
     stopSessTick();
     state.sessStart = null;
     state.sessElapsed = 0;
@@ -3611,7 +3624,7 @@ function libraryView() {
   return `<section class="screen">
     <p class="tagline">Biblioteca</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:10px">Ejercicios</h2>
-    <input class="search" id="q" placeholder="Buscar sentadilla, remo, plancha…" value="${state.query}">
+    <input class="search" id="q" placeholder="Buscar sentadilla, remo, plancha…" value="${escapeHtml(state.query || "")}">
     <div class="filters">${muscles.map(([id,l]) => `<button data-f="${id}" class="${state.filter===id?"on":""}">${l}</button>`).join("")}</div>
     <p class="muted" style="margin:8px 0 12px">${list.length} ejercicios</p>
     <div class="grid">${list.length ? list.map(exCard).join("") : "<p class='muted'>Nada con ese filtro. Pruebe «Todos».</p>"}</div>
@@ -3915,7 +3928,7 @@ function studioKey() {
   return state.settings.studioKey;
 }
 function clientCode(c) {
-  return ensureAccessCode(c);
+  return (c && /^\d{6}$/.test(String(c.accessCode || ""))) ? String(c.accessCode) : "";
 }
 function encodeTicket(c) {
   if (!c) return "";
@@ -4030,6 +4043,7 @@ function copyText(text) {
   return Promise.resolve(false);
 }
 function bindSigPad(canvas) {
+  if (!canvas) return { dirty: () => false, clear() {}, unbind() {} };
   const ctx = canvas.getContext("2d");
   ctx.strokeStyle = "#f7f1e8"; ctx.lineWidth = 2; ctx.lineCap = "round";
   let draw = false, dirty = false;
@@ -4134,6 +4148,7 @@ function openNeedCode(planLabel) {
   };
 }
 function openCodeEntry() {
+  closeModals();
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -4592,7 +4607,13 @@ function bindChrome() {
     rd.readAsDataURL(f);
   };
   $$("[data-delph]").forEach((b) => b.onclick = () => {
-    state.photos.splice(+b.dataset.delph, 1);
+    const i = +b.dataset.delph;
+    const gone = (state.photos || []).splice(i, 1)[0];
+    const who = selfClient() || currentClient();
+    if (who && who.photos) {
+      const j = who.photos.indexOf(gone);
+      if (j >= 0) who.photos.splice(j, 1);
+    }
     persist(); render();
   });
   $$("[data-note]").forEach((el) => el.onchange = () => {
@@ -4829,8 +4850,8 @@ function editorView() {
         <div class="set-row" style="grid-template-columns:2fr 50px 70px 50px 28px">
           <input class="field" data-n="${di}-${ii}" value="${(it.name||"").replace(/"/g,"&quot;")}" placeholder="Ejercicio">
           <input class="field" data-s="${di}-${ii}" value="${it.sets}" placeholder="s">
-          <input class="field" data-rp="${di}-${ii}" value="${(it.reps||"").replace(/"/g,"&quot;")}" placeholder="reps">
-          <input class="field" data-rs="${di}-${ii}" value="${it.rest||90}" placeholder="rest">
+          <input class="field" data-rp="${di}-${ii}" value="${(it.reps||"").replace(/"/g,"&quot;")}" placeholder="repeticiones">
+          <input class="field" data-rs="${di}-${ii}" value="${it.rest||90}" placeholder="descanso">
           <button class="btn small ghost" data-rm="${di}-${ii}">×</button>
         </div>`).join("")}
       <button class="btn small ghost" data-additem="${di}">Añadir ejercicio</button>
@@ -4887,13 +4908,13 @@ function bindEditor() {
   });
   $$("[data-additem]").forEach((b) => b.onclick = () => {
     collectDraftFromDom();
-    state.editDraft.daysPlan[Number(b.dataset.additem)].items.push({ name: "New exercise", sets: 3, reps: "8–10", rest: 90, exId: "" });
+    state.editDraft.daysPlan[Number(b.dataset.additem)].items.push({ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" });
     render();
   });
   const addDay = $("#addDay");
   if (addDay) addDay.onclick = () => {
     collectDraftFromDom();
-    state.editDraft.daysPlan.push({ title: "New day", items: [{ name: "New exercise", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
+    state.editDraft.daysPlan.push({ title: "Día nuevo", items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
     render();
   };
   $("#cancelRt").onclick = () => { state.editDraft = null; render(); };
@@ -4976,6 +4997,10 @@ function viewOrder() {
 let viewGen = 0;
 function afterPaint() {
   $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
+  if (state.view !== "work" && state.sessTick) {
+    clearInterval(state.sessTick);
+    state.sessTick = null;
+  }
   if (state.view === "work") bindWork();
   if (state.view === "rutinas") bindRoutinesCoach();
   bindChrome();
@@ -4985,6 +5010,10 @@ function afterPaint() {
   }
 }
 function render() {
+  if (state.splash) {
+    document.body.classList.remove("in-app");
+    return renderGate();
+  }
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
   }
