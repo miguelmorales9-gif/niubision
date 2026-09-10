@@ -41,6 +41,8 @@
 <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <style>:root {
   --bg: #121018; --bg-2: #1b1a22; --bg-3: #24222c; --line: #2e2b36;
@@ -1005,7 +1007,7 @@ const PLANS = [
       "Sale con una recomendación: Base, Estándar, Premium o sesión presencial.",
       "Si contrata 8 semanas o más, se descuentan estos 39 USD.",
       "Hay una llamada de 20 minutos sin costo si solo quiere preguntar antes de pagar.",
-      "IVU no incluido."
+      "Precio final."
     ] },
   { id: "base", eyebrow: "Digital · el mínimo", name: "NiuBision Base", price: "97", unit: "al mes", featured: false,
     simple: "Usted entrena solo con un plan escrito. Un ajuste al mes. Sin llamada ni check-in semanal.",
@@ -1018,7 +1020,7 @@ const PLANS = [
       "Un ajuste del programa cada mes, no cada semana.",
       "Mensajes respondidos en 24 a 48 horas laborables.",
       "Sin videollamada. Sin check-in semanal. Sin corrección de técnica por video.",
-      "IVU no incluido. Pago por PayPal o ATH Móvil."
+      "Precio final. Pago por PayPal o ATH Móvil."
     ] },
   { id: "estandar", eyebrow: "El plan de la mayoría", name: "NiuBision Estándar", price: "127", unit: "al mes", featured: true,
     simple: "El trabajo, todas las semanas: plan, check-in, hábitos y corrección de técnica por video.",
@@ -1032,7 +1034,7 @@ const PLANS = [
       "Chat de lunes a viernes por WhatsApp.",
       "Corrección de técnica por video: 2 envíos al mes.",
       "Sin videollamada semanal.",
-      "IVU no incluido."
+      "Precio final."
     ] },
   { id: "premium", eyebrow: "Dirección cercana", name: "NiuBision Premium", price: "197", unit: "al mes", featured: false,
     simple: "Estándar más una videollamada semanal de 25 a 30 minutos y respuesta el mismo día laborable.",
@@ -1044,7 +1046,7 @@ const PLANS = [
       "Una videollamada semanal de 25 a 30 minutos (se agenda en la app).",
       "Respuesta el mismo día laborable.",
       "Cupo máximo de 8 clientes Premium a la vez.",
-      "IVU no incluido."
+      "Precio final."
     ] },
   { id: "estandar12", eyebrow: "Compromiso · ahorro", name: "NiuBision Estándar · 12 semanas", price: "349", unit: "pago único", featured: false,
     simple: "Tres meses de Estándar pagados de una vez. 349 USD en total: cerca de 97 USD al mes (ahorro de ~10%).",
@@ -1056,7 +1058,7 @@ const PLANS = [
       "Un solo pago de 349 USD en vez de 381 USD (3 meses a 127).",
       "Ahorro de cerca del 10 por ciento.",
       "El período empieza el día del pago.",
-      "IVU no incluido."
+      "Precio final."
     ] },
   { id: "premium12", eyebrow: "Mejor valor de llamada", name: "NiuBision Premium · 12 semanas", price: "529", unit: "pago único", featured: false,
     simple: "Tres meses de Premium pagados de una vez. 529 USD en total: cerca de 147 USD al mes (ahorro de ~16%).",
@@ -1068,7 +1070,7 @@ const PLANS = [
       "Un solo pago de 529 USD en vez de 591 USD (3 meses a 197).",
       "Ahorro de cerca del 16 por ciento.",
       "12 videollamadas semanales en ese bloque; se agenda cada una.",
-      "IVU no incluido."
+      "Precio final."
     ] },
   { id: "presencial", eyebrow: "Presencial", name: "Sesión en gimnasio", price: "55", unit: "sesión suelta", featured: false,
     simple: "55 minutos con el entrenador en el gimnasio. Ejecuta el plan digital; no lo sustituye.",
@@ -1082,7 +1084,7 @@ const PLANS = [
       "Domicilio (radio corto): 70 USD la sesión.",
       "Pareja: 80 USD la sesión.",
       "Reprogramar con al menos 12 horas. Si avisa tarde, la sesión se descuenta.",
-      "No incluyen IVU."
+      "Precio final."
     ] },
   { id: "ai", eyebrow: "Complemento", name: "Armado de rutina", price: "12", unit: "por rutina", featured: false,
     simple: "Un programa armado con la biblioteca NiuBision, según meta, días y equipo. No es un chat de inteligencia. 12 USD cada vez.",
@@ -1094,7 +1096,7 @@ const PLANS = [
       "Elige meta, días, minutos y si entrena en gimnasio o en casa.",
       "El motor combina ejercicios de NiuBision. El entrenador puede revisarla y ajustarla.",
       "No prescribe dieta. No diagnostica lesiones.",
-      "IVU no incluido."
+      "Precio final."
     ] }
 ];
 
@@ -1195,7 +1197,10 @@ function persist() {
     store.set("nb_receipts", state.receipts || []);
     store.set("nb_ai_credits", state.aiCredits || 0);
     persistRevoked();
-    if (state.role === "coach") scheduleCloudPush();
+    if (state.role === "coach") {
+      try { idbVault.put("nb_backup_full", backupPayload()); } catch (e) {}
+      scheduleCloudPush();
+    }
     else if (state.role === "client") scheduleClientPush();
   } finally {
     persist._busy = false;
@@ -1519,12 +1524,26 @@ async function registerRest() {
 function crudUrl(id) {
   return CR_CLOUD + "/studios" + (id ? "/" + encodeURIComponent(id) : "");
 }
+async function loadStudioPointer() {
+  try {
+    const res = await fetch("/studios.json?v=" + Date.now(), { cache: "no-store" });
+    const d = await res.json();
+    if (!d || !d.apiUrl) return;
+    const u = String(d.apiUrl).replace(/\/$/, "");
+    if (!u || /crudcrud|jsonblob|restful-api/i.test(u)) return;
+    if (isPagesHost() && (u === "/api" || u.charAt(0) === "/")) return;
+    store.set("nb_api", u);
+    if (state.settings) state.settings.cloudUrl = u;
+  } catch (e) {}
+}
 function defaultCloudUrl() {
   try {
     if (!isPagesHost() && /^https?:/i.test(location.href)) {
       return new URL("/api", location.href).origin + "/api";
     }
   } catch (e) {}
+  const fromFile = store.get("nb_api", "");
+  if (fromFile && !/crudcrud|jsonblob|restful-api/i.test(fromFile)) return fromFile;
   return "/api";
 }
 function apiBases() {
@@ -1536,11 +1555,11 @@ function apiBases() {
     if (out.indexOf(n) < 0) out.push(n);
   };
   add(state.settings && state.settings.cloudUrl);
+  add(store.get("nb_api", ""));
   try {
     if (!isPagesHost() && /^https?:/i.test(location.href)) add(new URL("/api", location.href).origin + "/api");
   } catch (e) {}
   if (!isPagesHost()) add("/api");
-  add(store.get("nb_api", ""));
   return out;
 }
 function queueCloudPut(url, token, payload) {
@@ -2267,6 +2286,8 @@ async function lookupAccess(code) {
       const res = await cloudGet(bases[i] + "/redeem?code=" + encodeURIComponent(digits), { headers: { Accept: "application/json" } });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.client) {
+        if (data.client.unpaid) return null;
+        if (isRevoked(data.client.accessCode, data.client.id)) return null;
         if (data.token) {
           state.settings.cloudToken = data.token;
           state.settings.cloudUrl = bases[i];
@@ -2723,7 +2744,7 @@ function saveAiRoutine(rt, client) {
   persist();
 }
 function printReceipt(row) {
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>IVU no incluido. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
   const w = window.open("", "_blank");
   if (!w) { toast("Permita ventanas emergentes para el recibo"); return; }
   w.document.write(html);
@@ -2739,13 +2760,16 @@ function openReceipt(row) {
     <h2>${escapeHtml(row.amount || "—")} USD</h2>
     <p>${escapeHtml(row.plan)}</p>
     <p class="muted">${escapeHtml(row.name || "Cliente")} · ${escapeHtml(row.date)} · ${escapeHtml(row.method)} · ${escapeHtml(row.status || "iniciado")}</p>
-    <p class="muted">IVU no incluido. El cobro lo confirma PayPal o ATH Móvil.</p>
+    <p class="muted">Precio final. El cobro lo confirma PayPal o ATH Móvil.</p>
     <button class="btn primary" id="printRec">Imprimir o guardar PDF</button>
+    <button class="btn ghost" id="waRec">WhatsApp del recibo</button>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   modal.querySelector("#printRec").onclick = () => printReceipt(row);
+  const wr = modal.querySelector("#waRec");
+  if (wr) wr.onclick = () => window.open(waLink(receiptText(row)), "_blank");
 }
 function openAgenda(client) {
   const c = client || currentClient();
@@ -3668,7 +3692,7 @@ function openPaySheet(planLabel) {
     <p class="tagline">Pago</p>
     <h2>${escapeHtml(info.name || "NiuBision")}</h2>
     <div class="price">${info.amount ? info.amount + " USD" : ""} <small>${info.unit || ""}</small></div>
-    <p class="muted">El IVA/IVU no está incluido. Confirme el método. NiuBision no guarda tarjetas.</p>
+    <p class="muted">Precio final. Confirme el método. NiuBision no guarda tarjetas.</p>
     ${payButtonsHtml(planLabel)}
     ${paySecureHtml()}
     <button class="btn ghost" id="closeSheet">Ahora no</button>
@@ -3939,7 +3963,7 @@ Cliente: la persona que firma al final.
 
 2. SERVICIO CONTRATADO
 Plan: ${p.name}.
-Precio: ${p.price} USD ${p.unit}. El IVU no está incluido, si aplica.
+Precio: ${p.price} USD ${p.unit}. Precio final.
 Alcance: ${p.simple}
 Incluye: ${p.detail.join("; ")}.
 
@@ -5064,7 +5088,7 @@ function pricesView() {
     <p class="tagline">Servicios</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
     ${chip}
-    <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD. El IVU no está incluido. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
+    <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD. Precio final, sin IVU. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
     <div class="card">
       <h3>Cómo elegir</h3>
       <ul class="include">
@@ -5103,8 +5127,8 @@ function pricesView() {
       </article>`).join("")}
     <div class="card">
       <h3>Preguntas que suelen quedar</h3>
-      <p><strong>¿El IVU va aparte?</strong></p>
-      <p class="muted">Sí. Los números de esta pantalla no incluyen IVU.</p>
+      <p><strong>¿Hay IVU?</strong></p>
+      <p class="muted">No. El número que ve es el que paga. Precio final.</p>
       <p style="margin-top:10px"><strong>¿Cómo se paga?</strong></p>
       <p class="muted">PayPal (${escapeHtml(payCfg().paypal || "miguel.morales9@gmail.com")}) o ATH Móvil (${escapeHtml(payCfg().ath || "7874544038")}). NiuBision no guarda tarjetas.</p>
       <p style="margin-top:10px"><strong>¿Cuándo recibo el código?</strong></p>
@@ -5116,7 +5140,7 @@ function pricesView() {
     </div>
     <div class="card">
       <h3>Cómo pagar</h3>
-      <p class="muted">PayPal y ATH Móvil. El IVU no está incluido. Después del contrato se abre esta misma lista.</p>
+      <p class="muted">PayPal y ATH Móvil. Precio final. Después del contrato se abre esta misma lista.</p>
       ${paySecureHtml()}
       ${payButtonsHtml((state.profile && state.profile.plan) || "NiuBision Estándar")}
       ${state.role !== "guest" ? `<button class="btn ghost" id="openPay">Pagar un plan ya contratado</button>` : ""}
@@ -5175,8 +5199,9 @@ function peopleView() {
     </div>
     <div class="card">
       <h3>Respaldar este teléfono</h3>
-      <p class="muted">Exporte un archivo y ábralo o impórtelo en otro dispositivo. No es una nube; es su copia.</p>
-      <button class="btn ghost" id="exportData">Exportar JSON</button>
+      <p class="muted">Baje un archivo y guárdelo en el correo o en Drive. Si pierde el teléfono, impórtelo aquí.</p>
+      <button class="btn ghost" id="exportData">Descargar JSON</button>
+      <button class="btn ghost" id="emailBackup">Enviar a mi correo</button>
       <button class="btn primary" id="exportPdf">Expediente PDF para archivo</button>
       <input type="file" id="importData" accept="application/json" class="field">
     </div>
@@ -5336,7 +5361,51 @@ function confirmClientPaid(c, method) {
   if (state.clients.indexOf(c) < 0) state.clients.push(c);
   persistClients();
   persist();
+  cloudPush().catch(() => {});
   return { client: c, payment: p, code };
+}
+function backupPayload() {
+  return {
+    v: 3,
+    at: Date.now(),
+    clients: state.clients,
+    revoked: state.revoked,
+    dead: store.get("nb_dead_codes", []),
+    profile: state.profile,
+    history: state.history,
+    checkins: state.checkins,
+    habits: state.habits,
+    settings: Object.assign({}, state.settings, { cloudToken: undefined }),
+    customRoutines: state.customRoutines,
+    routineEdits: state.routineEdits,
+    waiver: state.waiver,
+    health: state.health,
+    contracts: state.contracts,
+    payments: state.payments,
+    appointments: state.appointments,
+    videos: state.videos,
+    receipts: state.receipts,
+    aiCredits: state.aiCredits
+  };
+}
+function downloadBackup() {
+  const data = backupPayload();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "niubision-respaldo-" + todayKey() + ".json";
+  a.click();
+  store.set("nb_last_backup", Date.now());
+  try { idbVault.put("nb_backup_full", data); } catch (e) {}
+}
+function emailBackup() {
+  downloadBackup();
+  const sub = encodeURIComponent("Respaldo NiuBision " + todayKey());
+  const body = encodeURIComponent("Adjunte el archivo niubision-respaldo-" + todayKey() + ".json que se descargó en este teléfono. Guárdelo en Drive o en el correo.\n\nNiuBision");
+  window.location.href = "mailto:miguel.morales9@gmail.com?subject=" + sub + "&body=" + body;
+}
+function receiptText(row) {
+  return "Recibo NiuBision\n" + (row.name || "Cliente") + "\n" + (row.plan || "") + "\n" + (row.amount || "—") + " USD · " + (row.method || "") + "\n" + (row.date || "") + (row.accessCode ? "\nCódigo: " + row.accessCode : "") + "\nPrecio final.";
 }
 function findByAccessCode(code) {
   const t = String(code || "").replace(/\D/g, "");
@@ -6164,6 +6233,7 @@ function bindChrome() {
     toast(done && done.code ? "Código listo: " + done.code : "Pago marcado");
     render();
     if (done && done.client) showShare(done.client);
+    if (done && done.payment) setTimeout(() => openReceipt(done.payment), 500);
   });
   $$("[data-wa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.wa);
@@ -6306,17 +6376,9 @@ function bindChrome() {
   const rp = $("#resetPin");
   if (rp) rp.onclick = () => openPinRecover();
   const exp = $("#exportData");
-  if (exp) exp.onclick = () => {
-    const blob = new Blob([JSON.stringify({
-      clients: state.clients, profile: state.profile, history: state.history, checkins: state.checkins,
-      habits: state.habits,
-      settings: Object.assign({}, state.settings, { cloudToken: undefined }),
-      customRoutines: state.customRoutines, routineEdits: state.routineEdits,
-      waiver: state.waiver, health: state.health, contracts: state.contracts, payments: state.payments,
-      appointments: state.appointments, videos: state.videos, aiCredits: state.aiCredits
-    }, null, 2)], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "niubision-datos.json"; a.click();
-  };
+  if (exp) exp.onclick = () => { downloadBackup(); toast("Respaldo descargado"); };
+  const em = $("#emailBackup");
+  if (em) em.onclick = () => emailBackup();
   const imp = $("#importData");
   if (imp) imp.onchange = () => {
     const f = imp.files[0]; if (!f) return;
@@ -6346,6 +6408,8 @@ function bindChrome() {
         if (d.habits) state.habits = d.habits;
         if (d.weighins) state.weighins = d.weighins;
         if (d.payments) state.payments = d.payments;
+        if (d.revoked) state.revoked = mergeRevoked(state.revoked, d.revoked);
+        if (Array.isArray(d.dead)) store.set("nb_dead_codes", d.dead);
         if (d.appointments) state.appointments = d.appointments;
         if (d.videos) state.videos = d.videos;
         if (typeof d.aiCredits === "number") state.aiCredits = d.aiCredits;
@@ -6664,6 +6728,7 @@ async function boot() {
   window.addEventListener("offline", () => {
     if (state.role && !state.splash) render();
   });
+  try { await loadStudioPointer(); } catch (e) {}
   try { await hydrateVault(); } catch (e) {}
   applyHash();
   if (state._pendingCode) {
@@ -6720,8 +6785,14 @@ async function boot() {
     if (el) el.innerHTML = "<section class='screen'><h2>NiuBision</h2><p>Error al iniciar. Ábralo con Chrome.</p></section>";
     console.error(err);
   }
+  if (state.role === "coach") {
+    const last = +store.get("nb_last_backup", 0) || 0;
+    if (!last || Date.now() - last > 7 * 86400000) {
+      setTimeout(() => toast("Haga un respaldo esta semana: Gente → Descargar JSON."), 1800);
+    }
+  }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=7").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=8").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});
