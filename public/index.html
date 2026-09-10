@@ -1271,6 +1271,26 @@ function revokedInState(st, digits, id) {
 function sweepRevoked() {
   state.clients = (state.clients || []).filter((c) => c && !isRevoked(c.accessCode, c.id));
 }
+function clientSeatOpen() {
+  const p = state.profile || {};
+  if (!p.unlocked) return false;
+  if (isRevoked(p.accessCode, p.clientId)) return false;
+  const code = String(p.accessCode || "").replace(/\D/g, "");
+  const id = p.clientId || "";
+  if (!code && !id) return false;
+  return (state.clients || []).some((c) => !isRevoked(c.accessCode, c.id) && ((id && c.id === id) || (code && String(c.accessCode) === code)));
+}
+function clearClientSeat() {
+  if (!state.profile) return;
+  state.profile.unlocked = false;
+  state.profile.accessCode = "";
+  state.profile.clientId = "";
+  if (state.role === "client") {
+    state.role = null;
+    state.splash = true;
+    state.view = "home";
+  }
+}
 function lockOutClient(msg) {
   const code = state.profile && state.profile.accessCode;
   const id = state.profile && state.profile.clientId;
@@ -1284,23 +1304,19 @@ function lockOutClient(msg) {
     state.contracts = (state.contracts || []).filter((k) => cleanName(k.name) !== name);
     state.payments = (state.payments || []).filter((p) => cleanName(p.name) !== name);
   }
-  state.role = null;
-  state.splash = true;
-  state.view = "home";
-  if (state.profile) {
-    state.profile.unlocked = false;
-    state.profile.accessCode = "";
-    state.profile.clientId = "";
-  }
+  clearClientSeat();
   persistClients();
   persist();
   toast(msg || "Acceso cerrado. Pague de nuevo para recibir un código.");
 }
 function lockIfRevokedSeat() {
-  if (state.role !== "client") return false;
   const p = state.profile || {};
-  if (!isRevoked(p.accessCode, p.clientId)) return false;
-  lockOutClient();
+  if (!p.unlocked && state.role !== "client") return false;
+  if (clientSeatOpen()) return false;
+  const wasClient = state.role === "client";
+  clearClientSeat();
+  persist();
+  if (wasClient) toast("Acceso cerrado. Pague de nuevo para recibir un código.");
   return true;
 }
 function dropClientRecords(c) {
@@ -1331,6 +1347,7 @@ function dropClientRecords(c) {
   if (state.settings && state.settings.clientId === id) state.settings.clientId = "";
   persistRevoked();
   persistClients();
+  if (!clientSeatOpen()) clearClientSeat();
   persist();
 }
 async function hydrateVault() {
@@ -1596,7 +1613,10 @@ function applyCloud(d) {
     persistRevoked();
   }
   if (d.floor) state.floor = d.floor;
-  if (lockIfRevokedSeat()) return;
+  const kicked = lockIfRevokedSeat();
+  if (kicked && (state.role === "client" || !state.role)) {
+    if (state.role === "client") return;
+  }
   if (state.role === "client") return;
   if (Array.isArray(d.clients)) state.clients = mergeRows(state.clients, d.clients);
   sweepRevoked();
@@ -3690,7 +3710,7 @@ function renderGate() {
       <div class="quiet-links">
         <button type="button" id="seeCoach">Entrenador</button>
         <button type="button" id="seeSocial">Facebook</button>
-        ${state.profile && state.profile.unlocked ? `<button type="button" id="reenter">Seguir en este teléfono</button>` : ""}
+        ${clientSeatOpen() ? `<button type="button" id="reenter">Seguir en este teléfono</button>` : ""}
         <button type="button" id="seePrivacy">Privacidad</button>
       </div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
@@ -3797,8 +3817,10 @@ function bindSplash() {
 }
 
 function enterClient(view) {
-  if (!state.profile || !state.profile.unlocked) {
-    toast("Necesita el código del coach");
+  if (!clientSeatOpen()) {
+    clearClientSeat();
+    persist();
+    toast("Ese acceso ya no vale. Pague de nuevo para recibir un código.");
     openCodeEntry();
     return;
   }
@@ -3807,6 +3829,16 @@ function enterClient(view) {
   persist();
   render();
   if (!waiverSigned()) setTimeout(() => openWaiver(() => render()), 400);
+  const code = String(state.profile.accessCode || "").replace(/\D/g, "");
+  if (isOnline() && code.length === 6) {
+    lookupAccess(code).then((hit) => {
+      if (hit) return;
+      if (isRevoked(code, state.profile.clientId) || !clientSeatOpen()) {
+        lockOutClient();
+        render();
+      }
+    }).catch(() => {});
+  }
 }
 function openCoachGate() {
   const has = true;
@@ -6666,10 +6698,11 @@ async function boot() {
     window.speechSynthesis.getVoices();
     window.speechSynthesis.onvoiceschanged = () => { try { window.speechSynthesis.getVoices(); } catch (e2) {} };
   } catch (e) {}
-  if (isOnline() && (state.role === "client" || state.role === "coach")) {
+  if (isOnline() && (state.role === "client" || state.role === "coach" || (state.profile && state.profile.unlocked))) {
     cloudPull().then((p) => {
       if (lockIfRevokedSeat()) { try { render(); } catch (e) {} return; }
       if (p && p.ok && state.role && !state.splash) render();
+      else if (p && p.ok && state.splash) render();
     }).catch(() => {});
   }
 }
