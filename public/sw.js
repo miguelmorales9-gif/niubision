@@ -1,4 +1,4 @@
-const CACHE = "nb-offline-v5";
+const CACHE = "nb-offline-v6";
 const SHELL = ["/", "/index.html", "/favicon.svg", "/icon-180.png", "/intro-poster.jpg", "/manifest.webmanifest", "/studios.json"];
 const DB_NAME = "nb-sync";
 const DB_STORE = "queue";
@@ -118,5 +118,16 @@ self.addEventListener("fetch", (e) => {
         return hit || Response.error();
       }
     })()
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const hit = list.find((c) => c.url && "focus" in c);
+      if (hit) return hit.focus();
+      if (self.clients.openWindow) return self.clients.openWindow("/");
+    })
   );
 });
