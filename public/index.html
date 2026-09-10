@@ -78,6 +78,7 @@ a { color: var(--gold); }
 .price { font-family: var(--display); font-size: 32px; color: var(--gold); margin: 8px 0 4px; }
 .price small { font-size: 14px; color: var(--mute); font-family: var(--font); }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 0; border-radius: 14px; padding: 13px 16px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.btn:disabled { opacity: .38; pointer-events: none; }
 .btn.primary { background: var(--gold); color: #1a160f; }
 .btn.ghost { background: transparent; color: var(--cream); border: 1px solid var(--line); }
 .btn.mint { background: #24332e; color: var(--mint); }
@@ -266,6 +267,35 @@ img { background: transparent; }
   font-size: 13px; line-height: 1.5; text-align: left;
 }
 .nav.guest { grid-template-columns:1fr 1fr 1fr 1fr; }
+.nav.slim { grid-template-columns:1fr 1fr 1fr; }
+.st-chip { display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; padding:4px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mute); }
+.st-chip.ok { color:var(--mint); border-color:#3a5348; background:#1a2622; }
+.st-chip.warn { color:var(--peach); border-color:#5a4030; background:#2a221c; }
+.st-chip.late { color:var(--gold); border-color:var(--gold-dim); }
+.need-card h3 { font-size:15px; }
+.need-card { cursor:pointer; }
+.need-card:active { border-color: var(--gold-dim); }
+.focus-session details.more-fold { margin: 8px 0 12px; }
+.focus-session details.more-fold summary { color: var(--gold); font-size: 13px; cursor: pointer; list-style: none; }
+.focus-session details.more-fold summary::-webkit-details-marker { display: none; }
+.focus-session .work-ex.is-min { display:none; }
+.focus-session .work-ex header { flex-direction:column; align-items:stretch; padding:0 0 12px; }
+.focus-session .work-ex header img { width:100%; height:210px; border-radius:16px; object-fit:cover; flex:none; }
+.focus-session .work-ex header h3 { font-size:22px; font-family:var(--display); font-weight:500; margin-top:10px; padding:0 12px; }
+.focus-session .work-ex header .muted { padding:0 12px; }
+.focus-session .set-row { grid-template-columns:28px minmax(110px,1.4fr) minmax(72px,1fr) 40px; padding:10px 12px; }
+.focus-session .set-row input[type=checkbox] { width:28px; height:28px; }
+.focus-session .stepper button { height:44px; font-size:20px; }
+.focus-nav { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0 4px; }
+.rest-dock { padding:0 12px 12px; }
+.rest-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; border:0; border-radius:14px; padding:12px 16px; background:var(--gold); color:#1a160f; font-weight:700; }
+.rest-bar b { font-family:var(--display); font-size:28px; line-height:1; }
+.rest-bar small { font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.offline-bar { display:flex; align-items:center; justify-content:center; padding:8px 16px; background:#2a221c; border-bottom:1px solid #5a4030; font-size:13px; color:var(--peach); }
+.install-bar button { width:auto; padding:8px 12px; }
+.people-card details summary { color:var(--gold); font-size:13px; cursor:pointer; margin-top:8px; }
+.join-steps { margin:0 0 12px 18px; }
+.join-steps li { color:var(--mute); font-size:13px; margin:0 0 6px; }
 .pay-grid { display:grid; gap:8px; margin:12px 0 4px; }
 .pay-btn { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:var(--bg-3); border:1px solid var(--line); border-radius:14px; padding:12px 14px; color:var(--cream); cursor:pointer; }
 .pay-btn:active { transform:scale(.98); border-color:var(--gold-dim); }
@@ -585,7 +615,7 @@ window.NBroutinesStock = [
   {
     id: "ppl-6",
     name: "Empuje · tiro · pierna · 6 días",
-    days: 6, minutes: 45, level: "Intermedio–avanzado",
+    days: 6, minutes: 45, level: "Avanzado",
     place: "Gimnasio",
     goal: "El mismo split, dos veces por semana. Solo si el cliente ya recupera bien y duerme.",
     evidence: "Duplicar el split eleva la frecuencia a dos veces por grupo. Eso encaja con la evidencia de frecuencia ≥2, siempre que el volumen no dispare un descenso de rendimiento sostenido.",
@@ -1091,10 +1121,13 @@ function persist() {
 }
 const JB_CLOUD = "https://jsonblob.com/api/jsonBlob";
 const CR_CLOUD = "https://crudcrud.com/api/25e3d135532e4964b496a8f7141e838d";
+const REST_CLOUD = "https://api.restful-api.dev/objects";
+const GH_STUDIO = "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studio.json";
 const NB_CLOUD = {
   key: "NIUBI",
   token: "nb-cloud-v1",
-  id: "6aa19e22bc2cf903e84afdff"
+  id: "ff808181a067127101a0889aa45d5ced",
+  kind: "rest"
 };
 function adoptCloud(id, kind, token) {
   if (id) {
@@ -1104,8 +1137,11 @@ function adoptCloud(id, kind, token) {
   if (kind) state.settings.cloudKind = kind;
   if (token) state.settings.cloudToken = token;
   state.settings.studioKey = NB_CLOUD.key;
-  state.settings.cloudUrl = CR_CLOUD;
+  if (kind === "api") state.settings.cloudUrl = state.settings.cloudUrl || defaultCloudUrl();
   store.set("nb_settings", state.settings);
+}
+function isOnline() {
+  try { return navigator.onLine !== false; } catch (e) { return true; }
 }
 function isPagesHost() {
   try {
@@ -1115,16 +1151,91 @@ function isPagesHost() {
 function isCrudId(id) {
   return /^[a-f0-9]{24}$/i.test(String(id || ""));
 }
+function isRestId(id) {
+  return /^[a-f0-9]{32}$/i.test(String(id || ""));
+}
+function restUrl(id) {
+  return REST_CLOUD + (id ? "/" + encodeURIComponent(id) : "");
+}
+function restWrap(body) {
+  return { name: "niubision", data: body };
+}
+function restUnwrap(row) {
+  if (!row || typeof row !== "object") return null;
+  return row.data || row;
+}
+async function restPut(id, body) {
+  const res = await cloudGet(restUrl(id || NB_CLOUD.id), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(restWrap(body))
+  });
+  return res.ok;
+}
+async function restGet(id) {
+  const res = await cloudGet(restUrl(id || NB_CLOUD.id), { headers: { Accept: "application/json" } });
+  if (!res.ok) return null;
+  const row = await res.json().catch(() => null);
+  return restUnwrap(row);
+}
+async function registerRest() {
+  const token = state.settings.cloudToken || NB_CLOUD.token;
+  const body = { studioKey: studioKey(), token, state: cloudPayload(), updatedAt: Date.now() };
+  const id = (isRestId(state.settings.cloudId) && state.settings.cloudId) || NB_CLOUD.id;
+  const got = await restGet(id).catch(() => null);
+  if (got && got.state && Array.isArray(got.state.clients)) {
+    mergeRemoteReports(body.state, got.state.clients);
+  }
+  const ok = await restPut(id, body);
+  if (!ok) throw new Error("No se pudo guardar el estudio");
+  adoptCloud(id, "rest", token);
+  persist();
+  return { token, id };
+}
 function crudUrl(id) {
   return CR_CLOUD + "/studios" + (id ? "/" + encodeURIComponent(id) : "");
 }
 function defaultCloudUrl() {
-  if (isPagesHost()) return CR_CLOUD;
   try {
-    const href = String(location.href || "");
-    if (/^https?:/i.test(href)) return new URL("/api", href).origin + "/api";
+    if (!isPagesHost() && /^https?:/i.test(location.href)) {
+      return new URL("/api", location.href).origin + "/api";
+    }
   } catch (e) {}
-  return CR_CLOUD;
+  return "/api";
+}
+function apiBases() {
+  const out = [];
+  const add = (u) => {
+    const n = String(u || "").replace(/\/$/, "");
+    if (!n || /crudcrud|jsonblob|restful-api/i.test(n)) return;
+    if (n === "/api" && isPagesHost()) return;
+    if (out.indexOf(n) < 0) out.push(n);
+  };
+  add(state.settings && state.settings.cloudUrl);
+  try {
+    if (!isPagesHost() && /^https?:/i.test(location.href)) add(new URL("/api", location.href).origin + "/api");
+  } catch (e) {}
+  if (!isPagesHost()) add("/api");
+  add(store.get("nb_api", ""));
+  return out;
+}
+function queueCloudPut(url, token, payload) {
+  const item = {
+    id: "state",
+    url,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, Accept: "application/json" },
+    body: JSON.stringify(payload)
+  };
+  try { store.set("nb_sync_item", item); } catch (e) {}
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: "nb-queue", item });
+  }
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then((reg) => {
+      if (reg.sync) return reg.sync.register("nb-sync");
+    }).catch(() => {});
+  }
 }
 function cloudUrl() {
   const raw = String(state.settings.cloudUrl || "").trim().replace(/\/$/, "");
@@ -1145,12 +1256,19 @@ function cloudErr(e) {
   return m || "No se pudo conectar la nube";
 }
 async function cloudGet(url, opts) {
-  return fetch(url, Object.assign({
-    mode: "cors",
-    credentials: "omit",
-    cache: "no-store",
-    referrerPolicy: "origin"
-  }, opts || {}));
+  const extra = opts || {};
+  const ctrl = extra.signal ? null : new AbortController();
+  const t = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
+  try {
+    return await fetch(url, Object.assign({
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      referrerPolicy: "origin"
+    }, extra, ctrl ? { signal: ctrl.signal } : {}));
+  } finally {
+    if (t) clearTimeout(t);
+  }
 }
 function newCloudToken() {
   const a = new Uint8Array(32);
@@ -1212,7 +1330,7 @@ function applyCloud(d) {
 }
 let cloudTimer = null;
 function scheduleCloudPush() {
-  if (!state.settings.cloudToken) return;
+  if (!state.settings.cloudToken || !isOnline()) return;
   clearTimeout(cloudTimer);
   cloudTimer = setTimeout(() => cloudPush().catch(() => {}), 1200);
 }
@@ -1254,17 +1372,58 @@ function mergeRemoteReports(payload, remoteClients) {
 }
 let clientPushTimer = null;
 function scheduleClientPush() {
-  if (state.role !== "client") return;
+  if (state.role !== "client" || !isOnline()) return;
   clearTimeout(clientPushTimer);
   clientPushTimer = setTimeout(() => cloudPushClient().catch(() => {}), 900);
 }
 async function cloudPushClient() {
   const report = clientReportPayload();
   if (!report.accessCode && !report.clientId) return { ok: false };
+  if (!isOnline()) return { ok: false, offline: true };
   const attachIn = (list) => {
     const code = report.accessCode;
     return (list || []).find((c) => (report.clientId && c.id === report.clientId) || (code && String(c.accessCode) === code));
   };
+  try {
+    const bases = apiBases();
+    const token = state.settings.cloudToken;
+    for (let i = 0; i < bases.length && token; i++) {
+      const got = await cloudGet(bases[i] + "/state", {
+        headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+      });
+      const data = await got.json().catch(() => ({}));
+      const clients = (data.state && data.state.clients) || [];
+      const hit = attachIn(clients);
+      if (got.ok && hit) {
+        attachReport(hit, report);
+        data.state.updatedAt = Date.now();
+        const put = await cloudGet(bases[i] + "/state", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, Accept: "application/json" },
+          body: JSON.stringify(data.state)
+        });
+        if (put.ok) {
+          state.settings.cloudUrl = bases[i];
+          state.settings.cloudKind = "api";
+          return { ok: true };
+        }
+      }
+    }
+  } catch (e) {}
+  try {
+    const got = await restGet(NB_CLOUD.id);
+    const clients = (got && got.state && got.state.clients) || [];
+    const hit = attachIn(clients);
+    if (hit) {
+      attachReport(hit, report);
+      got.state.updatedAt = Date.now();
+      got.updatedAt = Date.now();
+      if (await restPut(NB_CLOUD.id, got)) {
+        adoptCloud(NB_CLOUD.id, "rest", got.token || NB_CLOUD.token);
+        return { ok: true };
+      }
+    }
+  } catch (e) {}
   try {
     const rows = await crudList();
     let row = null;
@@ -1409,12 +1568,7 @@ async function registerCrud() {
   return { token, id };
 }
 async function registerNative() {
-  const bases = [];
-  try {
-    const href = String(location.href || "");
-    if (/^https?:/i.test(href)) bases.push(new URL("/api", href).origin + "/api");
-  } catch (e) {}
-  bases.push("/api");
+  const bases = apiBases();
   const key = studioKey();
   let last = "No se pudo crear el estudio";
   for (let i = 0; i < bases.length; i++) {
@@ -1426,13 +1580,15 @@ async function registerNative() {
         res = await cloudGet(base + "/studio", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ studioKey: key, auth: state.pinHash || "local" })
+          body: JSON.stringify({ studioKey: key })
         });
         data = await res.json().catch(() => ({}));
       }
       if (res.ok && data.token) {
         state.settings.cloudUrl = base;
+        state.settings.cloudKind = "api";
         state.settings.cloudToken = data.token;
+        store.set("nb_api", base);
         persist();
         return data;
       }
@@ -1478,6 +1634,37 @@ async function registerBlob() {
 async function cloudPush() {
   if (!state.settings.cloudToken) return { ok: false };
   const payload = cloudPayload();
+  const bases = apiBases();
+  const token = state.settings.cloudToken;
+  if (bases[0] && token) queueCloudPut(bases[0] + "/state", token, payload);
+  if (!isOnline()) return { ok: false, offline: true };
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, Accept: "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        state.settings.cloudUrl = bases[i];
+        state.settings.cloudKind = "api";
+        store.set("nb_api", bases[i]);
+        store.set("nb_settings", state.settings);
+        return { ok: true };
+      }
+    } catch (e) {}
+  }
+  try {
+    const got = await restGet(NB_CLOUD.id);
+    if (got && got.state && Array.isArray(got.state.clients)) {
+      mergeRemoteReports(payload, got.state.clients);
+    }
+    const body = { studioKey: studioKey(), token: state.settings.cloudToken || NB_CLOUD.token, state: payload, updatedAt: Date.now() };
+    if (await restPut(NB_CLOUD.id, body)) {
+      adoptCloud(NB_CLOUD.id, "rest", body.token);
+      return { ok: true };
+    }
+  } catch (e) {}
   const crudId = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
   if (crudId || state.settings.cloudKind === "crud") {
     try {
@@ -1559,6 +1746,33 @@ async function cloudPull() {
     store.set("nb_ai_credits", state.aiCredits || 0);
     store.set("nb_settings", state.settings);
   };
+  const bases = apiBases();
+  const token = state.settings.cloudToken;
+  if (token) {
+    for (let i = 0; i < bases.length; i++) {
+      try {
+        const res = await cloudGet(bases[i] + "/state", {
+          headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.state) {
+          save(data.state);
+          state.settings.cloudUrl = bases[i];
+          state.settings.cloudKind = "api";
+          store.set("nb_api", bases[i]);
+          return { ok: true, data: { state: data.state } };
+        }
+      } catch (e) {}
+    }
+  }
+  try {
+    const got = await restGet((isRestId(state.settings.cloudId) && state.settings.cloudId) || NB_CLOUD.id);
+    if (got && got.state) {
+      save(got.state);
+      adoptCloud(NB_CLOUD.id, "rest", got.token || state.settings.cloudToken);
+      return { ok: true, data: { state: got.state } };
+    }
+  } catch (e) {}
   try {
     let id = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
     if (!id) {
@@ -1648,32 +1862,47 @@ async function cloudPull() {
   return { ok: false };
 }
 async function githubLoad() {
-  const res = await cloudGet("https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studios.json", {
-    headers: { Accept: "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28" }
-  });
-  if (!res.ok) return [];
-  const data = await res.json().catch(() => []);
-  return Array.isArray(data) ? data : [];
+  const urls = [
+    GH_STUDIO,
+    "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studios.json"
+  ];
+  const out = [];
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const res = await cloudGet(urls[i], {
+        headers: { Accept: "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28" }
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (Array.isArray(data)) out.push.apply(out, data);
+      else if (data && typeof data === "object") out.push(data);
+    } catch (e) {}
+  }
+  return out;
 }
 async function cloudRegisterStudio() {
+  if (!isOnline()) throw new Error("Sin conexión. El trabajo queda en este teléfono.");
   let last = "No se pudo conectar la nube";
   try {
-    const out = await registerCrud();
+    const out = await registerNative();
     if (out && out.token) return out;
   } catch (e) { last = cloudErr(e); }
-  if (!isPagesHost()) {
-    try {
-      const out = await registerNative();
-      if (out && out.token) return out;
-    } catch (e) { last = cloudErr(e); }
-  }
+  try {
+    const out = await registerRest();
+    if (out && out.token) return out;
+  } catch (e) { last = cloudErr(e); }
   try {
     const out = await registerBlob();
+    if (out && out.token) return out;
+  } catch (e) { last = cloudErr(e); }
+  try {
+    const out = await registerCrud();
     if (out && out.token) return out;
   } catch (e) { last = cloudErr(e); }
   throw new Error(last);
 }
 async function ensureCloud() {
+  if (!isOnline()) return { ok: false, offline: true };
   try {
     await cloudRegisterStudio();
     const p = await cloudPush();
@@ -1706,6 +1935,32 @@ async function lookupAccess(code) {
       state.settings.studioKey = NB_CLOUD.key;
     }
   };
+  try {
+    const bases = apiBases();
+    for (let i = 0; i < bases.length; i++) {
+      const res = await cloudGet(bases[i] + "/redeem?code=" + encodeURIComponent(digits), { headers: { Accept: "application/json" } });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.client) {
+        if (data.token) {
+          state.settings.cloudToken = data.token;
+          state.settings.cloudUrl = bases[i];
+          state.settings.cloudKind = "api";
+          store.set("nb_api", bases[i]);
+        }
+        remember("api", "api");
+        return data.client;
+      }
+    }
+  } catch (e) {}
+  try {
+    const got = await restGet(NB_CLOUD.id);
+    const list = (got && got.state && got.state.clients) || [];
+    const hit = list.find((x) => String(x.accessCode) === digits);
+    if (hit) {
+      remember(NB_CLOUD.id, "rest");
+      return hit;
+    }
+  } catch (e) {}
   try {
     const res = await cloudGet(crudUrl(NB_CLOUD.id), { headers: { Accept: "application/json" } });
     const row = await res.json().catch(() => null);
@@ -1783,34 +2038,36 @@ function findRoutine(id) {
   return allRoutines().find((r) => r.id === id) || null;
 }
 function bandOf(r) {
-  const l = String((r && r.level) || "").toLowerCase();
+  const l = String((r && r.level) || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (/avanz/.test(l)) return "avanzado";
-  if (/inter/.test(l) && !/inicio/.test(l)) return "intermedio";
-  if (/inicio|begin/.test(l)) return "principiante";
   if (/inter/.test(l)) return "intermedio";
+  if (/inicio|begin|novat|princip/.test(l)) return "principiante";
   return "principiante";
 }
 function routinesByBand(band) {
-  return allRoutines().filter((r) => {
-    const l = String(r.level || "").toLowerCase();
-    if (band === "principiante") return /inicio|begin/.test(l);
-    if (band === "avanzado") return /avanz/.test(l);
-    return /inter/.test(l) || (!/inicio/.test(l) && !/avanz/.test(l) && !/begin/.test(l));
-  });
+  const want = band || "principiante";
+  return allRoutines().filter((r) => bandOf(r) === want);
+}
+function preferredRoutine(band) {
+  const prefer = { principiante: "full-inicio", intermedio: "full-fuerza", avanzado: "ppl-6" };
+  const pool = routinesByBand(band);
+  return pool.find((r) => r.id === prefer[band]) || pool[0] || null;
 }
 function currentBand() {
   const saved = (state.profile && state.profile.level) || store.get("nb_level", "");
-  if (saved) return saved;
+  if (saved === "principiante" || saved === "intermedio" || saved === "avanzado") return saved;
   return bandOf(activeRoutine());
 }
 function assignRoutine(id) {
   const r = findRoutine(id);
-  if (!r) return;
+  if (!r) return null;
   if (state.role === "coach" && currentClient()) currentClient().routine = r.id;
   else state.profile.routine = r.id;
   state.profile.level = bandOf(r);
   store.set("nb_level", state.profile.level);
+  store.set("nb_open_ex", 0);
   persist();
+  return r;
 }
 function icon(name) {
   const map = {
@@ -1929,6 +2186,22 @@ function renewSoon() {
     const s = clientStatus(c);
     return s === "por vencer" || s === "vencido";
   });
+}
+function sessionAgeDays(c) {
+  const d = (c && c.report && c.report.lastSession && c.report.lastSession.date) || (c && c.lastSession && c.lastSession.date) || (c && c.lastSeen) || "";
+  if (!d) return 999;
+  return Math.round((Date.now() - new Date(d + "T12:00:00").getTime()) / 86400000);
+}
+function silentClients() {
+  return (state.clients || []).filter((c) => clientStatus(c) !== "vencido" && sessionAgeDays(c) >= 7);
+}
+function pendingVideos() {
+  return (state.videos || []).filter((v) => v.status === "pendiente");
+}
+function statusChip(st) {
+  const cls = st === "activo" ? "ok" : st === "sin sesión" ? "late" : "warn";
+  const label = st === "sin sesión" ? "Sin sesión" : statusLabel(st);
+  return `<span class="st-chip ${cls}">${escapeHtml(label)}</span>`;
 }
 function pickAiEx(needles, used, place, avoid) {
   const list = state.exercises || [];
@@ -2343,9 +2616,9 @@ ensureStudioOps();
 
 function activeRoutine() {
   const id = state.role === "coach"
-    ? (currentClient() && currentClient().routine) || "full-inicio"
+    ? (currentClient() && currentClient().routine) || state.profile.routine || "full-inicio"
     : state.profile.routine || "full-inicio";
-  return findRoutine(id);
+  return findRoutine(id) || findRoutine("full-inicio");
 }
 function dayIndex(rt) {
   const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
@@ -3041,7 +3314,7 @@ function renderGate() {
     setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
   };
   const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
-  const re = $("#reenter"); if (re) re.onclick = () => enterClient("home");
+  const re = $("#reenter"); if (re) re.onclick = () => enterClient("work");
   const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
   const sc = $("#seeCoach"); if (sc) sc.onclick = () => { state.role = "guest"; state.view = "coach"; persist(); render(); };
   const ss = $("#seeSocial"); if (ss) ss.onclick = () => { state.role = "guest"; state.view = "social"; persist(); render(); };
@@ -3144,9 +3417,10 @@ function enterClient(view) {
     return;
   }
   state.role = "client";
-  state.view = view || "home";
+  state.view = view || "work";
   persist();
   render();
+  if (!waiverSigned()) setTimeout(() => openWaiver(() => render()), 400);
 }
 function openCoachGate() {
   const has = true;
@@ -3490,18 +3764,26 @@ function openContract(planLabel) {
 }
 
 function header() {
-  return `<header class="app-header">
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  const ios = /iphone|ipad|ipod/i.test(ua);
+  const android = /android/i.test(ua);
+  const stand = typeof window !== "undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone);
+  const showInstall = !stand && !store.get("nb_hide_install") && (state._installEvt || ios || android);
+  const hint = ios ? "Compartir → Añadir a pantalla de inicio" : state._installEvt ? "Añadir NiuBision a este teléfono" : "Menú de Chrome → Instalar app";
+  const offline = !isOnline() ? `<div class="offline-bar">Sin conexión · el trabajo queda en este teléfono</div>` : "";
+  const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
+  return `${offline}${install}<header class="app-header">
     <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
   </header>`;
 }
 function nav() {
   const items = state.role === "coach"
-    ? [["home","Inicio"],["work","Hoy"],["rutinas","Rutinas"],["book","Ejercicios"],["people","Clientes"]]
+    ? [["home","Hoy"],["work","Sesión"],["people","Gente"]]
     : state.role === "guest"
     ? [["price","Planes"],["coach","Entrenador"],["social","Síguenos"],["privacy","Privacidad"]]
-    : [["home","Inicio"],["work","Hoy"],["book","Ejercicios"],["habit","Hábitos"],["price","Precios"]];
-  return `<nav class="nav ${state.role === "guest" ? "guest" : ""}">${items.map(([id,l]) => `<button data-view="${id}" class="${state.view===id?"on":""}">${icon(id)}${l}</button>`).join("")}</nav>`;
+    : [["work","Hoy"],["home","Yo"],["price","Plan"]];
+  return `<nav class="nav${state.role === "guest" ? " guest" : " slim"}">${items.map(([id,l]) => `<button data-view="${id}" class="${state.view===id?"on":""}">${icon(id)}${l}</button>`).join("")}</nav>`;
 }
 
 
@@ -3629,19 +3911,32 @@ function homeView() {
   const st = streak();
   if (state.role === "coach") {
     const cur = currentClient();
+    const soon = renewSoon();
+    const vids = pendingVideos();
+    const silent = silentClients();
+    const today = todayAppts();
+    const need = [
+      today[0] ? { k: "agenda", id: today[0].clientId, t: "Agenda hoy", n: today[0].name, d: (today[0].time || "") + " · " + (today[0].type || ""), extra: today.length > 1 ? "+" + (today.length - 1) : "" } : null,
+      soon[0] ? { k: "soon", id: soon[0].id, t: "Por vencer", n: soon[0].name, d: vigencyHtml(soon[0]), extra: soon.length > 1 ? "+" + (soon.length - 1) : "" } : null,
+      vids[0] ? { k: "vid", id: vids[0].clientId, t: "Video pendiente", n: vids[0].name, d: (vids[0].exercise || "") + " · " + (vids[0].date || ""), extra: vids.length > 1 ? "+" + (vids.length - 1) : "" } : null,
+      silent[0] ? { k: "late", id: silent[0].id, t: "Sin sesión", n: silent[0].name, d: sessionAgeDays(silent[0]) >= 900 ? "Aún no cierra un día" : sessionAgeDays(silent[0]) + " días", extra: silent.length > 1 ? "+" + (silent.length - 1) : "" } : null
+    ].filter(Boolean);
     return `<section class="screen">
-      <p class="tagline">Panel</p>
-      <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el trabajo se ve aquí.</h2>
-      ${state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${cur && cur.id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>
-      <p class="muted">${cur ? "Hoy y las rutinas aplican a " + escapeHtml(cur.name) + " · " + escapeHtml(cur.plan) : "Toque un cliente."}</p>` : "<p class='muted'>Añada el primer cliente en la pestaña Clientes.</p>"}
-      <div class="row three">
-        <div class="card stat"><b>${state.clients.length}</b><span>Clientes</span></div>
-        <div class="card stat"><b>${state.checkins.length}</b><span>Check-ins</span></div>
-        <div class="card stat"><b>${st}</b><span>Racha local</span></div>
-      </div>
-      ${coachOpsCards()}
-      ${lastWorkHtml(cur)}
+      <p class="tagline">Estudio</p>
+      <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Quién necesita algo hoy.</h2>
+      ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">Nadie urgente. El roster está abajo.</p></div>`}
+      ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
+        normalizeClient(c);
+        const stc = clientStatus(c);
+        const late = sessionAgeDays(c) >= 7;
+        return `<div class="list-row" data-pick="${c.id}" style="cursor:pointer"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.lastSession ? " · " + escapeHtml(c.lastSession.day || "sesión") : ""}</div></div>${late && stc === "activo" ? statusChip("sin sesión") : statusChip(stc)}</div>`;
+      }).join("")}</div>` : "<p class='muted'>Añada el primer cliente en Gente.</p>"}
+      ${cur ? lastWorkHtml(cur) : ""}
       <div class="actions">
+        <button class="btn primary" data-view="work">Abrir sesión</button>
+        <button class="btn ghost" data-view="people">Gente y códigos</button>
+        <button class="btn ghost" data-view="rutinas">Rutinas</button>
+        <button class="btn ghost" data-view="book">Ejercicios</button>
         <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
       </div>
     </section>`;
@@ -3652,33 +3947,23 @@ function homeView() {
     const d = new Date(c.date + "T12:00:00");
     return (Date.now() - d) / 86400000 < 7;
   });
-  const prog = sessionProgress(rt);
-  const delta = weekDelta();
   const pack = selfClient();
   const next = pack ? upcomingAppts(pack.id)[0] : null;
   const vids = pack ? videosMonth(pack.id).length : 0;
-  const stPack = pack ? clientStatus(pack) : "";
-  const startLabel = prog.done > 0 && prog.left > 0 ? ("Continuar · " + prog.done + "/" + prog.total) : "Empezar sesión";
-  const headline = day ? ("Hoy · " + day.title) : "Hoy se entrena";
-  const renew = (stPack === "por vencer" || stPack === "vencido")
-    ? `<div class="card"><h3>Renovar</h3><p class="muted">${stPack === "vencido" ? "El plan venció." : "El plan vence en " + daysLeft(pack) + " días."} Pague para seguir.</p><button class="btn primary" id="renewPlan">Renovar ahora</button></div>`
-    : "";
+  const stPack = pack ? clientStatus(pack) : "activo";
+  const silent = pack && sessionAgeDays(pack) >= 7;
+  const headline = "Su semana";
   return `<section class="screen dash">
     <p class="tagline">${escapeHtml(state.profile.name || "Cliente")} · ${escapeHtml(state.profile.plan || "Estándar")}</p>
     <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">${escapeHtml(headline)}</h2>
-    <p class="muted">${escapeHtml((rt && rt.name) || "Rutina")}${day ? " · " + day.items.length + " ejercicios" : ""}</p>
-    ${delta ? `<p class="week-line">${escapeHtml(delta)}</p>` : ""}
+    <p>${silent ? statusChip("sin sesión") : statusChip(stPack)}</p>
     <div class="week">${dots.map((d) => `<span class="dot ${d.on?"on":""} ${d.today?"today":""}">${d.label}</span>`).join("")}</div>
-    <div class="actions">
-      <button class="btn primary go-train" data-view="work">${startLabel}</button>
-    </div>
     <div class="quiet">
       <span>Racha <b>${st}</b></span>
       <span>Hábitos <b>${hn}/3</b> <button type="button" id="habitHome">abrir</button></span>
       <span>Videos <b>${vids}/2</b></span>
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
-    ${renew}
     ${!checked ? `<div class="card"><h3>Check-in de la semana</h3><p class="muted">Treinta segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
     <div id="moreStudio" class="more-fold" hidden>
@@ -3766,10 +4051,17 @@ function workPickerHtml(band, list, currentId) {
 }
 
 function workView() {
-  const rt = activeRoutine();
+  let rt = activeRoutine();
   const band = currentBand();
   const pool = routinesByBand(band);
   const list = pool.length ? pool : allRoutines();
+  if (rt && pool.length && !pool.some((x) => x.id === rt.id)) {
+    const next = preferredRoutine(band);
+    if (next) {
+      assignRoutine(next.id);
+      rt = activeRoutine();
+    }
+  }
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
     return `<section class="screen"><p class="tagline">Hoy</p><h2>No hay rutina asignada</h2>
       <p class="muted">Elija un nivel y una rutina para hoy.</p>
@@ -3789,19 +4081,21 @@ function workView() {
     const n = ses.items.findIndex((it) => it.sets.some((s) => !s.done));
     if (n >= 0) open = n;
   }
-  return `<section class="screen">
-    <p class="tagline">${state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : ""}${escapeHtml(rt.name)}</p>
+  return `<section class="screen focus-session">
+    <p class="tagline">${state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : ""}${escapeHtml(band)} · ${escapeHtml(rt.name)}</p>
     <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
-    <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ${escapeHtml(rt.level || "")} · ~${rt.minutes || 45} min</p>
-    ${weekDelta() ? `<p class="week-line">${escapeHtml(weekDelta())}</p>` : ""}
-    ${workPickerHtml(band, list, rt.id)}
-    <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+    <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · ~${rt.minutes || 45} min</p>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
-    ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <div class="row two">
       <button class="btn mint" id="startSess">Iniciar</button>
       <div class="card stat" style="margin:0"><b id="sessClock">00:00</b><span>sesión</span></div>
     </div>
+    ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
+    <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
+      <summary>Cambiar día o rutina</summary>
+      ${workPickerHtml(band, list, rt.id)}
+      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+    </details>
     ${ses.items.map((it, i) => {
       const ex = findEx(it.exId);
       const last = lastLoad(it.exId);
@@ -3812,6 +4106,7 @@ function workView() {
           <div><h3>${escapeHtml(name)}</h3><p class="muted">${it.sets.length} series · descanso ${it.rest}s${last?` · último ${escapeHtml(String(last))} lb`:""}</p></div>
         </header>
         <div class="work-body">
+        <div class="rest-dock"${open===i ? ' id="restDock"' : ""}></div>
         <div class="set-row muted" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase"><span>#</span><span>Peso</span><span>Reps</span><span>Ok</span></div>
         ${it.sets.map((s, si) => `<div class="set-row ${s.done?"done":""}">
           <span>${si + 1}</span>
@@ -3829,6 +4124,10 @@ function workView() {
         </div>
       </article>`;
     }).join("")}
+    <div class="focus-nav">
+      <button class="btn ghost" type="button" id="prevEx"${open<=0?" disabled":""}>Anterior</button>
+      <button class="btn primary" type="button" id="nextEx"${open>=ses.items.length-1?" disabled":""}>Siguiente</button>
+    </div>
     <div class="actions">
       <button class="btn primary" id="finishDay">Terminé el día</button>
     </div>
@@ -3853,23 +4152,28 @@ function beep(freq, ms) {
 
 function bindWork() {
   const rt = activeRoutine();
-  $$("[data-level]").forEach((b) => b.onclick = () => {
+  $$("[data-level]").forEach((b) => b.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     const band = b.dataset.level;
     state.profile.level = band;
     store.set("nb_level", band);
-    const pool = routinesByBand(band);
-    const keep = rt && pool.some((x) => x.id === rt.id);
-    if (!keep && pool[0]) assignRoutine(pool[0].id);
+    store.set("nb_pick_open", 1);
+    const next = preferredRoutine(band);
+    if (next) assignRoutine(next.id);
     else persist();
-    toast("Nivel: " + b.textContent);
+    toast("Nivel: " + b.textContent + (next ? " · " + next.name : ""));
     render();
   });
   const pick = $("#pickRt");
   if (pick) pick.onchange = () => {
+    store.set("nb_pick_open", 1);
     assignRoutine(pick.value);
     toast("Rutina lista");
     render();
   };
+  const fold = document.querySelector(".focus-session details.more-fold");
+  if (fold) fold.addEventListener("toggle", () => store.set("nb_pick_open", fold.open ? 1 : 0));
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) return;
   const saveFromDom = () => {
     const ses = loadSession(rt);
@@ -3902,11 +4206,12 @@ function bindWork() {
       if (now > last && last > 0) { toast("Marca · " + now + " lb"); goldBurst(); }
       const allDone = article && [...article.querySelectorAll("[data-d]")].every((x) => x.checked);
       if (allDone && article) {
-        article.classList.add("is-min");
         const next = article.nextElementSibling;
         if (next && next.classList.contains("work-ex")) {
-          next.classList.remove("is-min");
           store.set("nb_open_ex", Number(next.dataset.item || 0));
+          render();
+          if (done < total) startTimer(Number((article.querySelector("[data-rest]") || {}).dataset.rest || 90));
+          return;
         }
       }
       if (done < total) startTimer(Number((article && article.querySelector("[data-rest]") || {}).dataset.rest || 90));
@@ -4020,6 +4325,16 @@ function bindWork() {
     paintSess();
     if (startBtn) startBtn.textContent = "Iniciar";
   }
+  const jumpEx = (dir) => {
+    saveFromDom();
+    const arts = [...document.querySelectorAll(".work-ex")];
+    const cur = arts.findIndex((a) => !a.classList.contains("is-min"));
+    const n = Math.max(0, Math.min(arts.length - 1, (cur < 0 ? 0 : cur) + dir));
+    store.set("nb_open_ex", Number(arts[n].dataset.item || n));
+    render();
+  };
+  const px = $("#prevEx"); if (px) px.onclick = () => jumpEx(-1);
+  const nx = $("#nextEx"); if (nx) nx.onclick = () => jumpEx(1);
   const fd = $("#finishDay");
   if (fd) fd.onclick = () => {
     const ses = saveFromDom();
@@ -4041,16 +4356,23 @@ function startTimer(sec) {
   if (state.timer && state.timer.id) clearInterval(state.timer.id);
   const total = Math.max(5, Number(sec) || 90);
   let left = total;
-  let el = $(".timer");
+  const dock = document.querySelector(".work-ex:not(.is-min) .rest-dock") || $("#restDock");
+  let el = $(".rest-bar") || $(".timer");
   if (!el) {
     el = document.createElement("button");
-    el.className = "timer";
     el.type = "button";
-    document.body.appendChild(el);
+    (dock || document.body).appendChild(el);
+  } else if (dock && el.parentNode !== dock) {
+    dock.appendChild(el);
   }
+  el.className = dock ? "rest-bar" : "timer";
   const paint = () => {
     const m = Math.floor(Math.max(0, left) / 60);
     const s = Math.max(0, left) % 60;
+    if (dock) {
+      el.innerHTML = `<span><small>descanso · toque +15 s</small></span><b>${m}:${String(s).padStart(2,"0")}</b>`;
+      return;
+    }
     const circ = 2 * Math.PI * 40;
     const dash = circ * (Math.max(0, left) / total);
     el.innerHTML = `<svg viewBox="0 0 88 88"><circle cx="44" cy="44" r="40" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${(circ - dash).toFixed(1)}"></circle></svg><b>${m}:${String(s).padStart(2,"0")}</b><small>descanso</small>`;
@@ -4115,7 +4437,7 @@ function libraryView() {
     <div class="filters">${muscles.map(([id,l]) => `<button data-f="${id}" class="${state.filter===id?"on":""}">${l}</button>`).join("")}</div>
     <p class="muted" style="margin:8px 0 12px">${list.length} ejercicios</p>
     <div class="grid">${list.length ? list.map(exCard).join("") : "<p class='muted'>Nada con ese filtro. Pruebe «Todos».</p>"}</div>
-    ${state.role === "client" ? `<div class="actions"><button class="btn ghost" id="seeRoutines">Ver rutinas completas</button></div>` : ""}
+    ${state.role === "client" ? `<div class="actions"><button class="btn ghost" id="seeRoutines">Ver rutinas completas</button><button class="btn ghost" data-view="work">Volver a Hoy</button></div>` : `<div class="actions"><button class="btn ghost" data-view="home">Volver a Hoy</button></div>`}
   </section>`;
 }
 function filteredExercises() {
@@ -4138,6 +4460,7 @@ function habitView() {
     ${HABITS_DAY.map((h) => `<label class="habit"><input type="checkbox" data-h="${h.id}" ${day[h.id]?"checked":""}><div><strong>${h.t}</strong><div class="muted">${h.d}</div></div></label>`).join("")}
     <h3 style="margin:22px 0 10px">Biblioteca · qué dice la evidencia</h3>
     ${HABIT_LIB.map((h) => `<article class="card"><h3>${h.t}</h3><p>${h.how}</p><p class="muted" style="margin-top:8px">${h.why}</p><p class="warn" style="margin-top:8px;font-size:13px">No es: ${h.not}</p></article>`).join("")}
+    <div class="actions"><button class="btn ghost" data-view="${state.role === "coach" ? "home" : "work"}">Volver a Hoy</button></div>
   </section>`;
 }
 
@@ -4230,7 +4553,7 @@ function pricesView() {
         ${p.includes ? `<p class="muted"><strong>Incluye.</strong> ${p.includes}</p>` : ""}
         ${p.not ? `<p class="warn" style="font-size:13px;margin-top:6px"><strong>No incluye.</strong> ${p.not}</p>` : ""}
         <ul class="include">${p.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
-        ${state.role === "guest" ? `<button class="btn primary" data-need="${escAttr(p.name)}">Pedir código para contratar</button>` : `<button class="btn primary" data-want="${p.name} ${p.price} USD">Cuestionario y contrato</button>`}
+        ${state.role === "guest" ? `<button class="btn primary" data-need="${escAttr(p.name)}">Empezar este plan</button>` : `<button class="btn primary" data-want="${p.name} ${p.price} USD">Cuestionario y contrato</button>`}
       </article>`).join("")}
     <div class="card">
       <h3>Preguntas que suelen quedar</h3>
@@ -4261,25 +4584,25 @@ function pricesView() {
 function peopleView() {
   return `<section class="screen">
     <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Clientes</h2>
-    <p class="muted">Añada clientes reales. El código son 6 dígitos. Envíelo por WhatsApp cuando el cliente haya pagado. En la portada toca «Pegar código del coach».</p>
-    ${(state.contracts || []).length ? `<div class="card"><h3>Contratos firmados</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}${k.flagged?" · bandera de salud":""}${k.payMethod?" · "+escapeHtml(k.payMethod):""}</div></div><button class="btn small ghost" data-delk="${k.id}">Eliminar</button></div>`).join("")}</div>` : ""}
-    ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().slice(0,12).map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method)}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.plan)} · ${escapeHtml(p.date)} · ${escapeHtml(p.status || "iniciado")}</div></div>${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" data-gotpay="${p.id}">Marcar recibido</button>`}</div>`).join("")}</div>` : ""}
-    ${state.health ? `<div class="card"><h3>Cuestionario de salud</h3><p class="muted">${escapeHtml(state.health.name)} · ${escapeHtml(state.health.date)} · ${HEALTH_ITEMS.some((q)=>state.health[q.id]==="sí") ? "hay al menos un sí" : "todas las respuestas no"}</p><button class="btn small ghost" id="delHealth">Eliminar cuestionario</button></div>` : ""}
-    ${state.waiver ? `<div class="card"><h3>Relevo</h3><p class="muted">${escapeHtml(state.waiver.name)} · ${escapeHtml(state.waiver.date)}</p><button class="btn small ghost" id="delWaiver">Eliminar relevo</button></div>` : "<p class='muted'>Aún no hay relevo firmado en este teléfono.</p>"}
+    <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
+    <p class="muted">Código de 6 dígitos. Envíelo cuando el cliente haya pagado.</p>
+    ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div></div>`).join("")}</div>` : ""}
+    ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().slice(0,8).map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method)}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}</div></div>${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" data-gotpay="${p.id}">Marcar recibido</button>`}</div>`).join("")}</div>` : ""}
     ${state.clients.length ? state.clients.map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
       const st = clientStatus(c);
-      return `<div class="card">
+      const late = sessionAgeDays(c) >= 7;
+      return `<div class="card people-card">
         <strong>${escapeHtml(c.name)}</strong>
-        <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}${c.phone ? " · " + escapeHtml(c.phone) : ""}${c.sex ? " · " + escapeHtml(c.sex) : ""}${c.age ? " · " + escapeHtml(String(c.age)) + " años" : ""}</div>
+        <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
+        <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
         ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : `<p class="muted" style="margin:6px 0">Sin código hasta el pago</p>`}
-        ${c.lastSession ? `<p class="muted">Última sesión: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")} · ${escapeHtml(String(c.lastSession.doneSets || 0))}/${escapeHtml(String(c.lastSession.total || 0))} series</p>` : `<p class="muted">Sin sesión recibida aún.</p>`}
-        <p class="${statusClass(st)}" style="margin:6px 0 10px">${escapeHtml(vigencyHtml(c))}</p>
+        ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${allRoutines().map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===c.routine?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}</select>
         <button class="btn small ghost" data-link="${c.id}">Copiar código</button>
-        <button class="btn small ghost" data-wa="${c.id}">Enviar por WhatsApp</button>
+        <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
+        <details><summary>Más</summary>
         <button class="btn small ghost" data-agenda="${c.id}">Agenda</button>
         <button class="btn small ghost" data-video-in="${c.id}">Video</button>
         <button class="btn small ghost" data-recibo="${c.id}">Recibo</button>
@@ -4287,6 +4610,7 @@ function peopleView() {
         <button class="btn small ghost" data-delc="${c.id}">Eliminar</button>
         <button class="btn small ghost" data-pdf="${c.id}">Ficha PDF</button>
         <textarea class="field" data-note="${c.id}" placeholder="Nota privada del coach">${escapeHtml((state.notes && state.notes[c.id]) || "")}</textarea>
+        </details>
       </div>`;
     }).join("") : "<p class='muted'>Aún no hay clientes. Añada el primero abajo.</p>"}
     <div class="actions">
@@ -4535,6 +4859,7 @@ function applyClientAssign(a) {
   }
   if (a.clientId) state.profile.clientId = a.clientId;
   state.profile.unlocked = true;
+  state.view = "work";
   persist();
   return true;
 }
@@ -4614,9 +4939,13 @@ function openNeedCode(planLabel) {
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
     <div class="handle"></div>
-    <p class="tagline">Solicitud</p>
-    <h2>Pedir código</h2>
-    <p class="muted">El entrenador recibe sus datos por WhatsApp. El código de 6 dígitos se lo envían cuando el servicio esté pagado.</p>
+    <p class="tagline">Empezar</p>
+    <h2>${escapeHtml(plan)}</h2>
+    <ol class="join-steps">
+      <li>Sus datos</li>
+      <li>Pague por PayPal o ATH Móvil</li>
+      <li>Cuando Miguel confirme, el código llega aquí</li>
+    </ol>
     <input class="field" id="leadName" placeholder="Nombre y apellido" value="${escAttr((state.profile && state.profile.name) || "")}">
     <select id="leadSex" class="field">
       <option value="">Sexo</option>
@@ -4626,13 +4955,20 @@ function openNeedCode(planLabel) {
     </select>
     <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad">
     <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono 7874544038">
-    <p class="muted">Plan de interés: ${escapeHtml(plan)}</p>
-    <button class="btn primary" id="leadSend">Enviar por WhatsApp</button>
-    <button class="btn ghost" id="closeSheet">Cerrar</button>
+    ${payButtonsHtml(plan)}
+    ${paySecureHtml()}
+    <button class="btn primary" id="leadSend">Ya pagué · avisar por WhatsApp</button>
+    <button class="btn ghost" id="leadHave">Ya tengo el código</button>
+    <button class="btn ghost" id="closeSheet">Ahora no</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  $("#leadSend").onclick = () => {
+  $$("[data-pay]", modal).forEach((b) => b.onclick = () => {
+    modal.remove();
+    openPayConfirm(b.dataset.pay, plan);
+  });
+  modal.querySelector("#leadHave").onclick = () => { modal.remove(); openCodeEntry(); };
+  modal.querySelector("#leadSend").onclick = () => {
     const name = cleanName($("#leadName", modal).value || "");
     const sex = ($("#leadSex", modal).value || "").trim();
     const age = parseInt($("#leadAge", modal).value, 10);
@@ -4658,7 +4994,7 @@ function openNeedCode(planLabel) {
     const msg = waReady("want", { name, plan }) + `\nSexo: ${sex}\nEdad: ${age}\nTeléfono: ${phone}\n\nAñadir al estudio. El código de 6 dígitos se envía cuando pague.`;
     window.open(waLink(msg), "_blank");
     modal.remove();
-    toast("Solicitud enviada. El código llega al pagar.");
+    toast("Aviso enviado. El código llega al pagar.");
     startOnboard(plan);
   };
 }
@@ -4695,10 +5031,11 @@ function openCodeEntry() {
     applyClientAssign(a);
     state.splash = false;
     store.set("nb_seen_cover", true);
-    state.view = "home";
+    state.view = "work";
     persist();
     render();
-    toast("Bienvenido a NiuBision");
+    toast("Bienvenido. Hoy se entrena.");
+    if (!waiverSigned()) setTimeout(() => openWaiver(() => render()), 400);
   };
 }
 
@@ -5057,7 +5394,26 @@ function bindChrome() {
   $$("[data-want]").forEach((b) => b.onclick = () => startOnboard(b.dataset.want));
   $$("[data-need]").forEach((b) => b.onclick = () => openNeedCode(b.dataset.need));
   $$("[data-pick]").forEach((b) => b.onclick = () => {
-    state.settings.clientId = b.dataset.pick; persist(); render();
+    state.settings.clientId = b.dataset.pick;
+    persist();
+    if (state.role === "coach" && state.view === "home") state.view = "work";
+    render();
+  });
+  $$("[data-needk]").forEach((b) => b.onclick = () => {
+    if (b.dataset.cid) state.settings.clientId = b.dataset.cid;
+    persist();
+    if (b.dataset.needk === "vid") {
+      const c = state.clients.find((x) => x.id === b.dataset.cid) || currentClient();
+      openVideoInbox(c);
+      return;
+    }
+    if (b.dataset.needk === "agenda") {
+      const c = state.clients.find((x) => x.id === b.dataset.cid) || currentClient();
+      openAgenda(c);
+      return;
+    }
+    state.view = b.dataset.needk === "soon" ? "people" : "work";
+    render();
   });
   const ss = $("#saveSelf");
   if (ss) ss.onclick = () => {
@@ -5333,6 +5689,7 @@ function routinesCoachView() {
       <button class="btn primary" id="newRt">Nueva rutina</button>
       <button class="btn ghost" id="openAiCoach">Generar con IA</button>
       <button class="btn ghost" id="uploadRt">Subir rutina JSON</button>
+      <button class="btn ghost" data-view="home">Volver a Hoy</button>
       <input type="file" id="rtFile" accept="application/json" class="hidden">
     </div>
     ${allRoutines().map((r) => {
@@ -5503,9 +5860,9 @@ function viewBody() {
   return peopleView();
 }
 function viewOrder() {
-  if (state.role === "coach") return ["home", "work", "rutinas", "book", "people"];
-  if (state.role === "guest") return ["price", "coach", "social"];
-  return ["home", "work", "book", "habit", "price"];
+  if (state.role === "coach") return ["home", "work", "people", "rutinas", "book"];
+  if (state.role === "guest") return ["price", "coach", "social", "privacy"];
+  return ["work", "home", "price", "habit", "book"];
 }
 let viewGen = 0;
 function afterPaint() {
@@ -5514,12 +5871,27 @@ function afterPaint() {
     clearInterval(state.sessTick);
     state.sessTick = null;
   }
+  if (state.view !== "work") {
+    if (state.timer && state.timer.id) { clearInterval(state.timer.id); state.timer = null; }
+    document.querySelectorAll(".timer, .rest-bar").forEach((el) => el.remove());
+  }
   if (state.view === "work") bindWork();
   if (state.view === "rutinas") bindRoutinesCoach();
   bindChrome();
   bindStudioOps();
   const pv = $("#seePrivacy");
   if (pv) pv.onclick = () => { state.role = state.role || "guest"; state.view = "privacy"; persist(); render(); };
+  const ib = $("#installBtn");
+  if (ib) ib.onclick = async () => {
+    if (!state._installEvt) return;
+    state._installEvt.prompt();
+    try { await state._installEvt.userChoice; } catch (e) {}
+    state._installEvt = null;
+    store.set("nb_hide_install", 1);
+    render();
+  };
+  const hi = $("#hideInstall");
+  if (hi) hi.onclick = () => { store.set("nb_hide_install", 1); render(); };
   if (state.role === "coach" && !state._cloudTried) {
     state._cloudTried = true;
     ensureCloud().then((r) => { if (r && r.ok && state.view === "home") render(); });
@@ -5538,6 +5910,10 @@ function render() {
     state.role = null;
   }
   if (state.role === "guest" && state.view !== "price" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy") state.view = "price";
+  if (state.role === "client" && !store.get("nb_nav7")) {
+    state.view = "work";
+    store.set("nb_nav7", 1);
+  }
   document.body.classList.toggle("in-app", !!state.role);
   if (!state.role) return renderGate();
   const html = viewBody();
@@ -5581,6 +5957,23 @@ function render() {
 }
 
 async function boot() {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    state._installEvt = e;
+    if (document.getElementById("app") && !state.splash) render();
+  });
+  window.addEventListener("online", () => {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: "nb-flush" });
+    }
+    ensureCloud().then(() => {
+      if (state.role === "client") cloudPushClient().catch(() => {});
+      if (state.role && !state.splash) render();
+    });
+  });
+  window.addEventListener("offline", () => {
+    if (state.role && !state.splash) render();
+  });
   applyHash();
   if (state._pendingCode) {
     try {
@@ -5611,7 +6004,10 @@ async function boot() {
   if (!state.settings.cloudUrl) {
     state.settings.cloudUrl = defaultCloudUrl();
   }
-  adoptCloud(state.settings.cloudId || NB_CLOUD.id, "crud", state.settings.cloudToken || NB_CLOUD.token);
+  adoptCloud(state.settings.cloudId || NB_CLOUD.id, state.settings.cloudKind || "api", state.settings.cloudToken || NB_CLOUD.token);
+  if (!state.settings.cloudUrl || /crudcrud|jsonblob|restful-api/i.test(String(state.settings.cloudUrl))) {
+    state.settings.cloudUrl = defaultCloudUrl();
+  }
   persist();
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
@@ -5633,7 +6029,10 @@ async function boot() {
     console.error(err);
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
+      if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
+    }).catch(() => {});
   }
 }
 boot();
