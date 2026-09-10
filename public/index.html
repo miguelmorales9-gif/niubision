@@ -5077,8 +5077,8 @@ function peopleView() {
       <textarea class="field" id="pasteLead" placeholder="Pegue el WhatsApp o la línea NBLEAD"></textarea>
       <button class="btn primary" id="ingestLead" type="button">Añadir desde el aviso</button>
     </div>
-    ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div></div>`).join("")}</div>` : ""}
-    ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().slice(0,8).map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method)}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}</div></div>${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" data-gotpay="${p.id}">Marcar recibido</button>`}</div>`).join("")}</div>` : ""}
+    ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
+    ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method)}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
     ${!Array.isArray(state.clients) || !state.clients.length ? "<p class='muted'>Aún no hay clientes. Añada el primero abajo.</p>" : (state.clients || []).map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
@@ -6121,7 +6121,16 @@ function bindChrome() {
     if (!confirm("¿Eliminar este contrato?")) return;
     state.contracts = (state.contracts || []).filter((k) => k.id !== b.dataset.delk);
     persist();
+    cloudPush().catch(() => {});
     toast("Contrato eliminado");
+    render();
+  });
+  $$("[data-delpay]").forEach((b) => b.onclick = () => {
+    if (!confirm("¿Eliminar este pago?")) return;
+    state.payments = (state.payments || []).filter((p) => p.id !== b.dataset.delpay);
+    persist();
+    cloudPush().catch(() => {});
+    toast("Pago eliminado");
     render();
   });
   const dh = $("#delHealth");
