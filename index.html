@@ -1222,6 +1222,7 @@ function slimClient(c) {
 }
 function persistClients() {
   if (!Array.isArray(state.clients)) state.clients = [];
+  sweepRevoked();
   const slim = state.clients.map(slimClient);
   let ok = false;
   try { ok = !!store.set("nb_clients", slim); } catch (e) { ok = false; }
@@ -1256,11 +1257,25 @@ function mergeRevoked(a, b) {
 function isRevoked(code, id) {
   const digits = String(code || "").replace(/\D/g, "");
   const cid = id ? String(id) : "";
+  const dead = store.get("nb_dead_codes", []);
+  const deadList = Array.isArray(dead) ? dead.map(String) : [];
+  if (digits.length === 6 && deadList.indexOf(digits) >= 0) return true;
+  if (cid && deadList.indexOf("id:" + cid) >= 0) return true;
   return revokedList().some((r) => {
     if (digits.length === 6 && String(r.code || "") === digits) return true;
     if (cid && r.clientId && String(r.clientId) === cid) return true;
     return false;
   });
+}
+function buryCode(code, id) {
+  const digits = String(code || "").replace(/\D/g, "");
+  const dead = store.get("nb_dead_codes", []);
+  const list = Array.isArray(dead) ? dead.map(String) : [];
+  if (digits.length === 6 && list.indexOf(digits) < 0) list.push(digits);
+  if (id && list.indexOf("id:" + id) < 0) list.push("id:" + id);
+  const cut = list.slice(-500);
+  try { store.set("nb_dead_codes", cut); } catch (e) {}
+  try { idbVault.put("nb_dead_codes", cut); } catch (e) {}
 }
 function revokedInState(st, digits, id) {
   const list = (st && st.revoked) || [];
@@ -1327,6 +1342,7 @@ function dropClientRecords(c) {
   const phone = String(c.phone || "").replace(/\D/g, "");
   revokedList().push({ code: code || "", clientId: id || "", name, phone, at: Date.now() });
   if (state.revoked.length > 400) state.revoked = state.revoked.slice(-400);
+  buryCode(code, id);
   state.clients = (state.clients || []).filter((x) => x.id !== id);
   state.contracts = (state.contracts || []).filter((k) => {
     if (id && k.clientId && k.clientId === id) return false;
@@ -1347,7 +1363,9 @@ function dropClientRecords(c) {
   if (state.settings && state.settings.clientId === id) state.settings.clientId = "";
   persistRevoked();
   persistClients();
-  if (!clientSeatOpen()) clearClientSeat();
+  if ((state.profile && ((id && state.profile.clientId === id) || (code && String(state.profile.accessCode) === code) || (name && cleanName(state.profile.name) === name))) || !clientSeatOpen()) {
+    clearClientSeat();
+  }
   persist();
 }
 async function hydrateVault() {
@@ -1368,7 +1386,16 @@ async function hydrateVault() {
   state.contracts = await take("nb_contracts", state.contracts);
   const rev = await idbVault.get("nb_revoked");
   if (Array.isArray(rev) && rev.length) state.revoked = mergeRevoked(state.revoked, rev);
+  const dead = await idbVault.get("nb_dead_codes");
+  if (Array.isArray(dead) && dead.length) {
+    const cur = store.get("nb_dead_codes", []);
+    const list = (Array.isArray(cur) ? cur : []).concat(dead).map(String);
+    const uniq = [];
+    list.forEach((x) => { if (uniq.indexOf(x) < 0) uniq.push(x); });
+    store.set("nb_dead_codes", uniq.slice(-500));
+  }
   sweepRevoked();
+  if (state.profile && state.profile.unlocked && !clientSeatOpen()) clearClientSeat();
 }
 function pickReport(a, b) {
   if (!a) return b;
@@ -1388,6 +1415,7 @@ function mergeRows(localArr, remoteArr) {
   const byName = {};
   const put = (x) => {
     if (!x || typeof x !== "object") return;
+    if (isRevoked(x.accessCode, x.id)) return;
     const phone = String(x.phone || "").replace(/\D/g, "");
     const prev = (x.id && byId["id:" + x.id])
       || (x.accessCode && byCode["a:" + String(x.accessCode)])
@@ -1573,7 +1601,7 @@ function newCloudToken() {
 }
 function cloudPayload() {
   return {
-    clients: (state.clients || []).map(slimClient),
+    clients: (state.clients || []).filter((c) => !isRevoked(c.accessCode, c.id)).map(slimClient),
     profile: { name: state.profile.name, plan: state.profile.plan, routine: state.profile.routine },
     history: state.history,
     checkins: state.checkins,
@@ -3817,7 +3845,9 @@ function bindSplash() {
 }
 
 function enterClient(view) {
-  if (!clientSeatOpen()) {
+  const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+  const live = findByAccessCode(code);
+  if (!live || isRevoked(code, live.id) || !clientSeatOpen()) {
     clearClientSeat();
     persist();
     toast("Ese acceso ya no vale. Pague de nuevo para recibir un código.");
@@ -3829,7 +3859,6 @@ function enterClient(view) {
   persist();
   render();
   if (!waiverSigned()) setTimeout(() => openWaiver(() => render()), 400);
-  const code = String(state.profile.accessCode || "").replace(/\D/g, "");
   if (isOnline() && code.length === 6) {
     lookupAccess(code).then((hit) => {
       if (hit) return;
@@ -6556,6 +6585,10 @@ function afterPaint() {
   }
 }
 function render() {
+  if (state.profile && state.profile.unlocked && !clientSeatOpen()) clearClientSeat();
+  if (state.role === "client" && !findByAccessCode(state.profile && state.profile.accessCode)) {
+    clearClientSeat();
+  }
   if (state.role === "client" && isRevoked(state.profile && state.profile.accessCode, state.profile && state.profile.clientId)) {
     lockOutClient();
   }
@@ -6631,6 +6664,7 @@ async function boot() {
   window.addEventListener("offline", () => {
     if (state.role && !state.splash) render();
   });
+  try { await hydrateVault(); } catch (e) {}
   applyHash();
   if (state._pendingCode) {
     try {
@@ -6665,7 +6699,6 @@ async function boot() {
   if (!state.settings.cloudUrl || /crudcrud|jsonblob|restful-api/i.test(String(state.settings.cloudUrl))) {
     state.settings.cloudUrl = defaultCloudUrl();
   }
-  try { await hydrateVault(); } catch (e) {}
   if (lockIfRevokedSeat()) {}
   persist();
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
@@ -6688,7 +6721,7 @@ async function boot() {
     console.error(err);
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=7").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});
