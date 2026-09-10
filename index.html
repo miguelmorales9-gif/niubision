@@ -281,6 +281,8 @@ img { background: transparent; }
 .focus-session .work-ex.is-min { display:none; }
 .focus-session .work-ex header { flex-direction:column; align-items:stretch; padding:0 0 12px; }
 .focus-session .work-ex header img { width:100%; height:210px; border-radius:16px; object-fit:cover; flex:none; }
+.focus-session .work-ex header .ex-loop { width:100%; height:240px; flex:none; }
+.focus-session .work-ex header .ex-loop img { height:100%; width:100%; border-radius:0; position:absolute; }
 .focus-session .work-ex header h3 { font-size:22px; font-family:var(--display); font-weight:500; margin-top:10px; padding:0 12px; }
 .focus-session .work-ex header .muted { padding:0 12px; }
 .focus-session .set-row { grid-template-columns:28px minmax(110px,1.4fr) minmax(72px,1fr) 40px; padding:10px 12px; }
@@ -291,6 +293,30 @@ img { background: transparent; }
 .rest-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; border:0; border-radius:14px; padding:12px 16px; background:var(--gold); color:#1a160f; font-weight:700; }
 .rest-bar b { font-family:var(--display); font-size:28px; line-height:1; }
 .rest-bar small { font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.ex-loop { position:relative; width:100%; height:240px; border-radius:16px; overflow:hidden; background:#0d0c12; }
+.ex-loop img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.ex-loop img.b { animation: techFlip 1.6s steps(1) infinite; }
+@keyframes techFlip { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ex-loop img.b { animation: none; opacity: 0; } }
+.session-start { text-align:left; padding-top:8px; }
+.session-start h2 { font-family:var(--display); font-size:34px; line-height:1.05; margin:6px 0 10px; }
+.session-start .go { margin-top:18px; min-height:56px; font-size:18px; }
+.floor-line { color:var(--gold); font-size:13px; letter-spacing:.04em; margin:8px 0 0; }
+.close-flash { position:fixed; inset:0; z-index:90; background:#121018; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; animation: fadeUp .35s ease both; }
+.close-flash p { color:var(--gold); letter-spacing:.18em; text-transform:uppercase; font-size:12px; }
+.close-flash b { font-family:var(--display); font-size:42px; color:var(--cream); margin-top:10px; }
+.rest-face { position:fixed; inset:0; z-index:85; background:#121018; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:24px; }
+.rest-face b { font-family:var(--display); font-size:22vw; line-height:.9; color:var(--gold); }
+.rest-face small { letter-spacing:.2em; text-transform:uppercase; color:var(--mute); font-size:12px; }
+.rest-face .rest-actions { display:flex; gap:10px; width:min(320px, 100%); }
+.rest-face .rest-actions .btn { margin:0; }
+.voice-chip { font-size:11px; letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--line); background:transparent; color:var(--mute); border-radius:999px; padding:6px 10px; width:auto; flex:0 0 auto; margin:0; }
+.voice-chip.on { color:var(--gold); border-color:var(--gold-dim); }
+.sess-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
+.sess-top .tagline { margin:0; }
+.cover .actions .btn.primary { min-height:52px; }
+.cover .quiet-links { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:18px; }
+.cover .quiet-links button { background:none; border:0; color:var(--gold); font-size:13px; padding:0; letter-spacing:.04em; }
 .offline-bar { display:flex; align-items:center; justify-content:center; padding:8px 16px; background:#2a221c; border-bottom:1px solid #5a4030; font-size:13px; color:var(--peach); }
 .install-bar button { width:auto; padding:8px 12px; }
 .people-card details summary { color:var(--gold); font-size:13px; cursor:pointer; margin-top:8px; }
@@ -1295,11 +1321,23 @@ function cloudPayload() {
     appointments: (state.appointments || []).map((a) => ({ id: a.id, clientId: a.clientId, name: a.name, date: a.date, time: a.time, type: a.type, place: a.place, status: a.status })),
     aiCredits: state.aiCredits || 0,
     settings: { wa: state.settings.wa, studioKey: state.settings.studioKey, pay: state.settings.pay || {}, cloudId: state.settings.cloudId || store.get("nb_blob_id") || "" },
+    floor: (function () {
+      const today = todayKey();
+      const list = state.clients || [];
+      return {
+        today: list.filter((c) => {
+          const d = (c.report && c.report.lastSession && c.report.lastSession.date) || (c.lastSession && c.lastSession.date) || "";
+          return d === today;
+        }).length,
+        active: list.filter((c) => clientStatus(c) === "activo").length
+      };
+    })(),
     updatedAt: Date.now()
   };
 }
 function applyCloud(d) {
   if (!d || typeof d !== "object") return;
+  if (d.floor) state.floor = d.floor;
   if (state.role === "client") return;
   if (d.clients) state.clients = d.clients;
   if (d.history) state.history = d.history;
@@ -2066,6 +2104,7 @@ function assignRoutine(id) {
   state.profile.level = bandOf(r);
   store.set("nb_level", state.profile.level);
   store.set("nb_open_ex", 0);
+  store.set("nb_live", 0);
   persist();
   return r;
 }
@@ -2084,8 +2123,109 @@ function icon(name) {
   };
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="${map[name] || map.home}"/></svg>`;
 }
-function findEx(id) { return state.exercises.find((e) => e.id === id); }
+function findEx(id) { return (state.exercises || []).find((e) => e.id === id); }
 function imgOf(ex) { return (ex && ex.images && ex.images[0]) || ""; }
+function imgPair(ex) {
+  const a = (ex && ex.images) || [];
+  return [a[0] || "", a[1] || a[0] || ""];
+}
+function techLoopHtml(ex, name) {
+  const [a, b] = imgPair(ex);
+  if (!a) return "";
+  if (!b || b === a) return `<img src="${a}" alt="${escapeHtml(name)}" loading="lazy" decoding="async">`;
+  return `<div class="ex-loop" aria-hidden="true"><img class="a" src="${a}" alt=""><img class="b" src="${b}" alt=""></div>`;
+}
+function voiceOn() { return store.get("nb_voice", 1) !== 0; }
+function speak(text) {
+  if (!voiceOn() || !text) return;
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const u = new SpeechSynthesisUtterance(String(text));
+    u.lang = "es-PR";
+    u.rate = 1.02;
+    u.pitch = 0.96;
+    const vs = window.speechSynthesis.getVoices() || [];
+    const v = vs.find((x) => /es-PR/i.test(x.lang)) || vs.find((x) => /es-MX|es-US/i.test(x.lang)) || vs.find((x) => /^es/i.test(x.lang));
+    if (v) u.voice = v;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch (e) {}
+}
+async function holdScreen(on) {
+  try {
+    if (!on) {
+      if (holdScreen._lock) { await holdScreen._lock.release(); holdScreen._lock = null; }
+      return;
+    }
+    if (navigator.wakeLock) holdScreen._lock = await navigator.wakeLock.request("screen");
+  } catch (e) {}
+}
+function floorStats() {
+  const f = state.floor || {};
+  const list = state.clients || [];
+  const today = todayKey();
+  const trained = list.filter((c) => {
+    const d = (c.report && c.report.lastSession && c.report.lastSession.date) || (c.lastSession && c.lastSession.date) || "";
+    return d === today;
+  }).length;
+  const active = list.filter((c) => clientStatus(c) === "activo").length;
+  return {
+    today: typeof f.today === "number" ? f.today : trained,
+    active: typeof f.active === "number" ? f.active : active
+  };
+}
+function floorLine() {
+  const f = floorStats();
+  if (!f.active) return "";
+  return `<p class="floor-line">Hoy el piso · ${f.today} de ${f.active} cerraron el día</p>`;
+}
+function packChip(c) {
+  const who = c || selfClient();
+  if (!who) return "";
+  const st = clientStatus(who);
+  const left = daysLeft(who);
+  if (st === "vencido") return `<span class="st-chip warn">Pausado</span>`;
+  if (st === "por vencer" && left != null && left >= 0) return `<span class="st-chip warn">Vence en ${left} días</span>`;
+  if (st === "por vencer") return `<span class="st-chip warn">Por vencer</span>`;
+  if (left != null && left <= 14) return `<span class="st-chip ok">Activo · ${left} días</span>`;
+  return `<span class="st-chip ok">Activo</span>`;
+}
+function sessionLoad(ses) {
+  let lb = 0;
+  (ses.items || []).forEach((it) => it.sets.forEach((s) => {
+    if (!s.done) return;
+    const w = parseFloat(s.w) || 0;
+    const r = parseFloat(String(s.r || "").replace(/[^\d.]/g, "")) || 0;
+    lb += w * (r || 1);
+  }));
+  return Math.round(lb);
+}
+function trainedToday() {
+  return (state.history || []).some((h) => h.date === todayKey());
+}
+function nudgeGym() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (trainedToday()) return;
+  if (store.get("nb_nudge_" + todayKey())) return;
+  store.set("nb_nudge_" + todayKey(), 1);
+  const body = "Día pendiente. ¿Hoy o lo pasamos?";
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.showNotification("NiuBision", { body, icon: "/icon-180.png", tag: "nb-nudge", badge: "/favicon.svg" });
+    }).catch(() => { try { new Notification("NiuBision", { body }); } catch (e) {} });
+  } else {
+    try { new Notification("NiuBision", { body }); } catch (e) {}
+  }
+}
+function scheduleGymNudge() {
+  if (!("Notification" in window)) return;
+  const now = new Date();
+  if (now.getHours() >= 17) nudgeGym();
+  const fire = new Date();
+  fire.setHours(17, 0, 0, 0);
+  if (now >= fire) fire.setDate(fire.getDate() + 1);
+  setTimeout(() => { nudgeGym(); scheduleGymNudge(); }, Math.max(60 * 1000, fire - now));
+}
 function currentClient() {
   if (state.role !== "coach") return null;
   const id = state.settings.clientId || "";
@@ -3294,20 +3434,22 @@ function renderGate() {
   }
   $("#app").innerHTML = `
     <section class="screen hero cover">
-      <p class="tagline">Acceso con código</p>
+      <p class="tagline">NiuBision</p>
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
       <h1>NiuBision</h1>
-      <p>El entrenamiento está cerrado. Solo entra quien tiene el código que envía el coach.</p>
+      <p>See the work. Enjoy the day.</p>
       <div class="actions">
-        <button class="btn primary" id="haveCode">Pegar código del coach</button>
-        <button class="btn ghost" id="seePlans">Ver planes (sin entrenar)</button>
-        <button class="btn ghost" id="seeCoach">Conoce a tu entrenador</button>
-        <button class="btn ghost" id="seeSocial">Síguenos en Facebook</button>
-        ${state.profile && state.profile.unlocked ? `<button class="btn ghost" id="reenter">Ya tengo código en este teléfono</button>` : ""}
+        <button class="btn primary" id="haveCode">Entrar</button>
+        <button class="btn ghost" id="seePlans">Planes</button>
+        <button class="btn ghost" id="studioLock">Estudio</button>
+      </div>
+      <div class="quiet-links">
+        <button type="button" id="seeCoach">Entrenador</button>
+        <button type="button" id="seeSocial">Facebook</button>
+        ${state.profile && state.profile.unlocked ? `<button type="button" id="reenter">Seguir en este teléfono</button>` : ""}
+        <button type="button" id="seePrivacy">Privacidad</button>
       </div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
-      <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
-      <button class="studio-lock" id="studioLock" aria-label="Acceso del estudio">estudio</button>
     </section>`;
   $("#logoPulse").onclick = () => {
     $("#logoPulse").classList.add("spin");
@@ -3923,7 +4065,8 @@ function homeView() {
     ].filter(Boolean);
     return `<section class="screen">
       <p class="tagline">Estudio</p>
-      <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Quién necesita algo hoy.</h2>
+      <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
+      ${floorLine()}
       ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">Nadie urgente. El roster está abajo.</p></div>`}
       ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
         normalizeClient(c);
@@ -3950,13 +4093,14 @@ function homeView() {
   const pack = selfClient();
   const next = pack ? upcomingAppts(pack.id)[0] : null;
   const vids = pack ? videosMonth(pack.id).length : 0;
-  const stPack = pack ? clientStatus(pack) : "activo";
   const silent = pack && sessionAgeDays(pack) >= 7;
   const headline = "Su semana";
+  const sunday = new Date().getDay() === 0;
   return `<section class="screen dash">
     <p class="tagline">${escapeHtml(state.profile.name || "Cliente")} · ${escapeHtml(state.profile.plan || "Estándar")}</p>
     <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">${escapeHtml(headline)}</h2>
-    <p>${silent ? statusChip("sin sesión") : statusChip(stPack)}</p>
+    <p>${silent ? statusChip("sin sesión") : packChip(pack)}</p>
+    ${floorLine()}
     <div class="week">${dots.map((d) => `<span class="dot ${d.on?"on":""} ${d.today?"today":""}">${d.label}</span>`).join("")}</div>
     <div class="quiet">
       <span>Racha <b>${st}</b></span>
@@ -3964,7 +4108,7 @@ function homeView() {
       <span>Videos <b>${vids}/2</b></span>
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
-    ${!checked ? `<div class="card"><h3>Check-in de la semana</h3><p class="muted">Treinta segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
+    ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
     <div id="moreStudio" class="more-fold" hidden>
       ${(state.history || []).slice(-4).reverse().length ? `<div class="card"><h3>Últimas sesiones</h3>${(state.history || []).slice(-4).reverse().map((h) => `<div class="list-row"><div><strong>${escapeHtml(h.day || "Sesión")}</strong><div class="muted">${escapeHtml(h.date)} · ${h.doneSets}/${h.total} series</div></div></div>`).join("")}</div>` : ""}
@@ -4081,15 +4225,31 @@ function workView() {
     const n = ses.items.findIndex((it) => it.sets.some((s) => !s.done));
     if (n >= 0) open = n;
   }
+  const closed = (state.history || []).some((h) => h.date === todayKey() && h.routine === rt.id);
+  const live = !!store.get("nb_live") || !!state.sessStart;
+  const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
+  const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz on":"Voz off"}</button>`;
+  if (!live) {
+    return `<section class="screen session-start">
+      <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)}</p>${voiceBtn}</div>
+      <h2>${escapeHtml(day.title)}</h2>
+      <p class="muted">${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
+      ${packChip(selfClient())}
+      ${floorLine()}
+      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<button class="btn primary go" id="goLive">Empezar</button>`}
+      ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
+      <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
+        <summary>Cambiar día o rutina</summary>
+        ${workPickerHtml(band, list, rt.id)}
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+      </details>
+    </section>`;
+  }
   return `<section class="screen focus-session">
-    <p class="tagline">${state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : ""}${escapeHtml(band)} · ${escapeHtml(rt.name)}</p>
+    <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)} · ${escapeHtml(rt.name)}</p>${voiceBtn}</div>
     <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
-    <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · ~${rt.minutes || 45} min</p>
+    <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · <span id="sessClock">00:00</span></p>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
-    <div class="row two">
-      <button class="btn mint" id="startSess">Iniciar</button>
-      <div class="card stat" style="margin:0"><b id="sessClock">00:00</b><span>sesión</span></div>
-    </div>
     ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
@@ -4100,10 +4260,12 @@ function workView() {
       const ex = findEx(it.exId);
       const last = lastLoad(it.exId);
       const name = displayName(it);
+      const cue = (ex && ex.instructionsEs && ex.instructionsEs[0]) || "";
       return `<article class="card work-ex ${open===i?"":"is-min"}" data-item="${i}">
-        <header data-toggle="${i}">
-          <img src="${imgOf(ex)}" alt="${escapeHtml(name)}" data-open="${escapeHtml(it.exId || "")}" loading="lazy" decoding="async" width="64" height="64">
-          <div><h3>${escapeHtml(name)}</h3><p class="muted">${it.sets.length} series · descanso ${it.rest}s${last?` · último ${escapeHtml(String(last))} lb`:""}</p></div>
+        <header>
+          ${open===i ? techLoopHtml(ex, name) : `<img src="${imgOf(ex)}" alt="${escapeHtml(name)}" data-open="${escapeHtml(it.exId || "")}" loading="lazy" decoding="async" width="64" height="64">`}
+          <div data-toggle="${i}"><h3>${escapeHtml(name)}</h3><p class="muted">${it.sets.length} series · descanso ${it.rest}s${last?` · último ${escapeHtml(String(last))} lb`:""}</p>
+          ${open===i && cue ? `<p class="muted">${escapeHtml(String(cue).slice(0, 140))}</p>` : ""}</div>
         </header>
         <div class="work-body">
         <div class="rest-dock"${open===i ? ' id="restDock"' : ""}></div>
@@ -4152,6 +4314,31 @@ function beep(freq, ms) {
 
 function bindWork() {
   const rt = activeRoutine();
+  const voice = $("#voiceToggle");
+  if (voice) voice.onclick = (e) => {
+    e.preventDefault();
+    store.set("nb_voice", voiceOn() ? 0 : 1);
+    toast(voiceOn() ? "Voz on" : "Voz off");
+    render();
+  };
+  const go = $("#goLive");
+  if (go) go.onclick = () => {
+    store.set("nb_live", 1);
+    store.set("nb_open_ex", 0);
+    state.sessStart = Date.now();
+    state.sessElapsed = 0;
+    holdScreen(true);
+    const first = (loadSession(rt).items[0] || {});
+    if (go.textContent.indexOf("Ver") < 0) speak("Empiece. " + displayName(first));
+    beep(660, 140);
+    render();
+    setTimeout(() => {
+      if ("Notification" in window && Notification.permission === "default" && !store.get("nb_remind_ask")) {
+        store.set("nb_remind_ask", 1);
+        Notification.requestPermission().then((p) => store.set("nb_notify", p === "granted" ? 1 : 0));
+      }
+    }, 2500);
+  };
   $$("[data-level]").forEach((b) => b.onclick = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -4172,7 +4359,7 @@ function bindWork() {
     toast("Rutina lista");
     render();
   };
-  const fold = document.querySelector(".focus-session details.more-fold");
+  const fold = document.querySelector(".focus-session details.more-fold, .session-start details.more-fold");
   if (fold) fold.addEventListener("toggle", () => store.set("nb_pick_open", fold.open ? 1 : 0));
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) return;
   const saveFromDom = () => {
@@ -4200,22 +4387,27 @@ function bindWork() {
       const article = el.closest(".work-ex");
       const idx = Number(article && article.dataset.item);
       const it = ses.items[idx];
+      const setNo = Number(String(el.dataset.d || "").split("-")[1] || 0) + 1;
+      const setMax = (it && it.sets && it.sets.length) || 0;
+      speak("Serie " + setNo + " de " + setMax);
       const last = parseFloat(lastLoad(it && it.exId)) || 0;
       const wEl = article && article.querySelector(`[data-w="${idx}-${el.dataset.d.split("-")[1]}"]`);
       const now = parseFloat(wEl && wEl.value) || 0;
-      if (now > last && last > 0) { toast("Marca · " + now + " lb"); goldBurst(); }
+      if (now > last && last > 0) toast("Marca · " + now + " lb");
       const allDone = article && [...article.querySelectorAll("[data-d]")].every((x) => x.checked);
       if (allDone && article) {
         const next = article.nextElementSibling;
         if (next && next.classList.contains("work-ex")) {
           store.set("nb_open_ex", Number(next.dataset.item || 0));
+          const nxt = ses.items[Number(next.dataset.item || 0)];
+          speak("Siguiente. " + displayName(nxt || {}));
           render();
           if (done < total) startTimer(Number((article.querySelector("[data-rest]") || {}).dataset.rest || 90));
           return;
         }
       }
       if (done < total) startTimer(Number((article && article.querySelector("[data-rest]") || {}).dataset.rest || 90));
-      else { toast("Día completo"); goldBurst(); }
+      else { toast("Día completo"); speak("Día completo."); }
     }
   });
   $$("[data-w], [data-r]").forEach((el) => {
@@ -4241,6 +4433,7 @@ function bindWork() {
     store.set("nb_open_ex", i);
     $$(".work-ex").forEach((art) => art.classList.toggle("is-min", Number(art.dataset.item) !== i));
   });
+  $$("[data-open]").forEach((el) => el.onclick = (e) => { e.stopPropagation(); openExercise(el.dataset.open); });
   $$("[data-addset]").forEach((b) => b.onclick = () => {
     const ses = saveFromDom();
     const it = ses.items[Number(b.dataset.addset)];
@@ -4274,6 +4467,8 @@ function bindWork() {
     saveFromDom();
     setDayIndex(rt, Number(b.dataset.jumpday));
     store.set("nb_open_ex", 0);
+    store.set("nb_live", 0);
+    state.sessStart = null;
     render();
   });
   const startBtn = $("#startSess");
@@ -4291,6 +4486,7 @@ function bindWork() {
     stopSessTick();
     paintSess();
     state.sessTick = setInterval(paintSess, 1000);
+    holdScreen(true);
     if (startBtn) {
       startBtn.textContent = "Pausar";
       startBtn.disabled = false;
@@ -4319,7 +4515,8 @@ function bindWork() {
     beep(660, 140);
     runSess();
   };
-  if (state.sessStart) runSess();
+  if (store.get("nb_live") && !state.sessStart && !state.sessElapsed) state.sessStart = Date.now();
+  if (state.sessStart || store.get("nb_live")) runSess();
   else {
     stopSessTick();
     paintSess();
@@ -4331,6 +4528,8 @@ function bindWork() {
     const cur = arts.findIndex((a) => !a.classList.contains("is-min"));
     const n = Math.max(0, Math.min(arts.length - 1, (cur < 0 ? 0 : cur) + dir));
     store.set("nb_open_ex", Number(arts[n].dataset.item || n));
+    const it = loadSession(rt).items[n];
+    speak((dir > 0 ? "Siguiente. " : "Anterior. ") + displayName(it || {}));
     render();
   };
   const px = $("#prevEx"); if (px) px.onclick = () => jumpEx(-1);
@@ -4341,14 +4540,19 @@ function bindWork() {
     const doneSets = ses.items.reduce((n, it) => n + it.sets.filter((s) => s.done).length, 0);
     const total = ses.items.reduce((n, it) => n + it.sets.length, 0);
     if (!doneSets) return toast("Cierre al menos una serie");
-    state.history.push({ date: todayKey(), routine: rt.id, day: rt.daysPlan[dayIndex(rt) % rt.daysPlan.length].title, doneSets, total });
+    const lb = sessionLoad(ses);
+    const rec = { date: todayKey(), routine: rt.id, day: rt.daysPlan[dayIndex(rt) % rt.daysPlan.length].title, doneSets, total, load: lb };
+    const i = (state.history || []).findIndex((h) => h.date === rec.date && h.routine === rec.routine);
+    if (i >= 0) state.history[i] = rec;
+    else state.history.push(rec);
     persist();
     stopSessTick();
     state.sessStart = null;
     state.sessElapsed = 0;
+    store.set("nb_live", 0);
+    holdScreen(false);
     beep(520, 250);
-    goldBurst();
-    openDone(doneSets, total);
+    flashClose(doneSets, total, lb);
   };
 }
 
@@ -4356,6 +4560,17 @@ function startTimer(sec) {
   if (state.timer && state.timer.id) clearInterval(state.timer.id);
   const total = Math.max(5, Number(sec) || 90);
   let left = total;
+  holdScreen(true);
+  const n = Number(sec) || 90;
+  if (n >= 90) speak(n >= 120 ? "Dos minutos." : "Un minuto y medio.");
+  else if (n >= 60) speak("Un minuto.");
+  else speak(n + " segundos.");
+  document.querySelectorAll(".rest-face").forEach((n) => n.remove());
+  const face = document.createElement("div");
+  face.className = "rest-face";
+  face.setAttribute("role", "dialog");
+  face.setAttribute("aria-label", "Descanso");
+  document.body.appendChild(face);
   const dock = document.querySelector(".work-ex:not(.is-min) .rest-dock") || $("#restDock");
   let el = $(".rest-bar") || $(".timer");
   if (!el) {
@@ -4369,19 +4584,25 @@ function startTimer(sec) {
   const paint = () => {
     const m = Math.floor(Math.max(0, left) / 60);
     const s = Math.max(0, left) % 60;
+    const clock = m + ":" + String(s).padStart(2, "0");
+    face.innerHTML = `<small>descanso</small><b>${clock}</b><div class="rest-actions"><button type="button" class="btn ghost" data-restadd="1">+15 s</button><button type="button" class="btn primary" data-restskip="1">Listo</button></div>`;
     if (dock) {
-      el.innerHTML = `<span><small>descanso · toque +15 s</small></span><b>${m}:${String(s).padStart(2,"0")}</b>`;
+      el.innerHTML = `<span><small>descanso · toque +15 s</small></span><b>${clock}</b>`;
       return;
     }
     const circ = 2 * Math.PI * 40;
     const dash = circ * (Math.max(0, left) / total);
-    el.innerHTML = `<svg viewBox="0 0 88 88"><circle cx="44" cy="44" r="40" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${(circ - dash).toFixed(1)}"></circle></svg><b>${m}:${String(s).padStart(2,"0")}</b><small>descanso</small>`;
+    el.innerHTML = `<svg viewBox="0 0 88 88"><circle cx="44" cy="44" r="40" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${(circ - dash).toFixed(1)}"></circle></svg><b>${clock}</b><small>descanso</small>`;
   };
   const stop = (msg) => {
     if (state.timer && state.timer.id) clearInterval(state.timer.id);
     if (el && el.parentNode) el.remove();
+    if (face && face.parentNode) face.remove();
     state.timer = null;
-    if (msg) toast(msg);
+    if (msg) {
+      toast(msg);
+      if (msg === "Siguiente serie") speak("Siguiente serie.");
+    }
   };
   const tick = () => {
     paint();
@@ -4395,10 +4616,23 @@ function startTimer(sec) {
   };
   tick();
   state.timer = { id: setInterval(tick, 1000), add() { left += 15; paint(); toast("+15 s"); } };
-  el.onclick = () => { if (state.timer && state.timer.add) state.timer.add(); };
-  el.ondblclick = (e) => { e.preventDefault(); stop("Descanso listo"); };
+  const bump = () => { if (state.timer && state.timer.add) state.timer.add(); };
+  el.onclick = bump;
+  face.onclick = (e) => {
+    const t = e.target && e.target.closest ? e.target.closest("[data-restskip], [data-restadd]") : e.target;
+    if (t && t.getAttribute && t.getAttribute("data-restskip")) { e.preventDefault(); stop("Descanso listo"); return; }
+    bump();
+  };
 }
-function openDone(done, total) {
+function flashClose(done, total, lb) {
+  speak("Día completo. El trabajo se vio.");
+  const el = document.createElement("div");
+  el.className = "close-flash";
+  el.innerHTML = `<p>Sesión en el libro</p><b>${done} series</b>${lb ? `<p style="margin-top:12px;color:var(--mute)">${lb} lb movidas</p>` : ""}`;
+  document.body.appendChild(el);
+  setTimeout(() => { try { el.remove(); } catch (e) {} openDone(done, total, lb); }, 1800);
+}
+function openDone(done, total, lb) {
   const st = streak();
   const modal = document.createElement("div");
   modal.className = "modal";
@@ -4409,8 +4643,9 @@ function openDone(done, total) {
     <div class="rings" style="margin:16px 0">
       <div class="ring-card"><b>${done}</b><span>series</span></div>
       <div class="ring-card"><b>${st}</b><span>racha</span></div>
-      <div class="ring-card"><b>${total ? Math.round((done/total)*100) : 0}%</b><span>hoy</span></div>
+      <div class="ring-card"><b>${lb || (total ? Math.round((done/total)*100) : 0)}${lb ? " lb" : "%"}</b><span>${lb ? "movidas" : "hoy"}</span></div>
     </div>
+    ${floorLine()}
     <p class="muted">Mañana otro día. Hoy ya está hecho.</p>
     <div class="actions">
       <button class="btn primary" id="toHabits">Marcar hábitos</button>
@@ -4515,9 +4750,11 @@ function privacyView() {
   </section>`;
 }
 function pricesView() {
+  const chip = state.role === "client" ? `<p>${packChip(selfClient())}</p>` : "";
   return `<section class="screen">
     <p class="tagline">Servicios</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
+    ${chip}
     <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD. El IVU no está incluido. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
     <div class="card">
       <h3>Cómo elegir</h3>
@@ -5873,7 +6110,8 @@ function afterPaint() {
   }
   if (state.view !== "work") {
     if (state.timer && state.timer.id) { clearInterval(state.timer.id); state.timer = null; }
-    document.querySelectorAll(".timer, .rest-bar").forEach((el) => el.remove());
+    document.querySelectorAll(".timer, .rest-bar, .rest-face").forEach((el) => el.remove());
+    holdScreen(false);
   }
   if (state.view === "work") bindWork();
   if (state.view === "rutinas") bindRoutinesCoach();
@@ -6032,6 +6270,16 @@ async function boot() {
     navigator.serviceWorker.register("/sw.js").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
+    }).catch(() => {});
+  }
+  scheduleGymNudge();
+  try {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => { try { window.speechSynthesis.getVoices(); } catch (e2) {} };
+  } catch (e) {}
+  if (isOnline() && (state.role === "client" || state.role === "coach")) {
+    cloudPull().then((p) => {
+      if (p && p.ok && state.role && !state.splash) render();
     }).catch(() => {});
   }
 }
