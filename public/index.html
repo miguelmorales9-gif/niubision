@@ -5817,17 +5817,15 @@ function dossierHtml(filterName) {
 function openDossier(filterName) {
   downloadTextPdf(filterName);
   const html = dossierHtml(filterName);
-  const w = window.open("", "_blank");
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
   if (w) {
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 350);
+    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 400);
     return;
   }
-  const blob = new Blob([html], { type: "text/html" });
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = (filterName ? "ficha-" + filterName : "expediente-niubision") + ".html";
   a.click();
   toast("Ábralo y use Imprimir → Guardar como PDF");
