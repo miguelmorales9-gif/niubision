@@ -2,8 +2,14 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#121018">
+<meta name="theme-color" content="#121018" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NiuBision">
 <title>NiuBision | Entrenador personal en Puerto Rico</title>
 <meta name="description" content="Entrenamiento personal en San Juan, Puerto Rico. Rutinas, hábitos y seguimiento con Miguel Morales, entrenador certificado por el DRD. See the work. Enjoy the day.">
 <meta name="keywords" content="NiuBision, entrenador personal Puerto Rico, gym San Juan, coaching fitness, Miguel Morales, entrenamiento personal">
@@ -52,13 +58,14 @@
   --display: "Fraunces", Georgia, serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--bg); color: var(--cream); font-family: var(--font); min-height: 100%; }
-body { padding-bottom: 92px; }
+html, body { background: var(--bg); color: var(--cream); font-family: var(--font); min-height: 100%; min-height: 100dvh; color-scheme: dark; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { padding-bottom: 92px; overscroll-behavior: none; touch-action: manipulation; }
 button, input, select, textarea { font-family: inherit; color: inherit; }
 img { max-width: 100%; display: block; }
 a { color: var(--gold); }
 .hidden { display: none !important; }
-.app-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(18,16,24,.94); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+.app-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; background: rgba(18,16,24,.94); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand img { width: 40px; height: 40px; border-radius: 0; object-fit: contain; background: transparent; }
 .brand strong { font-size: 15px; letter-spacing: .04em; }
@@ -116,14 +123,14 @@ textarea { min-height: 80px; resize: vertical; }
 .set-row.done { opacity: .72; }
 .set-row.done input[type=checkbox] { animation: pop .28s ease; }
 .work-tools { display: flex; gap: 8px; padding: 10px 12px 14px; flex-wrap: wrap; }
-.timer { position: fixed; right: 16px; bottom: 100px; z-index: 40; width: 76px; height: 76px; border-radius: 50%; background: var(--gold); color: #1a160f; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-direction: column; box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+.timer { position: fixed; right: 16px; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: 76px; height: 76px; border-radius: 50%; background: var(--gold); color: #1a160f; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-direction: column; box-shadow: 0 12px 30px rgba(0,0,0,.4); }
 .timer small { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
-.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); background: #16141c; border-top: 1px solid var(--line); padding: 8px 4px 16px; }
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr); background: #16141c; border-top: 1px solid var(--line); padding: 8px 4px calc(16px + env(safe-area-inset-bottom, 0px)); }
 .nav button { background: none; border: 0; color: var(--mute); font-size: 10px; letter-spacing: .03em; text-transform: uppercase; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .nav button.on { color: var(--gold); }
 .nav svg { width: 22px; height: 22px; }
 .modal { position: fixed; inset: 0; z-index: 50; background: rgba(8,7,12,.72); display: flex; align-items: flex-end; justify-content: center; animation: rise .2s ease; }
-.sheet { background: var(--bg-2); width: min(720px, 100%); max-height: 92vh; overflow: auto; border-radius: 24px 24px 0 0; padding: 16px 16px 32px; border: 1px solid var(--line); }
+.sheet { background: var(--bg-2); width: min(720px, 100%); max-height: 92dvh; overflow: auto; border-radius: 24px 24px 0 0; padding: 16px 16px calc(32px + env(safe-area-inset-bottom, 0px)); border: 1px solid var(--line); }
 .handle { width: 42px; height: 4px; background: var(--line); border-radius: 4px; margin: 0 auto 14px; }
 .sheet h2 { font-family: var(--display); font-size: 26px; margin-bottom: 8px; }
 .demo-frame { position: relative; border-radius: 16px; overflow: hidden; background: #000; margin-bottom: 12px; }
@@ -142,7 +149,7 @@ textarea { min-height: 80px; resize: vertical; }
 .habit input { width: 22px; height: 22px; accent-color: var(--gold); }
 .list-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .ok { color: var(--mint); } .warn { color: var(--peach); }
-#toast { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); background: #2a261f; color: var(--cream); padding: 10px 14px; border-radius: 12px; z-index: 80; font-size: 14px; border: 1px solid var(--gold); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+#toast { position: fixed; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: #2a261f; color: var(--cream); padding: 10px 14px; border-radius: 12px; z-index: 80; font-size: 14px; border: 1px solid var(--gold); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
 #toast.show { opacity: 1; }
 @media (min-width: 900px) {
   body { padding-bottom: 24px; }
@@ -161,7 +168,7 @@ textarea { min-height: 80px; resize: vertical; }
 .stepper .field { margin: 0; padding: 8px 4px; }
 .btn.mint { margin-bottom: 12px; }
 
-.splash { min-height: 100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:24px; overflow:hidden; position:relative; }
+.splash { min-height: 100vh; min-height: 100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px)); overflow:hidden; position:relative; }
 .splash.out { opacity:0; transform:scale(.98); transition: .4s ease; }
 .orb { position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(212,176,106,.28), transparent 68%); filter:blur(8px); animation: pulse 2.8s ease-in-out infinite; }
 .splash-logo-wrap { position:relative; width:min(84vw, 280px); height:auto; border:0; background:none !important; padding:0; box-shadow:none; overflow:visible; }
@@ -201,10 +208,9 @@ pre.contract { white-space:pre-wrap; font-size:12px; line-height:1.45; backgroun
 .legal p { margin: 0 0 10px; color: var(--cream); }
 .legal h3 { margin: 18px 0 8px; font-size: 15px; }
 
-html { -webkit-text-size-adjust: 100%; }
-body { padding-bottom: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; color-scheme: dark; }
+body { padding-bottom: 0; overscroll-behavior: none; }
 body.in-app { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
-.nav { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 .work-tools .btn { margin-top: 0; }
 .set-row { grid-template-columns: 22px minmax(96px,1.3fr) minmax(64px,1fr) 32px; }
 .compare { overflow-x: auto; }
@@ -2744,12 +2750,12 @@ function saveAiRoutine(rt, client) {
   persist();
 }
 function printReceipt(row) {
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
-  const w = window.open("", "_blank");
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
   if (!w) { toast("Permita ventanas emergentes para el recibo"); return; }
-  w.document.write(html);
-  w.document.close();
-  setTimeout(() => { try { w.print(); } catch (e) {} }, 300);
+  setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
 }
 function openReceipt(row) {
   const modal = document.createElement("div");
@@ -6792,7 +6798,7 @@ async function boot() {
     }
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=8").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=9").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});
