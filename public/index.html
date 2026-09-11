@@ -275,6 +275,16 @@ img { background: transparent; }
   font-size: 13px; line-height: 1.5; text-align: left;
 }
 .nav.guest { grid-template-columns:1fr 1fr 1fr 1fr; }
+.about-creed {
+  font-family: var(--display); font-weight: 500;
+  font-size: 28px; line-height: 1.25; margin: 0 0 12px;
+}
+.about-mark { display: flex; gap: 16px; align-items: center; margin: 8px 0 4px; }
+.about-mark img {
+  width: 96px; height: auto; object-fit: contain;
+  background: transparent !important; animation: none !important; border-radius: 0;
+}
+.about-letter { color: var(--gold); font-weight: 700; letter-spacing: .04em; }
 .nav.slim { grid-template-columns:1fr 1fr 1fr; }
 .st-chip { display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; padding:4px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mute); }
 .st-chip.ok { color:var(--mint); border-color:#3a5348; background:#1a2622; }
@@ -2440,7 +2450,8 @@ function icon(name) {
     habit: "M12 3v6l4 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
     rutinas: "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3V4z",
     social: "M14 8h3V4h-3c-2.8 0-5 2.2-5 5v3H6v4h3v8h4v-8h3.2L17 12h-4V9c0-.6.4-1 1-1z",
-    privacy: "M12 3 5 6v6c0 5 3.4 8.4 7 9 3.6-.6 7-4 7-9V6z"
+    privacy: "M12 3 5 6v6c0 5 3.4 8.4 7 9 3.6-.6 7-4 7-9V6z",
+    about: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M7.2 9.2c1.6-2.4 7.8-2.4 9.6 0"
   };
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="${map[name] || map.home}"/></svg>`;
 }
@@ -3766,6 +3777,7 @@ function renderGate() {
         <button class="btn ghost" id="studioLock">Estudio</button>
       </div>
       <div class="quiet-links">
+        <button type="button" id="seeAbout">Acerca de</button>
         <button type="button" id="seeCoach">Entrenador</button>
         <button type="button" id="seeSocial">Facebook</button>
         ${clientSeatOpen() ? `<button type="button" id="reenter">Seguir en este teléfono</button>` : ""}
@@ -3780,6 +3792,7 @@ function renderGate() {
   const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
   const re = $("#reenter"); if (re) re.onclick = () => enterClient("work");
   const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
+  const sa = $("#seeAbout"); if (sa) sa.onclick = () => { state.role = "guest"; state.view = "about"; persist(); render(); };
   const sc = $("#seeCoach"); if (sc) sc.onclick = () => { state.role = "guest"; state.view = "coach"; persist(); render(); };
   const ss = $("#seeSocial"); if (ss) ss.onclick = () => { state.role = "guest"; state.view = "social"; persist(); render(); };
   const pv = $("#seePrivacy"); if (pv) pv.onclick = () => { state.role = "guest"; state.view = "privacy"; persist(); render(); };
@@ -4262,7 +4275,7 @@ function nav() {
   const items = state.role === "coach"
     ? [["home","Hoy"],["work","Sesión"],["people","Gente"]]
     : state.role === "guest"
-    ? [["price","Planes"],["coach","Entrenador"],["social","Síguenos"],["privacy","Privacidad"]]
+    ? [["price","Planes"],["about","Acerca"],["coach","Entrenador"],["social","Facebook"]]
     : [["work","Hoy"],["home","Yo"],["price","Plan"]];
   return `<nav class="nav${state.role === "guest" ? " guest" : " slim"}">${items.map(([id,l]) => `<button data-view="${id}" class="${state.view===id?"on":""}">${icon(id)}${l}</button>`).join("")}</nav>`;
 }
@@ -5054,6 +5067,48 @@ function coachView() {
     <p class="tagline">Conoce a tu entrenador</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Miguel Morales</h2>
     ${founderHtml()}
+    <div class="actions"><button class="btn ghost" data-view="about">Acerca de NiuBision</button></div>
+  </section>`;
+}
+function aboutView() {
+  return `<section class="screen">
+    <p class="tagline">Acerca de</p>
+    <div class="about-mark" style="margin-bottom:14px">
+      <img src="${MARK}" alt="Logo NiuBision">
+      <div>
+        <h2 class="about-creed" style="margin:0">NiuBision</h2>
+        <p class="muted" style="margin-top:4px">See the work. Enjoy the day.</p>
+      </div>
+    </div>
+    <p style="margin-bottom:16px">Estudio de entrenamiento personal en San Juan. Un entrenador certificado. Programas claros, medibles y sostenibles. La app es el piso: el trabajo del día queda a la vista. El resto del día es suyo.</p>
+
+    <article class="card">
+      <h3>Qué significa el nombre</h3>
+      <p>NiuBision es un nombre propio, no un eslogan. Junta dos cosas que el estudio no separa: <strong>empezar de nuevo</strong> y <strong>ver el trabajo</strong>.</p>
+      <p style="margin-top:10px"><strong>Niu</strong> es lo nuevo. El primer plan. El primer código. El día que todavía no se cierra.</p>
+      <p style="margin-top:10px"><strong>Bision</strong> es visión, escrita con B para que sea esta marca y no una frase de cualquiera. Visión, aquí, no es un sueño. Es lo que hace un entrenador con base en psicología industrial: observar el desempeño, medirlo y repetirlo. Si no se ve, no cuenta.</p>
+    </article>
+
+    <article class="card">
+      <h3>Qué es el logo</h3>
+      <p>Un ojo. Nada más.</p>
+      <p style="margin-top:10px">La <strong>esfera de cromo</strong> es lo que se hizo: series, kilos, el día cerrado. El cromo refleja. No inventa.</p>
+      <p style="margin-top:10px">El <strong>arco de oro va encima</strong>, siempre. Es el gesto de mirar. Se abre sobre el trabajo. No es una sonrisa ni un adorno debajo de la esfera.</p>
+      <p class="muted" style="margin-top:10px">Por eso la consigna está en ese orden: See the work. Enjoy the day. Primero se ve. Después se vive.</p>
+    </article>
+
+    <article class="card">
+      <h3>El estudio</h3>
+      ${founderHtml()}
+      <p style="margin-top:12px">Planes en USD, precio final. Pago por PayPal o ATH Móvil. Acceso con un código de 6 dígitos. El entrenador ve el piso. NiuBision no cobra tarjetas dentro de la app y no promete un cuerpo que usted no va a entrenar.</p>
+    </article>
+
+    <div class="actions">
+      <button class="btn primary" data-view="price">Ver planes</button>
+      <button class="btn ghost" data-view="coach">Conoce a tu entrenador</button>
+    </div>
+    <p class="muted" style="margin-top:16px">San Juan, Puerto Rico · niubision.com · facebook.com/NiuBision</p>
+    <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
   </section>`;
 }
 function socialView() {
@@ -6599,6 +6654,7 @@ function viewBody() {
   if (state.view === "book") return libraryView();
   if (state.view === "price") return pricesView();
   if (state.view === "coach") return coachView();
+  if (state.view === "about") return aboutView();
   if (state.view === "social") return socialView();
   if (state.view === "privacy") return privacyView();
   if (state.view === "habit") return habitView();
@@ -6607,7 +6663,7 @@ function viewBody() {
 }
 function viewOrder() {
   if (state.role === "coach") return ["home", "work", "people", "rutinas", "book"];
-  if (state.role === "guest") return ["price", "coach", "social", "privacy"];
+  if (state.role === "guest") return ["price", "about", "coach", "social"];
   return ["work", "home", "price", "habit", "book"];
 }
 let viewGen = 0;
@@ -6628,6 +6684,8 @@ function afterPaint() {
   bindStudioOps();
   const pv = $("#seePrivacy");
   if (pv) pv.onclick = () => { state.role = state.role || "guest"; state.view = "privacy"; persist(); render(); };
+  const ae = $("#aboutEnter");
+  if (ae) ae.onclick = () => { state.role = null; persist(); openCodeEntry(); };
   const ib = $("#installBtn");
   if (ib) ib.onclick = async () => {
     if (!state._installEvt) return;
@@ -6667,7 +6725,7 @@ function render() {
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
   }
-  if (state.role === "guest" && state.view !== "price" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy") state.view = "price";
+  if (state.role === "guest" && state.view !== "price" && state.view !== "about" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy") state.view = "price";
   if (state.role === "client" && !store.get("nb_nav7")) {
     state.view = "work";
     store.set("nb_nav7", 1);
