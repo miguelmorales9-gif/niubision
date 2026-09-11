@@ -1,19 +1,27 @@
 {
+  "id": "https://niubision.com/pwa",
   "name": "NiuBision",
   "short_name": "NiuBision",
   "description": "Entrenador personal en Puerto Rico. See the work. Enjoy the day.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "https://niubision.com/?source=pwa",
+  "scope": "https://niubision.com/",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#121018",
   "theme_color": "#121018",
   "lang": "es",
   "dir": "ltr",
+  "categories": ["health", "fitness", "lifestyle"],
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": ["focus-existing", "auto"] },
+  "handle_links": "preferred",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "https://niubision.com/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "https://niubision.com/screenshot-phone.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "NiuBision" },
+    { "src": "https://niubision.com/screenshot-wide.png", "sizes": "1920x1080", "type": "image/png", "form_factor": "wide", "label": "NiuBision" }
   ]
 }
