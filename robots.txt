@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /studios.json
+Disallow: /__grok/
 
 Sitemap: https://niubision.com/sitemap.xml
