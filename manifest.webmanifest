@@ -16,9 +16,14 @@
   "launch_handler": { "client_mode": ["focus-existing", "auto"] },
   "handle_links": "preferred",
   "icons": [
-    { "src": "https://niubision.com/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "https://niubision.com/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "https://niubision.com/icon-512-maskable.png?v=chrome", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "https://niubision.com/icon-48.png?v=and2", "sizes": "48x48", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-72.png?v=and2", "sizes": "72x72", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-96.png?v=and2", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-144.png?v=and2", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-192.png?v=and2", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-512.png?v=and2", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "https://niubision.com/icon-192-maskable.png?v=and2", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "https://niubision.com/icon-512-maskable.png?v=and2", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "screenshots": [
     { "src": "https://niubision.com/screenshot-phone.png", "sizes": "1080x1920", "type": "image/png", "form_factor": "narrow", "label": "NiuBision" },

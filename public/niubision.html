@@ -79,10 +79,12 @@
 <link rel="preload" href="/intro-poster.jpg" as="image">
 <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icon-180.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
-<link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
-<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="48x48" href="/icon-48.png?v=and2">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=and2">
+<link rel="apple-touch-icon" href="/icon-180.png?v=and2">
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=and2">
+<link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png?v=and2">
+<link rel="manifest" href="/manifest.webmanifest?v=and2">
 <style>:root {
   --bg: #121018; --bg-2: #1b1a22; --bg-3: #24222c; --line: #2e2b36;
   --gold: #d4b06a; --gold-dim: #8a7344; --cream: #f7f1e8;
@@ -2589,7 +2591,7 @@ function nudgeGym() {
   const body = "Día pendiente. ¿Hoy o lo pasamos?";
   if (navigator.serviceWorker && navigator.serviceWorker.ready) {
     navigator.serviceWorker.ready.then((reg) => {
-      reg.showNotification("NiuBision", { body, icon: "/icon-180.png", tag: "nb-nudge", badge: "/favicon.svg" });
+      reg.showNotification("NiuBision", { body, icon: "/icon-192.png", tag: "nb-nudge", badge: "/icon-96.png" });
     }).catch(() => { try { new Notification("NiuBision", { body }); } catch (e) {} });
   } else {
     try { new Notification("NiuBision", { body }); } catch (e) {}
@@ -6965,7 +6967,7 @@ async function boot() {
     }
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=10").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=11").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});

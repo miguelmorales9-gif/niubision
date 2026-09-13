@@ -1,11 +1,16 @@
-const CACHE = "nb-offline-v10";
+const CACHE = "nb-offline-v11";
 const SHELL = [
   "/",
   "/index.html",
   "/favicon.svg",
   "/logo.png",
+  "/icon-48.png",
+  "/icon-72.png",
+  "/icon-96.png",
+  "/icon-144.png",
   "/icon-180.png",
   "/icon-192.png",
+  "/icon-192-maskable.png",
   "/icon-512.png",
   "/icon-512-maskable.png",
   "/intro-poster.jpg",
