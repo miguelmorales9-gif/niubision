@@ -1275,7 +1275,7 @@ function slimClient(c) {
       accessCode: c.report.accessCode,
       clientId: c.report.clientId
     } : undefined,
-    waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date } : undefined
+    waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date, signature: c.waiver.signature || "", text: c.waiver.text || "" } : undefined
   };
 }
 function persistClients() {
@@ -1377,6 +1377,7 @@ function lockOutClient(msg) {
     state.contracts = (state.contracts || []).filter((k) => cleanName(k.name) !== name);
     state.payments = (state.payments || []).filter((p) => cleanName(p.name) !== name);
   }
+  buryCode(code, id);
   clearClientSeat();
   persistClients();
   persist();
@@ -1554,7 +1555,11 @@ async function restPut(id, body) {
   });
   return res.ok;
 }
+function allowPublicCloud() {
+  try { return !/niubision\.com$/i.test(location.hostname || ""); } catch (e) { return false; }
+}
 async function restGet(id) {
+  if (!allowPublicCloud()) return null;
   const res = await cloudGet(restUrl(id || NB_CLOUD.id), { headers: { Accept: "application/json" } });
   if (!res.ok) return null;
   const row = await res.json().catch(() => null);
@@ -1652,6 +1657,9 @@ function cloudErr(e) {
   return m || "No se pudo conectar la nube";
 }
 async function cloudGet(url, opts) {
+  if (!allowPublicCloud() && /jsonblob|crudcrud|restful-api\.dev/i.test(String(url || ""))) {
+    return { ok: false, json: async () => ({}) };
+  }
   const extra = opts || {};
   const ctrl = extra.signal ? null : new AbortController();
   const t = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
@@ -1684,8 +1692,8 @@ function cloudPayload() {
     customRoutines: state.customRoutines,
     routineEdits: state.routineEdits,
     health: state.health,
-    waiver: state.waiver ? { name: state.waiver.name, date: state.waiver.date } : null,
-    contracts: (state.contracts || []).map((k) => ({ id: k.id, name: k.name, plan: k.plan, date: k.date, flagged: k.flagged })),
+    waiver: state.waiver ? { name: state.waiver.name, date: state.waiver.date, signature: state.waiver.signature || "", text: state.waiver.text || "" } : null,
+    contracts: (state.contracts || []).map((k) => ({ id: k.id, name: k.name, plan: k.plan, date: k.date, flagged: k.flagged, signature: k.signature || "", text: k.text || "" })),
     payments: (state.payments || []).map((p) => ({ id: p.id, date: p.date, plan: p.plan, amount: p.amount, method: p.method, status: p.status, name: p.name, clientId: p.clientId, accessCode: p.accessCode || "" })),
     videos: (state.videos || []).map((v) => ({ id: v.id, clientId: v.clientId, name: v.name, exercise: v.exercise, date: v.date, month: v.month, status: v.status, note: v.note })),
     appointments: (state.appointments || []).map((a) => ({ id: a.id, clientId: a.clientId, name: a.name, date: a.date, time: a.time, type: a.type, place: a.place, status: a.status })),
@@ -1934,6 +1942,7 @@ function lastWorkHtml(c) {
   </div>`;
 }
 async function crudList() {
+  if (!allowPublicCloud()) return [];
   const res = await cloudGet(crudUrl(), { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error("Nube no disponible");
   const data = await res.json().catch(() => []);
@@ -4356,6 +4365,16 @@ function openStudioSettings() {
       <p class="muted">PIN 9798. Cámbiela solo si necesita recuperar el acceso.</p>
       <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
     </div>
+    <div class="card">
+      <h3>Marca en Google</h3>
+      <p class="muted">Hágalo esta semana. La app no puede entrar a su ficha.</p>
+      <ol class="include">
+        <li>Business Profile: web https://niubision.com, categoría Personal trainer, sin dirección.</li>
+        <li>Foto: logo blanco sobre negro (logo.png), no el cromo.</li>
+        <li>Search Console → inspeccionar niubision.com → solicitar indexación.</li>
+        <li>Facebook oficial: facebook.com/NiuBision. Cierre Niubision Fitness (Arecibo) si es suya.</li>
+      </ol>
+    </div>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
@@ -4575,6 +4594,24 @@ function exCard(e) {
   return `<article class="ex-card" data-ex="${e.id}"><img src="${(e.images && e.images[0]) || ""}" alt="${escapeHtml(title)}" loading="lazy"><div class="meta"><h4>${escapeHtml(title)}</h4><span class="pill">${escapeHtml(muscle)} · ${escapeHtml(e.equipmentEs || e.equipment || "")}</span></div></article>`;
 }
 
+function spanishSteps(ex) {
+  if (!ex) return [];
+  if (ex.instructionsEs && ex.instructionsEs.length) return ex.instructionsEs;
+  const n = ex.nameEs || ex.name || "el ejercicio";
+  const m = (ex.musclesEs && ex.musclesEs.length) ? ex.musclesEs.join(", ") : "";
+  const eq = ex.equipmentEs || "";
+  const eqLine = eq ? "Use " + eq.toLowerCase() + ". " : "";
+  const mus = m ? " Enfoque: " + m + "." : "";
+  return [
+    eqLine + "Posición estable para " + n + "." + mus,
+    "Baje o estire con control. Espalda neutra. No rebote.",
+    "Empuje o tire en el rango que pueda sin dolor. Exhale al esfuerzo."
+  ];
+}
+function exCue(ex) {
+  const steps = spanishSteps(ex);
+  return steps[0] || "";
+}
 function workPickerHtml(band, list, currentId) {
   const labels = [["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
   return `<div class="work-pick">
@@ -4625,6 +4662,7 @@ function workView() {
       <p class="muted">${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
       ${packChip(selfClient())}
       ${floorLine()}
+      ${renewBannerHtml()}
       ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<button class="btn primary go" id="goLive">Empezar</button>`}
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
@@ -4638,6 +4676,7 @@ function workView() {
     <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)} · ${escapeHtml(rt.name)}</p>${voiceBtn}</div>
     <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
     <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · <span id="sessClock">00:00</span></p>
+    <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ghost" id="startSess">${state.sessStart ? "Pausar" : "Pausar / seguir"}</button></div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
     ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
@@ -4649,7 +4688,7 @@ function workView() {
       const ex = findEx(it.exId);
       const last = lastLoad(it.exId);
       const name = displayName(it);
-      const cue = (ex && ex.instructionsEs && ex.instructionsEs[0]) || "";
+      const cue = exCue(ex);
       return `<article class="card work-ex ${open===i?"":"is-min"}" data-item="${i}">
         <header>
           ${open===i ? techLoopHtml(ex, name) : `<img src="${imgOf(ex)}" alt="${escapeHtml(name)}" data-open="${escapeHtml(it.exId || "")}" loading="lazy" decoding="async" width="64" height="64">`}
@@ -4685,6 +4724,21 @@ function workView() {
   </section>`;
 }
 
+function renewBannerHtml() {
+  if (state.role !== "client") return "";
+  const c = selfClient();
+  if (!c) return "";
+  normalizeClient(c);
+  const st = clientStatus(c);
+  if (st !== "por vencer" && st !== "vencido") return "";
+  const d = daysLeft(c);
+  const msg = st === "vencido"
+    ? "El plan venció. Pague para seguir. El código anterior ya no entra."
+    : ("El plan vence en " + d + " días. Pague antes para no perder el acceso.");
+  return `<div class="card"><h3>Renovar</h3><p class="muted">${msg} Miguel envía el código cuando confirma PayPal o ATH.</p>
+    <button class="btn primary" id="renewPlanHoy" type="button">Renovar ahora</button>
+    <button class="btn ghost" id="renewWaHoy" type="button">Avisar por WhatsApp</button></div>`;
+}
 function beep(freq, ms) {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -4709,6 +4763,13 @@ function bindWork() {
     store.set("nb_voice", voiceOn() ? 0 : 1);
     toast(voiceOn() ? "Voz on" : "Voz off");
     render();
+  };
+  const renewHoy = $("#renewPlanHoy");
+  if (renewHoy) renewHoy.onclick = () => { state.view = "price"; persist(); render(); };
+  const renewWa = $("#renewWaHoy");
+  if (renewWa) renewWa.onclick = () => {
+    const c = selfClient() || {};
+    window.open(waLink("Hola Miguel, soy " + (c.name || state.profile.name || "") + ". Quiero renovar " + (c.plan || "") + "."), "_blank");
   };
   const go = $("#goLive");
   if (go) go.onclick = () => {
@@ -5002,9 +5063,10 @@ function startTimer(sec) {
       return;
     }
     left -= 1;
+    if (state.timer) state.timer.left = left;
   };
   tick();
-  state.timer = { id: setInterval(tick, 1000), add() { left += 15; paint(); toast("+15 s"); } };
+  state.timer = { id: setInterval(tick, 1000), left, add() { left += 15; if (state.timer) state.timer.left = left; paint(); toast("+15 s"); } };
   const bump = () => { if (state.timer && state.timer.add) state.timer.add(); };
   el.onclick = bump;
   face.onclick = (e) => {
@@ -5129,7 +5191,7 @@ function aboutView() {
       <button class="btn ghost" data-view="coach">Conoce a tu entrenador</button>
     </div>
     <p class="muted" style="margin-top:16px">niubision.com</p>
-    <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
+    <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button> · <button type="button" class="legal-link" id="seeTerms">Términos</button></p>
   </section>`;
 }
 function socialView() {
@@ -5139,6 +5201,7 @@ function socialView() {
     <div class="card">
       <p>Trabajo, disciplina y el día a día de NiuBision. Entre al perfil oficial y síganos.</p>
       <p class="muted" style="margin-top:8px">facebook.com/NiuBision</p>
+      <p class="muted">Esa es la página oficial. Si existe “Niubision Fitness” en Arecibo, ciérrela o póngale este mismo sitio. Google las mezcla.</p>
       <a class="btn primary" href="https://www.facebook.com/NiuBision" target="_blank" rel="noopener noreferrer" style="margin-top:14px">Abrir Facebook</a>
     </div>
   </section>`;
@@ -5162,6 +5225,28 @@ function privacyView() {
     <p>En la app, Salir. En el teléfono: ajustes del navegador → borrar datos de niubision.com. Para borrar su ficha del estudio, escriba a miguel.morales9@gmail.com o al WhatsApp 7874544038.</p>
     <p class="muted">Responsable: Miguel Morales · NiuBision · miguel.morales9@gmail.com</p>
     <p class="disclaimer">${APP_DISCLAIMER}</p>
+    <p style="margin-top:8px"><button type="button" class="legal-link" id="seeTerms">Términos y cancelación</button></p>
+  </section>`;
+}
+function termsView() {
+  return `<section class="screen legal">
+    <p class="tagline">Aviso</p>
+    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Términos y cancelación</h2>
+    <p>NiuBision es entrenamiento personal y coaching en línea en Puerto Rico, dirigido por Miguel Morales. No es un gimnasio con sede ni una tienda de ropa.</p>
+    <h3>Pago</h3>
+    <p>Precio final, sin IVU. PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038). El cobro lo confirman ellos. NiuBision no guarda tarjetas. El código de 6 dígitos se envía cuando Miguel confirma el pago, no al pulsar “Ya pagué”.</p>
+    <h3>Mes en curso</h3>
+    <p>El mes que ya pagó no se reembolsa. Si cancela, avise por WhatsApp. No se cobra el mes siguiente. No hay prorrateo a mitad de mes.</p>
+    <h3>12 semanas</h3>
+    <p>Pago único. No se prorratea ni se devuelve si deja de entrenar a mitad.</p>
+    <h3>Pack presencial</h3>
+    <p>Pack 8 caduca en 8 semanas. Pack 12 en 10. Reprogramar con 12 horas. Sesión no presentada sin aviso se descuenta.</p>
+    <h3>Relevo</h3>
+    <p>Sin relevo y cuestionario de salud no hay contrato ni pago. El ejercicio tiene riesgo. NiuBision no es consulta médica.</p>
+    <h3>Acceso</h3>
+    <p>Si el entrenador elimina al cliente, el código queda anulado. Para volver, paga y recibe un código nuevo.</p>
+    <p class="muted">Miguel Morales · NiuBision · 787-454-4038 · miguel.morales9@gmail.com</p>
+    <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
   </section>`;
 }
 function pricesView() {
@@ -5224,11 +5309,11 @@ function pricesView() {
       <h3>Cómo pagar</h3>
       <p class="muted">PayPal y ATH Móvil. Precio final. Después del contrato se abre esta misma lista.</p>
       ${paySecureHtml()}
-      ${payButtonsHtml((state.profile && state.profile.plan) || "NiuBision Estándar")}
+      ${state.role === "guest" ? `<p class="muted">El pago se abre después del relevo y el contrato. El código llega cuando Miguel confirme PayPal o ATH, no al pulsar pagar.</p>` : payButtonsHtml((state.profile && state.profile.plan) || "NiuBision Estándar")}
       ${state.role !== "guest" ? `<button class="btn ghost" id="openPay">Pagar un plan ya contratado</button>` : ""}
     </div>
     <p class="disclaimer">${APP_DISCLAIMER}</p>
-    <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
+    <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button> · <button type="button" class="legal-link" id="seeTerms">Términos</button></p>
     ${waiverSigned() ? `<p class="ok">Relevo firmado por ${escapeHtml(state.waiver.name)} el ${escapeHtml(state.waiver.date)}.</p>` : `<button class="btn ghost" id="openWaiverNow">Firmar relevo para poder contratar</button>`}
   </section>`;
 }
@@ -5333,7 +5418,7 @@ function openExercise(id) {
     <div class="demo-frame"><span class="demo-badge">Demostración</span><img id="demoImg" src="${imgs[0]}" alt=""></div>
     <h2>${escapeHtml(e.nameEs || e.name)}</h2>
     <p class="muted">${escapeHtml(e.levelEs || e.level || "")} · ${escapeHtml(e.equipmentEs || e.equipment || "")} · ${escapeHtml((e.musclesEs || e.muscles || []).join(", "))}</p>
-    <ol class="steps">${(e.instructionsEs || e.instructions || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
+    <ol class="steps">${spanishSteps(e).map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
     <a class="btn primary" style="text-decoration:none;margin-bottom:8px" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent((e.nameEs || e.name) + " ejercicio técnica")}">Ver video de la técnica</a>
     <a class="btn ghost" style="text-decoration:none;margin-bottom:8px" target="_blank" rel="noopener" href="${waLink("Video de técnica: " + (e.nameEs || e.name) + " — " + (state.profile.name || ""))}">Enviar video al entrenador</a>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
@@ -5733,10 +5818,12 @@ function openNeedCode(planLabel) {
     <p class="tagline">Empezar</p>
     <h2>${escapeHtml(plan)}</h2>
     <ol class="join-steps">
-      <li>Sus datos</li>
+      <li>Relevo y salud</li>
+      <li>Contrato</li>
       <li>Pague por PayPal o ATH Móvil</li>
       <li>Cuando Miguel confirme, el código llega aquí</li>
     </ol>
+    ${waiverSigned() ? "" : `<p class="muted">Primero el relevo. Después el pago. El código no sale al pulsar pagar.</p>`}
     <input class="field" id="leadName" placeholder="Nombre y apellido" value="${escAttr((state.profile && state.profile.name) || "")}">
     <select id="leadSex" class="field">
       <option value="">Sexo</option>
@@ -5746,9 +5833,8 @@ function openNeedCode(planLabel) {
     </select>
     <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad">
     <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono 7874544038">
-    ${payButtonsHtml(plan)}
-    ${paySecureHtml()}
-    <button class="btn primary" id="leadSend">Ya pagué · avisar por WhatsApp</button>
+    ${waiverSigned() ? payButtonsHtml(plan) + paySecureHtml() : ""}
+    <button class="btn primary" id="leadSend">${waiverSigned() ? "Ya pagué · avisar por WhatsApp" : "Continuar al relevo"}</button>
     <button class="btn ghost" id="leadHave">Ya tengo el código</button>
     <button class="btn ghost" id="closeSheet">Ahora no</button>
   </div>`;
@@ -6678,33 +6764,37 @@ function viewBody() {
   if (state.view === "about") return aboutView();
   if (state.view === "social") return socialView();
   if (state.view === "privacy") return privacyView();
+  if (state.view === "terms") return termsView();
   if (state.view === "habit") return habitView();
   if (state.view === "rutinas") return routinesCoachView();
   return peopleView();
 }
 function viewOrder() {
   if (state.role === "coach") return ["home", "work", "people", "rutinas", "book"];
-  if (state.role === "guest") return ["price", "about", "coach", "social"];
+  if (state.role === "guest") return ["price", "about", "coach", "social", "privacy", "terms"];
   return ["work", "home", "price", "habit", "book"];
 }
 let viewGen = 0;
 function afterPaint() {
   $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
-  if (state.view !== "work" && state.sessTick) {
-    clearInterval(state.sessTick);
-    state.sessTick = null;
-  }
   if (state.view !== "work") {
-    if (state.timer && state.timer.id) { clearInterval(state.timer.id); state.timer = null; }
     document.querySelectorAll(".timer, .rest-bar, .rest-face").forEach((el) => el.remove());
-    holdScreen(false);
   }
-  if (state.view === "work") bindWork();
+  if (state.view === "work") {
+    bindWork();
+    if (state.timer && state.timer.left > 0 && !document.querySelector(".rest-face")) {
+      const left = state.timer.left;
+      if (state.timer.id) { clearInterval(state.timer.id); state.timer.id = null; }
+      startTimer(left);
+    }
+  }
   if (state.view === "rutinas") bindRoutinesCoach();
   bindChrome();
   bindStudioOps();
   const pv = $("#seePrivacy");
   if (pv) pv.onclick = () => { state.role = state.role || "guest"; state.view = "privacy"; persist(); render(); };
+  const tm = $("#seeTerms");
+  if (tm) tm.onclick = () => { state.role = state.role || "guest"; state.view = "terms"; persist(); render(); };
   const ae = $("#aboutEnter");
   if (ae) ae.onclick = () => { state.role = null; persist(); openCodeEntry(); };
   const ib = $("#installBtn");
@@ -6746,7 +6836,7 @@ function render() {
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
   }
-  if (state.role === "guest" && state.view !== "price" && state.view !== "about" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy") state.view = "price";
+  if (state.role === "guest" && state.view !== "price" && state.view !== "about" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy" && state.view !== "terms") state.view = "price";
   if (state.role === "client" && !store.get("nb_nav7")) {
     state.view = "work";
     store.set("nb_nav7", 1);
@@ -6875,7 +6965,7 @@ async function boot() {
     }
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=9").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=10").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});

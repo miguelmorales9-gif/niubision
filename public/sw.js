@@ -1,5 +1,17 @@
-const CACHE = "nb-offline-v9";
-const SHELL = ["/favicon.svg", "/icon-180.png", "/icon-192.png", "/icon-512.png", "/intro-poster.jpg", "/manifest.webmanifest"];
+const CACHE = "nb-offline-v10";
+const SHELL = [
+  "/",
+  "/index.html",
+  "/favicon.svg",
+  "/logo.png",
+  "/icon-180.png",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-512-maskable.png",
+  "/intro-poster.jpg",
+  "/intro.mp4",
+  "/manifest.webmanifest"
+];
 const DB_NAME = "nb-sync";
 const DB_STORE = "queue";
 
