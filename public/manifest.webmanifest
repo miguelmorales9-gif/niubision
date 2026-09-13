@@ -2,7 +2,7 @@
   "id": "https://niubision.com/pwa",
   "name": "NiuBision",
   "short_name": "NiuBision",
-  "description": "Entrenador personal en Puerto Rico. See the work. Enjoy the day.",
+  "description": "Entrenamiento personal y coaching en línea en Puerto Rico. Niubi + visión. See the work. Enjoy the day.",
   "start_url": "https://niubision.com/?source=pwa",
   "scope": "https://niubision.com/",
   "display": "standalone",
