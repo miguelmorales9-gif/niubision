@@ -1,6 +1,8 @@
 {
   "studioKey": "NIUBI",
-  "kind": "api",
+  "kind": "rest",
   "apiUrl": "/api",
+  "restId": "ff808181a067127101a09d8c8a530e21",
+  "ntfy": "niubision-miguel-estudio",
   "clients": []
 }

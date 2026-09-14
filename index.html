@@ -1514,9 +1514,10 @@ const GH_STUDIO = "https://api.github.com/repos/miguelmorales9-gif/niubision-dat
 const NB_CLOUD = {
   key: "NIUBI",
   token: "nb-cloud-v1",
-  id: "ff808181a067127101a0889aa45d5ced",
+  id: "ff808181a067127101a09d8c8a530e21",
   kind: "rest"
 };
+const NTFY_TOPIC = "niubision-miguel-estudio";
 function adoptCloud(id, kind, token) {
   if (id) {
     state.settings.cloudId = id;
@@ -1627,15 +1628,19 @@ async function mirrorPublic(op, patch) {
 function pingCoach(title, text) {
   const line = String(title || "NiuBision") + " — " + String(text || "");
   try {
-    fetch("https://ntfy.sh/niubision-miguel-estudio", {
+    fetch("https://ntfy.sh/" + NTFY_TOPIC, {
       method: "POST",
-      headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter" },
+      headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" },
       body: String(text || "")
     }).catch(() => {});
   } catch (e) {}
   try {
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-      new Notification(String(title || "NiuBision"), { body: String(text || ""), icon: "/logo.png" });
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.showNotification) reg.showNotification(String(title || "NiuBision"), { body: String(text || ""), icon: "/icon-192.png", badge: "/icon-96.png" });
+      }).catch(() => {});
+    } else if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      new Notification(String(title || "NiuBision"), { body: String(text || ""), icon: "/icon-192.png" });
     }
   } catch (e) {}
   return line;
@@ -1671,12 +1676,21 @@ async function loadStudioPointer() {
   try {
     const res = await fetch("/studios.json?v=" + Date.now(), { cache: "no-store" });
     const d = await res.json();
-    if (!d || !d.apiUrl) return;
-    const u = String(d.apiUrl).replace(/\/$/, "");
-    if (!u || /crudcrud|jsonblob|restful-api/i.test(u)) return;
-    if (isPagesHost() && (u === "/api" || u.charAt(0) === "/")) return;
-    store.set("nb_api", u);
-    if (state.settings) state.settings.cloudUrl = u;
+    if (!d) return;
+    if (d.blobId || d.restId) {
+      const id = String(d.restId || d.blobId);
+      if (isRestId(id) || isCrudId(id)) {
+        state.settings.cloudId = id;
+        store.set("nb_blob_id", id);
+      }
+    }
+    const u = String(d.apiUrl || "").replace(/\/$/, "");
+    if (u && !/crudcrud|jsonblob|restful-api/i.test(u)) {
+      if (!(isPagesHost() && (u === "/api" || u.charAt(0) === "/"))) {
+        store.set("nb_api", u);
+        if (state.settings) state.settings.cloudUrl = u;
+      }
+    }
   } catch (e) {}
 }
 function defaultCloudUrl() {
@@ -3724,7 +3738,8 @@ function paypalHref(amount, item) {
       no_note: "1",
       "return": "https://niubision.com/?pago=ok",
       cancel_return: "https://niubision.com/?pago=cancel",
-      rm: "1"
+      notify_url: "https://niubision.com/api/paypal",
+      rm: "2"
     });
     return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
   }
@@ -4505,6 +4520,11 @@ function openStudioSettings() {
       <button class="btn primary" id="savePay">Guardar métodos de pago</button>
     </div>
     <div class="card">
+      <h3>Avisos en este teléfono</h3>
+      <p class="muted">Cuando un cliente pague o pida código, le llega un aviso aquí. Si el estudio está cerrado, abra ntfy.sh/${NTFY_TOPIC} una vez y deje las notificaciones de esa página.</p>
+      <button class="btn primary" id="enableAlerts">Activar avisos</button>
+    </div>
+    <div class="card">
       <h3>Nube del estudio</h3>
       <p class="muted">Una sola nube para todos los teléfonos. Guarda clientes, pagos y el trabajo que cada cliente cierra.</p>
       <p class="${state.settings.cloudId ? "ok" : "muted"}">${state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."}</p>
@@ -4535,6 +4555,18 @@ function openStudioSettings() {
     state.settings.wa = ($("#waNum", modal).value || "").replace(/[^\d+]/g, "").slice(0, 16);
     persist();
     toast("Número guardado");
+  };
+  const al = $("#enableAlerts", modal);
+  if (al) al.onclick = async () => {
+    try {
+      if (typeof Notification !== "undefined") {
+        const p = await Notification.requestPermission();
+        if (p !== "granted") return toast("Permita las notificaciones del navegador");
+      }
+      store.set("nb_alerts", 1);
+      pingCoach("NiuBision", "Avisos activos en este teléfono");
+      toast("Avisos activos");
+    } catch (e) { toast("No se pudieron activar"); }
   };
   const savePay = $("#savePay", modal);
   if (savePay) savePay.onclick = () => {
@@ -5702,7 +5734,13 @@ function emailReceipt(c, p) {
       }).catch(() => {});
     } catch (e) {}
   }
-  try { window.open(waLink("NiuBision — recibo\n" + text), "_blank"); } catch (e) {}
+  const phone = String(c.phone || state.profile.phone || "").replace(/\D/g, "");
+  let num = phone;
+  if (num.length === 10) num = "1" + num;
+  const href = num.length >= 11
+    ? "https://wa.me/" + num + "?text=" + encodeURIComponent("NiuBision — recibo\n" + text)
+    : waLink("NiuBision — recibo\n" + text);
+  try { window.open(href, "_blank"); } catch (e) {}
 }
 function backupPayload() {
   return {
@@ -6477,6 +6515,9 @@ function bindChrome() {
       render();
       return;
     }
+    state.view = "work";
+    render();
+  });
   const ss = $("#saveSelf");
   if (ss) ss.onclick = () => {
     const n = cleanName($("#selfName").value || "");
@@ -7160,7 +7201,7 @@ async function boot() {
     }
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=11").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=12").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});
