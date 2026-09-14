@@ -19,6 +19,20 @@
       "url": "https://niubision.com/manifest.webmanifest"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Hoy",
+      "short_name": "Hoy",
+      "url": "https://niubision.com/?source=pwa",
+      "icons": [{ "src": "https://niubision.com/icon-192.png?v=and2", "sizes": "192x192" }]
+    },
+    {
+      "name": "Planes",
+      "short_name": "Planes",
+      "url": "https://niubision.com/?view=price",
+      "icons": [{ "src": "https://niubision.com/icon-192.png?v=and2", "sizes": "192x192" }]
+    }
+  ],
   "launch_handler": { "client_mode": ["focus-existing", "auto"] },
   "handle_links": "preferred",
   "icons": [

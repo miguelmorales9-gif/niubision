@@ -1596,7 +1596,16 @@ const NB_CLOUD = {
   id: "ff808181a067127101a09d8c8a530e21",
   kind: "rest"
 };
-const NTFY_TOPIC = "niubision-miguel-estudio";
+function ntfyTopic() {
+  let s = (state.settings && state.settings.alertKey) || store.get("nb_alert_key") || "";
+  if (!s) {
+    s = newCloudToken().slice(0, 20);
+    try { store.set("nb_alert_key", s); } catch (e) {}
+    if (!state.settings) state.settings = {};
+    state.settings.alertKey = s;
+  } else if (state.settings && !state.settings.alertKey) state.settings.alertKey = s;
+  return "nb-" + s;
+}
 function adoptCloud(id, kind, token) {
   if (id) {
     state.settings.cloudId = id;
@@ -1652,6 +1661,28 @@ function mergeStudio(prev, next) {
     if (r && r.clientId) deadIds[String(r.clientId)] = 1;
   });
   const alive = (c) => c && !dead[String(c.accessCode || "")] && !deadIds[String(c.id || "")];
+  if (op === "paid") {
+    const invoice = String(b.invoice || b.id || "");
+    const clientId = String(b.clientId || "");
+    const nm = cleanName(b.name || "");
+    const payments = (a.payments || []).map((p) => {
+      if ((invoice && (p.id === invoice || p.invoice === invoice)) || (clientId && p.clientId === clientId && p.status !== "recibido")) {
+        return Object.assign({}, p, { status: "recibido", method: b.method || p.method, amount: b.amount || p.amount });
+      }
+      return p;
+    });
+    const clients = (a.clients || []).map((c) => {
+      const hit = (clientId && c.id === clientId) || (nm && cleanName(c.name) === nm);
+      if (!hit || !alive(c)) return c;
+      const code = /^\d{6}$/.test(String(c.accessCode || "")) ? c.accessCode : String(100000 + Math.floor(Math.random() * 900000));
+      return Object.assign({}, c, { unpaid: false, accessCode: code });
+    });
+    return scrubCloudState(Object.assign({}, a, {
+      clients, payments, revoked,
+      inbox: (a.inbox || []).concat([{ id: "in" + Date.now(), type: "pay", name: b.name || "", plan: b.plan || "", at: Date.now(), clientId, amount: b.amount || "", method: b.method || "PayPal" }]),
+      updatedAt: Date.now()
+    }));
+  }
   if (op === "report") {
     const clients = (a.clients || []).map((c) => {
       const hit = (b.clients || []).find((x) => (c.id && x.id === c.id) || (c.accessCode && x.accessCode === c.accessCode));
@@ -1725,7 +1756,7 @@ async function mirrorPublic(op, patch) {
 function pingCoach(title, text) {
   const line = String(title || "NiuBision") + " — " + String(text || "");
   try {
-    fetch("https://ntfy.sh/" + NTFY_TOPIC, {
+    fetch("https://ntfy.sh/" + ntfyTopic(), {
       method: "POST",
       headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" },
       body: String(text || "")
@@ -1741,6 +1772,25 @@ function pingCoach(title, text) {
     }
   } catch (e) {}
   return line;
+}
+function listenPayAlerts() {
+  if (state.role !== "coach") return;
+  if (listenPayAlerts._es) return;
+  try {
+    const es = new EventSource("https://ntfy.sh/" + ntfyTopic() + "/sse");
+    listenPayAlerts._es = es;
+    es.onmessage = (ev) => {
+      let msg = "";
+      try {
+        const j = JSON.parse(ev.data);
+        msg = String(j.message || j.title || "");
+      } catch (e) { msg = String(ev.data || ""); }
+      if (!msg) return;
+      if (!/pago|pay|invoice|NB-|lead|código|codigo|renov/i.test(msg)) return;
+      toast(msg.slice(0, 90));
+      cloudPull().then(() => { try { render(); } catch (e2) {} }).catch(() => {});
+    };
+  } catch (e) {}
 }
 function allowPublicCloud() {
   return true;
@@ -1889,12 +1939,13 @@ function cloudPayload() {
     routineEdits: state.routineEdits,
     health: state.health,
     waiver: state.waiver ? { name: state.waiver.name, date: state.waiver.date, signature: state.waiver.signature || "", text: state.waiver.text || "" } : null,
-    contracts: (state.contracts || []).map((k) => ({ id: k.id, name: k.name, plan: k.plan, date: k.date, flagged: k.flagged, signature: k.signature || "", text: k.text || "" })),
-    payments: (state.payments || []).map((p) => ({ id: p.id, date: p.date, plan: p.plan, amount: p.amount, method: p.method, status: p.status, name: p.name, clientId: p.clientId, accessCode: p.accessCode || "" })),
+    contracts: (state.contracts || []).map((k) => ({ id: k.id, name: k.name, plan: k.plan, date: k.date, flagged: k.flagged, signature: k.signature || "", text: k.text || "", clientId: k.clientId || "" })),
+    payments: (state.payments || []).map((p) => ({ id: p.id, date: p.date, plan: p.plan, amount: p.amount, method: p.method, status: p.status, name: p.name, clientId: p.clientId, accessCode: p.accessCode || "", invoice: p.invoice || p.id, ref: p.ref || "" })),
+    receipts: (state.receipts || []).map((r) => ({ id: r.id, clientId: r.clientId, name: r.name, plan: r.plan, amount: r.amount, method: r.method, date: r.date, accessCode: r.accessCode || "", invoice: r.invoice || "" })),
     videos: (state.videos || []).map((v) => ({ id: v.id, clientId: v.clientId, name: v.name, exercise: v.exercise, date: v.date, month: v.month, status: v.status, note: v.note })),
     appointments: (state.appointments || []).map((a) => ({ id: a.id, clientId: a.clientId, name: a.name, date: a.date, time: a.time, type: a.type, place: a.place, status: a.status })),
     aiCredits: state.aiCredits || 0,
-    settings: { wa: state.settings.wa, studioKey: state.settings.studioKey, pay: state.settings.pay || {}, cloudId: state.settings.cloudId || store.get("nb_blob_id") || "" },
+    settings: { wa: state.settings.wa, studioKey: state.settings.studioKey, pay: state.settings.pay || {}, cloudId: state.settings.cloudId || store.get("nb_blob_id") || "", alertKey: state.role === "coach" ? (state.settings.alertKey || "") : undefined },
     floor: (function () {
       const today = todayKey();
       const list = state.clients || [];
@@ -1977,11 +2028,13 @@ function applyCloud(d) {
   }
   if (d.appointments) state.appointments = mergeRows(state.appointments || [], d.appointments);
   if (d.videos) state.videos = mergeRows(state.videos || [], d.videos);
+  if (Array.isArray(d.receipts)) state.receipts = mergeRows(state.receipts || [], d.receipts);
   if (typeof d.aiCredits === "number") state.aiCredits = Math.max(state.aiCredits || 0, d.aiCredits);
   if (d.settings) {
     if (d.settings.wa) state.settings.wa = d.settings.wa;
     if (d.settings.studioKey) state.settings.studioKey = d.settings.studioKey;
     if (d.settings.pay) state.settings.pay = d.settings.pay;
+    if (d.settings.alertKey) state.settings.alertKey = d.settings.alertKey;
   }
   if (d.profile) {
     if (d.profile.name && !state.profile.name) state.profile.name = d.profile.name;
@@ -2013,6 +2066,26 @@ function applyClientAssignment(d) {
     local.unpaid = !!me.unpaid;
     local.sessionsTotal = me.sessionsTotal || local.sessionsTotal;
     local.sessionsUsed = me.sessionsUsed || local.sessionsUsed;
+    if (me.health) local.health = me.health;
+    if (me.waiver) local.waiver = me.waiver;
+    if (me.contract) local.contract = me.contract;
+  }
+  if (me.health) state.health = me.health;
+  if (me.waiver) state.waiver = me.waiver;
+  if (me.contract) {
+    state.contracts = latestByPerson((state.contracts || []).filter((k) => !(me.id && k.clientId === me.id) && cleanName(k.name) !== cleanName(me.name)).concat([me.contract]));
+  }
+  if (Array.isArray(d.contracts)) {
+    const mine = d.contracts.filter((k) => (me.id && k.clientId === me.id) || (me.name && cleanName(k.name) === cleanName(me.name)));
+    if (mine.length) state.contracts = latestByPerson((state.contracts || []).concat(mine));
+  }
+  if (Array.isArray(d.payments)) {
+    const mine = d.payments.filter((p) => (me.id && p.clientId === me.id) || (me.name && cleanName(p.name) === cleanName(me.name)));
+    if (mine.length) state.payments = mergeRows(state.payments || [], mine);
+  }
+  if (Array.isArray(d.receipts)) {
+    const mine = d.receipts.filter((r) => (me.id && r.clientId === me.id) || (me.name && cleanName(r.name) === cleanName(me.name)));
+    if (mine.length) state.receipts = mergeRows(state.receipts || [], mine);
   }
   if (d.customRoutines) state.customRoutines = d.customRoutines;
   if (d.routineEdits) state.routineEdits = Object.assign({}, state.routineEdits || {}, d.routineEdits);
@@ -3298,7 +3371,7 @@ function coachOpsCards() {
     <div class="card">
       <h3>Vigencia y renovación</h3>
       <p class="muted">Premium activos: ${cupo} de 8.</p>
-      ${soon.length ? soon.map((c) => `<div class="list-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(vigencyHtml(c))}</div></div><span class="${statusClass(clientStatus(c))}">${statusLabel(clientStatus(c))}</span></div>`).join("") : "<p class='muted'>Nadie por vencer esta semana.</p>"}
+      ${soon.length ? soon.map((c) => `<div class="list-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(vigencyHtml(c))}</div></div><button class="btn small primary" type="button" data-askrenew="${escAttr(c.id)}">Pedir renovación</button></div>`).join("") : "<p class='muted'>Nadie por vencer esta semana.</p>"}
     </div>
     <div class="card">
       <h3>Videos de técnica</h3>
@@ -3316,14 +3389,21 @@ function clientOpsCards() {
   const next = upcomingAppts(c.id)[0];
   const used = videosMonth(c.id).length;
   const banner = (st === "por vencer" || st === "vencido")
-    ? `<div class="card"><h3>Renovar</h3><p class="muted">${st === "vencido" ? "El plan venció." : "El plan vence en " + daysLeft(c) + " días."} Pague para seguir.</p><button class="btn primary" id="renewPlan">Renovar ahora</button></div>`
+    ? `<div class="card"><h3>Renovar</h3><p class="muted">${st === "vencido" ? "El plan venció." : "El plan vence en " + daysLeft(c) + " días."} Pague ahora para no perder el código.</p><button class="btn primary" id="renewPlan">Renovar ahora</button></div>`
     : "";
+  const mineR = (state.receipts || []).filter((r) => r.clientId === c.id || cleanName(r.name) === cleanName(c.name));
+  const hasLegal = !!(c.waiver || state.waiver || c.contract || (state.contracts || []).some((k) => k.clientId === c.id || cleanName(k.name) === cleanName(c.name)));
   return `${banner}
     <div class="card">
       <h3>Su plan</h3>
       <p><strong>${escapeHtml(c.plan || state.profile.plan || "Estándar")}</strong></p>
       <p class="muted">${escapeHtml(vigencyHtml(c))}</p>
     </div>
+    <div class="card">
+      <h3>Contrato y relevo</h3>
+      ${hasLegal ? `<p class="ok">Firmados. Disponibles en este teléfono y en la nube.</p><button class="btn ghost" id="seeMyDossier">Ver documento</button>` : `<p class="muted">Si firmó en otro teléfono, pulse sincronizar o vuelva a abrir con su código.</p>`}
+    </div>
+    ${mineR.length ? `<div class="card"><h3>Recibos</h3>${mineR.slice().reverse().map((r) => `<div class="list-row"><div><strong>${escapeHtml(r.amount || "—")} USD · ${escapeHtml(r.method || "")}</strong><div class="muted">${escapeHtml(r.date || "")} · ${escapeHtml(r.invoice || r.ref || "")}</div></div><button class="btn small ghost" type="button" data-myrec="${escAttr(r.id)}">Ver</button></div>`).join("")}</div>` : ""}
     <div class="card">
       <h3>Próxima cita</h3>
       ${next ? `<p><strong>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</strong></p><p class="muted">${escapeHtml(next.type)} · ${escapeHtml(next.place || "")}. Reprogramar con 12 horas por WhatsApp.</p>` : "<p class='muted'>Aún no hay cita. El entrenador la agenda.</p>"}
@@ -3357,6 +3437,18 @@ function bindStudioOps() {
   const aip = $("#openAiPrice"); if (aip) aip.onclick = openAiBuilder;
   const aic = $("#openAiCoach"); if (aic) aic.onclick = openAiBuilder;
   const rn = $("#renewPlan"); if (rn) rn.onclick = () => openPaySheet((selfClient() && selfClient().plan) || state.profile.plan || "NiuBision Estándar");
+  const dos = $("#seeMyDossier");
+  if (dos) dos.onclick = () => {
+    const c = selfClient();
+    openDossier(c ? c.name : (state.profile && state.profile.name) || "");
+  };
+  $$("[data-myrec]").forEach((b) => {
+    b.onclick = () => {
+      const row = (state.receipts || []).find((r) => r.id === b.dataset.myrec)
+        || (state.payments || []).find((p) => p.id === b.dataset.myrec);
+      if (row) openReceipt(row);
+    };
+  });
   $$("[data-agenda]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.agenda);
     if (c) openAgenda(c);
@@ -3379,6 +3471,13 @@ function bindStudioOps() {
       state.settings.clientId = c.id;
       openPaySheet(c.plan);
     }
+  });
+  $$("[data-askrenew]").forEach((b) => b.onclick = () => {
+    const c = state.clients.find((x) => x.id === b.dataset.askrenew);
+    if (!c) return;
+    const left = daysLeft(c);
+    const msg = `NiuBision\nHola ${c.name}. Su plan ${c.plan} ${left != null && left < 0 ? "ya venció" : "vence en " + left + " días"}. Renueve en niubision.com → Plan → Renovar ahora. PayPal ${payCfg().paypal} o ATH ${payCfg().ath}.`;
+    window.open(waLink(msg), "_blank");
   });
   $$("[data-gotpay]").forEach((b) => {
     b.onclick = () => {
@@ -3836,31 +3935,35 @@ function planPriceOf(planLabel) {
   const m = raw.match(/(\d+(?:\.\d+)?)\s*USD/i);
   return { amount: m ? m[1] : "", unit: "", name: raw };
 }
-function paypalHref(amount, item) {
+function paypalHref(amount, item, invoice) {
   const safe = paypalSafe(payCfg().paypal);
   if (!safe.ok) return "";
-  if (safe.href) {
-    if (amount && /paypal\.me/i.test(safe.href)) return safe.href + "/" + amount;
-    return safe.href;
-  }
-  if (safe.me && amount) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me) + "/" + encodeURIComponent(amount);
-  if (safe.me) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me);
+  const inv = String(invoice || "").slice(0, 40);
+  const ret = "https://niubision.com/?pago=ok" + (inv ? "&inv=" + encodeURIComponent(inv) : "");
   if (safe.email) {
     const q = new URLSearchParams({
       cmd: "_xclick",
       business: safe.email,
       currency_code: "USD",
-      item_name: item || "NiuBision",
+      item_name: String(item || "NiuBision").slice(0, 80),
       amount: String(amount || ""),
       no_shipping: "1",
-      no_note: "1",
-      "return": "https://niubision.com/?pago=ok",
+      no_note: "0",
+      invoice: inv,
+      custom: inv,
+      "return": ret,
       cancel_return: "https://niubision.com/?pago=cancel",
       notify_url: "https://niubision.com/api/paypal",
       rm: "2"
     });
     return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
   }
+  if (safe.href) {
+    if (amount && /paypal\.me/i.test(safe.href)) return safe.href.replace(/\/$/, "") + "/" + amount;
+    return safe.href;
+  }
+  if (safe.me && amount) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me) + "/" + encodeURIComponent(amount);
+  if (safe.me) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me);
   return "";
 }
 function payMethods(planLabel) {
@@ -3889,6 +3992,8 @@ function recordPay(planLabel, method, status) {
     name: who,
     clientId: (selfClient() && selfClient().id) || (currentClient() && currentClient().id) || ""
   };
+  row.invoice = row.id;
+  row.ref = "NB-" + String(row.id).replace(/\D/g, "").slice(-6);
   state.payments = state.payments || [];
   state.payments.push(row);
   const last = (state.contracts || [])[state.contracts.length - 1];
@@ -3927,6 +4032,48 @@ function payDestHint(method) {
   if (method === "paypal") return maskDest(cfg.paypal, "paypal") || "PayPal del estudio";
   return maskDest(cfg.ath, "ath") || "ATH Móvil del estudio";
 }
+async function watchInvoice(inv) {
+  const want = String(inv || "");
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 3500));
+    try {
+      const got = await restGet(NB_CLOUD.id);
+      const st = got && got.state;
+      if (!st) continue;
+      const pays = st.payments || [];
+      const hit = want ? pays.find((p) => p.id === want || p.invoice === want) : (pays.filter((p) => p.status === "recibido").slice(-1)[0]);
+      if (hit && hit.status === "recibido") {
+        const c = (st.clients || []).find((x) => x.id === hit.clientId || (hit.accessCode && x.accessCode === hit.accessCode));
+        if (c && c.accessCode) {
+          toast("Pago confirmado. Código " + c.accessCode);
+          applyCloud(st);
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+}
+function ensureRenewals() {
+  (state.clients || []).forEach((c) => {
+    if (clientStatus(c) !== "por vencer" && clientStatus(c) !== "vencido") return;
+    const pending = (state.payments || []).some((p) => p.clientId === c.id && p.status !== "recibido");
+    if (pending) return;
+    const info = planPriceOf(c.plan);
+    state.payments = state.payments || [];
+    state.payments.push({
+      id: "p" + Date.now() + Math.floor(Math.random() * 99),
+      date: todayKey(),
+      plan: c.plan,
+      amount: info.amount,
+      method: "",
+      status: "renovar",
+      name: c.name,
+      clientId: c.id,
+      invoice: "ren-" + c.id,
+      ref: "NB-R" + String(c.id).replace(/\D/g, "").slice(-4)
+    });
+  });
+}
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
   const who = state.profile.name || (state.health && state.health.name) || "Cliente";
@@ -3947,9 +4094,9 @@ function showPayReceipt(row) {
     <p class="tagline">Recibo</p>
     <h2>Pago iniciado</h2>
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
-    <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}</p>
+    <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}</p>
     ${row.accessCode ? `<p style="font-family:var(--display);font-size:36px;letter-spacing:.12em;text-align:center;margin:10px 0">${escapeHtml(row.accessCode)}</p>
-    <p class="muted">Este es su código de acceso. Guárdelo. En otro teléfono: portada → «Pegar código del coach».</p>` : `<p class="muted">Cuando Miguel marque el pago como recibido, le envía el código de 6 dígitos por WhatsApp. Con ese código entra a entrenar.</p>`}
+    <p class="muted">Este es su código de acceso. Guárdelo. En otro teléfono: portada → «Pegar código del coach».</p>` : `<p class="muted">Referencia ${escapeHtml(row.ref || row.invoice || row.id)}. Cuando el pago se confirme, el código de 6 dígitos llega por WhatsApp y queda en Recibos.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
     ${row.accessCode ? `<button class="btn primary" id="enterNow">Entrar a entrenar</button>` : ""}
     <button class="btn ghost" id="printRec">Imprimir recibo</button>
@@ -3981,7 +4128,7 @@ async function runPay(method, planLabel) {
     toast("Abra niubision.com con candado (https) para pagar");
   }
   if (method === "paypal") {
-    const href = paypalHref(info.amount, item);
+    const href = paypalHref(info.amount, item, row.invoice || row.id);
     if (!href) {
       toast("PayPal del estudio no es un enlace seguro");
       notifyPay(planLabel, "PayPal");
@@ -3996,11 +4143,15 @@ async function runPay(method, planLabel) {
   if (method === "ath") {
     const num = cfg.ath.replace(/\D/g, "");
     const amt = info.amount || "";
-    const clip = amt ? num + " · " + amt + " USD" : num;
+    const ref = row.ref || row.id;
+    const clip = [num, amt ? amt + " USD" : "", "ref " + ref].filter(Boolean).join(" · ");
     if (num) {
       await copyText(clip);
-      toast(amt ? ("ATH " + num + " · " + amt + " USD copiado. Ábralo en ATH Móvil.") : "Número ATH copiado. Ábralo en ATH Móvil, no lo pegue en otro chat.");
-      try { window.open("athmovil://", "_blank"); } catch (e) {}
+      toast("ATH " + num + (amt ? " · " + amt + " USD" : "") + " · " + ref + " copiado.");
+      const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + "&note=" + encodeURIComponent(ref);
+      try { window.location.href = deep; } catch (e) {
+        try { window.open("athmovil://", "_blank"); } catch (e2) {}
+      }
     } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
@@ -4054,6 +4205,12 @@ function openPaySheet(planLabel) {
 }
 
 function applyHash() {
+  const q = new URLSearchParams(location.search || "");
+  const viewQ = q.get("view");
+  if (viewQ && /^(price|about|coach|social|work|home|people)$/.test(viewQ)) {
+    if (!state.role) state.role = "guest";
+    state.view = viewQ;
+  }
   const raw = String(location.hash || "").replace(/^#/, "");
   if (!raw) return;
   const params = new URLSearchParams(raw.indexOf("=") >= 0 ? raw : "");
@@ -4693,8 +4850,9 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Avisos en este teléfono</h3>
-      <p class="muted">Cuando un cliente pague o pida código, le llega un aviso aquí. Si el estudio está cerrado, abra ntfy.sh/${NTFY_TOPIC} una vez y deje las notificaciones de esa página.</p>
+      <p class="muted">Aviso privado de este estudio. Nadie más ve el canal. Pulse activar una vez en este teléfono.</p>
       <button class="btn primary" id="enableAlerts">Activar avisos</button>
+      <button class="btn ghost" id="copyAlerts" type="button">Copiar canal privado</button>
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
@@ -4707,6 +4865,12 @@ function openStudioSettings() {
       <h3>Clave del estudio</h3>
       <p class="muted">PIN 9798. Cámbiela solo si necesita recuperar el acceso.</p>
       <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
+    </div>
+    <div class="card">
+      <h3>Respaldo</h3>
+      <p class="muted">Si se pierde el teléfono, esto restaura clientes, contratos y pagos.</p>
+      <button class="btn primary" id="exportData">Descargar respaldo</button>
+      <input type="file" id="importData" accept="application/json" class="field" style="margin-top:8px">
     </div>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
@@ -4726,9 +4890,15 @@ function openStudioSettings() {
         if (p !== "granted") return toast("Permita las notificaciones del navegador");
       }
       store.set("nb_alerts", 1);
+      listenPayAlerts();
       pingCoach("NiuBision", "Avisos activos en este teléfono");
       toast("Avisos activos");
     } catch (e) { toast("No se pudieron activar"); }
+  };
+  const copyAl = $("#copyAlerts", modal);
+  if (copyAl) copyAl.onclick = () => {
+    const url = "https://ntfy.sh/" + ntfyTopic();
+    copyText(url).then((ok) => toast(ok ? "Canal copiado. Ábralo una vez en este teléfono para suscribirse." : url));
   };
   const savePay = $("#savePay", modal);
   if (savePay) savePay.onclick = () => {
@@ -4765,6 +4935,10 @@ function openStudioSettings() {
   };
   const rp = $("#resetPin", modal);
   if (rp) rp.onclick = () => { modal.remove(); openPinRecover(); };
+  const exp = $("#exportData", modal);
+  if (exp) exp.onclick = () => { downloadBackup(); toast("Respaldo descargado"); };
+  const imp = $("#importData", modal);
+  if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0], () => { modal.remove(); render(); });
 }
 function openWeekRecap(s) {
   closeModals();
@@ -5021,8 +5195,8 @@ function workView() {
   return `<section class="screen focus-session">
     <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)} · ${escapeHtml(rt.name)}</p>${voiceBtn}</div>
     <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
-    <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · <span id="sessClock">00:00</span></p>
-    <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ghost" id="startSess">${state.sessStart ? "Pausar" : "Pausar / seguir"}</button></div>
+    <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · Tiempo <span id="sessClock">00:00</span></p>
+    <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ${state.sessStart ? "ghost" : "mint"}" id="startSess">${state.sessStart ? "Pausar" : (state.sessElapsed ? "Seguir" : "Empezar")}</button></div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
     ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
@@ -5296,7 +5470,7 @@ function bindWork() {
     stopSessTick();
     paintSess();
     if (startBtn) {
-      startBtn.textContent = "Iniciar";
+      startBtn.textContent = "Seguir";
       startBtn.disabled = false;
       startBtn.classList.add("mint");
       startBtn.classList.remove("ghost");
@@ -5311,12 +5485,11 @@ function bindWork() {
     beep(660, 140);
     runSess();
   };
-  if (store.get("nb_live") && !state.sessStart && !state.sessElapsed) state.sessStart = Date.now();
-  if (state.sessStart || store.get("nb_live")) runSess();
+  if (state.sessStart || (store.get("nb_live") && state.sessElapsed)) runSess();
   else {
     stopSessTick();
     paintSess();
-    if (startBtn) startBtn.textContent = "Iniciar";
+    if (startBtn) startBtn.textContent = state.sessElapsed ? "Seguir" : "Empezar";
   }
   const jumpEx = (dir) => {
     saveFromDom();
@@ -5850,8 +6023,11 @@ function confirmClientPaid(c, method) {
   c.unpaid = false;
   c.startDate = c.startDate || todayKey();
   const meta = planMeta(c.plan);
-  if (meta.weeks && !c.endDate) c.endDate = addDaysIso(c.startDate, meta.weeks * 7);
-  if (meta.sessions && !c.sessionsTotal) c.sessionsTotal = meta.sessions;
+  if (meta.weeks) {
+    const base = (c.endDate && daysLeft(c) != null && daysLeft(c) >= 0) ? c.endDate : todayKey();
+    c.endDate = addDaysIso(base, meta.weeks * 7);
+  }
+  if (meta.sessions) c.sessionsTotal = (c.sessionsTotal || 0) + (c.sessionsUsed >= c.sessionsTotal ? meta.sessions : 0) || meta.sessions;
   c.sessionsUsed = c.sessionsUsed || 0;
   normalizeClient(c);
   state.payments = state.payments || [];
@@ -5881,9 +6057,30 @@ function confirmClientPaid(c, method) {
   if (state.clients.indexOf(c) < 0) state.clients.push(c);
   persistClients();
   persist();
+  stashReceipt(c, p);
   cloudPush().catch(() => {});
-  emailReceipt(c, p);
+  deliverReceipt(c, p);
   return { client: c, payment: p, code };
+}
+function stashReceipt(c, p) {
+  if (!c || !p) return;
+  state.receipts = state.receipts || [];
+  const rec = {
+    id: "r" + Date.now(),
+    clientId: c.id,
+    name: c.name,
+    plan: p.plan || c.plan,
+    amount: p.amount,
+    method: p.method,
+    date: p.date || todayKey(),
+    accessCode: c.accessCode || p.accessCode || "",
+    invoice: p.invoice || p.id,
+    ref: p.ref || ""
+  };
+  state.receipts = state.receipts.filter((x) => x.invoice !== rec.invoice).concat([rec]);
+}
+function deliverReceipt(c, p) {
+  emailReceipt(c, p);
 }
 function emailReceipt(c, p) {
   if (!c || !p) return;
@@ -5932,6 +6129,47 @@ function backupPayload() {
     receipts: state.receipts,
     aiCredits: state.aiCredits
   };
+}
+function restoreBackupFromFile(f, after) {
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const d = JSON.parse(reader.result);
+      if (!d || typeof d !== "object") return toast("Archivo no válido");
+      if (!confirm("Esto reemplaza clientes, contratos y pagos de este teléfono. ¿Seguir?")) return;
+      if (d.clients) state.clients = d.clients;
+      if (d.profile) state.profile = Object.assign({}, state.profile, d.profile);
+      if (d.history) state.history = d.history;
+      if (d.checkins) state.checkins = d.checkins;
+      if (d.habits) state.habits = d.habits;
+      if (d.settings) {
+        const s = d.settings;
+        if (s.cloudToken) delete s.cloudToken;
+        state.settings = Object.assign({}, state.settings, s);
+      }
+      if (d.customRoutines) state.customRoutines = d.customRoutines;
+      if (d.routineEdits) state.routineEdits = d.routineEdits;
+      if (d.waiver) state.waiver = d.waiver;
+      if (d.health) state.health = d.health;
+      if (d.contracts) state.contracts = d.contracts;
+      if (d.weighins) state.weighins = d.weighins;
+      if (d.payments) state.payments = d.payments;
+      if (d.receipts) state.receipts = d.receipts;
+      if (d.revoked) state.revoked = mergeRevoked(state.revoked, d.revoked);
+      if (Array.isArray(d.dead)) store.set("nb_dead_codes", d.dead);
+      if (d.appointments) state.appointments = d.appointments;
+      if (d.videos) state.videos = d.videos;
+      if (typeof d.aiCredits === "number") state.aiCredits = d.aiCredits;
+      pruneOrphanDocs();
+      persist();
+      cloudPush().catch(() => {});
+      toast("Respaldo restaurado");
+      if (typeof after === "function") after();
+      else render();
+    } catch (e) { toast("Archivo no válido"); }
+  };
+  reader.readAsText(f);
 }
 function downloadBackup() {
   const data = backupPayload();
@@ -6112,6 +6350,15 @@ function applyClientAssign(a) {
     state.settings.cloudId = a.blob;
   }
   if (a.clientId) state.profile.clientId = a.clientId;
+  const who = selfClient();
+  if (who) {
+    if (a.health) { who.health = a.health; state.health = a.health; }
+    if (a.waiver) { who.waiver = a.waiver; state.waiver = a.waiver; }
+    if (a.contract) {
+      who.contract = a.contract;
+      state.contracts = latestByPerson((state.contracts || []).concat([a.contract]));
+    }
+  }
   state.profile.unlocked = true;
   state.view = "work";
   persist();
@@ -6934,44 +7181,7 @@ function bindChrome() {
   const em = $("#emailBackup");
   if (em) em.onclick = () => emailBackup();
   const imp = $("#importData");
-  if (imp) imp.onchange = () => {
-    const f = imp.files[0]; if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const d = JSON.parse(reader.result);
-        if (d.clients) state.clients = d.clients;
-        if (d.profile) state.profile = d.profile;
-        if (d.history) state.history = d.history;
-        if (d.checkins) state.checkins = d.checkins;
-        if (d.habits) state.habits = d.habits;
-        if (d.settings) {
-          const s = d.settings;
-          if (s.cloudToken) delete s.cloudToken;
-          if (s.cloudUrl && !(String(s.cloudUrl).startsWith("https://") || String(s.cloudUrl).startsWith("http://127.0.0.1") || String(s.cloudUrl).startsWith("http://localhost"))) s.cloudUrl = "";
-          if (s.pay && s.pay.paypal && !paypalSafe(s.pay.paypal).ok) s.pay.paypal = "";
-          state.settings = Object.assign({}, state.settings, s);
-        }
-        if (d.customRoutines) state.customRoutines = d.customRoutines;
-        if (d.routineEdits) state.routineEdits = d.routineEdits;
-        if (d.waiver) state.waiver = d.waiver;
-        if (d.health) state.health = d.health;
-        if (d.contracts) state.contracts = d.contracts;
-        if (d.history) state.history = d.history;
-        if (d.checkins) state.checkins = d.checkins;
-        if (d.habits) state.habits = d.habits;
-        if (d.weighins) state.weighins = d.weighins;
-        if (d.payments) state.payments = d.payments;
-        if (d.revoked) state.revoked = mergeRevoked(state.revoked, d.revoked);
-        if (Array.isArray(d.dead)) store.set("nb_dead_codes", d.dead);
-        if (d.appointments) state.appointments = d.appointments;
-        if (d.videos) state.videos = d.videos;
-        if (typeof d.aiCredits === "number") state.aiCredits = d.aiCredits;
-        persist(); toast("Datos importados"); render();
-      } catch { toast("Archivo no válido"); }
-    };
-    reader.readAsText(f);
-  };
+  if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0]);
   bindStudioOps();
 }
 
@@ -7295,7 +7505,11 @@ async function boot() {
   try { await hydrateVault(); } catch (e) {}
   try {
     const q = new URLSearchParams(location.search || "");
-    if (q.get("pago") === "ok") toast("Pago enviado. El código llega cuando Miguel confirme.");
+    if (q.get("pago") === "ok") {
+      toast("Pago enviado. Esperando confirmación…");
+      const inv = q.get("inv") || "";
+      watchInvoice(inv);
+    }
     if (q.get("pago") === "cancel") toast("Pago cancelado. Puede intentarlo de nuevo.");
   } catch (e) {}
   if (state.role === "coach" && typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -7396,6 +7610,10 @@ async function boot() {
       if (p && p.ok && state.role && !state.splash) render();
       else if (p && p.ok && state.splash) render();
     }).catch(() => {});
+  }
+  if (state.role === "coach") {
+    if (store.get("nb_alerts")) listenPayAlerts();
+    ensureRenewals();
   }
 }
 boot();
