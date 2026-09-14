@@ -1280,7 +1280,8 @@ function slimClient(c) {
       accessCode: c.report.accessCode,
       clientId: c.report.clientId
     } : undefined,
-    waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date, signature: c.waiver.signature || "", text: c.waiver.text || "" } : undefined
+    waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date, signature: c.waiver.signature || "", text: c.waiver.text || "" } : undefined,
+    contract: c.contract ? { id: c.contract.id, plan: c.contract.plan, name: c.contract.name, date: c.contract.date, signature: c.contract.signature || "" } : undefined
   };
 }
 function persistClients() {
@@ -3912,6 +3913,7 @@ function openPayConfirm(method, planLabel) {
   };
 }
 function openPaySheet(planLabel) {
+  if (!waiverSigned() || !contractSigned(planLabel)) return continueJoin(planLabel);
   closeModals();
   const info = planPriceOf(planLabel);
   const modal = document.createElement("div");
@@ -4280,13 +4282,50 @@ const APP_DISCLAIMER = `Aviso legal. NiuBision es un servicio de entrenamiento d
 function waiverSigned() {
   return !!(state.waiver && state.waiver.name && state.waiver.date && state.waiver.signature);
 }
+function contractSigned(planLabel) {
+  const name = cleanName((state.profile && state.profile.name) || (state.waiver && state.waiver.name) || (state.health && state.health.name) || "");
+  const id = (selfClient() && selfClient().id) || (state.profile && state.profile.clientId) || "";
+  const plan = String(planLabel || state.pendingPlan || "");
+  return (state.contracts || []).some((k) => {
+    if (!k) return false;
+    const who = (id && k.clientId && k.clientId === id) || (name && cleanName(k.name) === name);
+    if (!who) return false;
+    if (!plan) return true;
+    const kp = String(k.plan || "");
+    return !kp || kp.indexOf(plan) >= 0 || plan.indexOf(kp) >= 0;
+  });
+}
+function clientHasLegal(c) {
+  if (!c) return false;
+  const w = c.waiver || (state.waiver && cleanName(state.waiver.name) === cleanName(c.name) ? state.waiver : null);
+  const k = c.contract || (state.contracts || []).find((x) => (c.id && x.clientId === c.id) || cleanName(x.name) === cleanName(c.name));
+  return !!(w && (w.signature || w.date) && k);
+}
+function continueJoin(planLabel) {
+  const plan = planLabel || state.pendingPlan || ((state.profile && state.profile.plan) || "NiuBision Estándar");
+  state.pendingPlan = plan;
+  if (!waiverSigned()) return openWaiver(() => continueJoin(plan));
+  if (!healthComplete()) return openHealth(plan);
+  if (healthFlagged() && !(state.health && state.health.clearance)) return openClearance(plan);
+  if (!contractSigned(plan)) return openContract(plan);
+  if (state._pendingAssign) {
+    const a = state._pendingAssign;
+    state._pendingAssign = null;
+    applyClientAssign(a);
+    state.splash = false;
+    store.set("nb_seen_cover", true);
+    state.view = "work";
+    persist();
+    render();
+    toast("Bienvenido. Hoy se entrena.");
+    return;
+  }
+  openPaySheet(plan);
+}
 
 function startOnboard(planLabel) {
   state.pendingPlan = planLabel;
-  if (!waiverSigned()) return openWaiver(() => startOnboard(planLabel));
-  if (!healthComplete()) return openHealth(planLabel);
-  if (healthFlagged() && !(state.health && state.health.clearance)) return openClearance(planLabel);
-  openContract(planLabel);
+  continueJoin(planLabel);
 }
 
 function openWaiver(after) {
@@ -4322,8 +4361,14 @@ function openWaiver(after) {
     if (!pad.dirty()) return toast("Firme en el recuadro");
     state.waiver = { name, date: todayKey(), signature: canvas.toDataURL("image/png"), text: WAIVER_TEXT };
     state.profile.name = state.profile.name || name;
-    const who = (state.clients || []).find((x) => cleanName(x.name) === name);
-    if (who) who.waiver = { name, date: state.waiver.date, signature: state.waiver.signature, text: WAIVER_TEXT };
+    const who = (state.clients || []).find((x) => cleanName(x.name) === name)
+      || selfClient()
+      || (Array.isArray(state.clients) ? state.clients[state.clients.length - 1] : null);
+    if (who) {
+      who.waiver = { name, date: state.waiver.date, signature: state.waiver.signature, text: WAIVER_TEXT };
+      persistClients();
+      postLead(who).catch(() => {});
+    }
     persist();
     pad.unbind();
     modal.remove();
@@ -4376,7 +4421,7 @@ function openHealth(planLabel) {
     persist();
     modal.remove();
     if (flagged) return openClearance(planLabel);
-    if (planLabel) openContract(planLabel);
+    if (planLabel) continueJoin(planLabel);
     else toast("Cuestionario guardado");
   };
 }
@@ -4399,7 +4444,7 @@ function openClearance(planLabel) {
     if (!$("#hasClear").checked) return toast("Marque la confirmación");
     state.health.clearance = true; persist();
     modal.remove();
-    if (planLabel) openContract(planLabel);
+    if (planLabel) continueJoin(planLabel);
   };
 }
 
@@ -4457,15 +4502,17 @@ function openContract(planLabel) {
     c.startDate = todayKey();
     c.health = state.health;
     c.waiver = state.waiver ? { name: state.waiver.name, date: state.waiver.date, signature: state.waiver.signature, text: state.waiver.text || WAIVER_TEXT } : null;
+    c.contract = rec;
     normalizeClient(c);
     rec.clientId = c.id;
     state.settings.clientId = c.id;
     persistClients();
     persist();
+    postLead(c).catch(() => {});
     pad.unbind();
     modal.remove();
     toast("Contrato firmado");
-    openPaySheet(planLabel);
+    continueJoin(planLabel);
   };
 }
 
@@ -5497,7 +5544,7 @@ function peopleView() {
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
-    <p class="muted">Añada el cliente. Cuando pague, pulse «Pago recibido · dar código» en su ficha. Ahí salen los 6 dígitos para WhatsApp.</p>
+    <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
     ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Lead")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div></div>`).join("")}<p class="muted">Ya están en el roster si el lead llegó. Marque el pago cuando el dinero esté en PayPal o ATH.</p></div>` : ""}
     <div class="card">
       <h3>Aviso del cliente</h3>
@@ -5516,7 +5563,7 @@ function peopleView() {
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
-        ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>`}
+        ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta relevo o contrato. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${allRoutines().map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===c.routine?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}</select>
         ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>`}
@@ -5669,6 +5716,10 @@ function ensureAccessCode(c) {
 }
 function confirmClientPaid(c, method) {
   if (!c) return null;
+  if (!clientHasLegal(c)) {
+    toast("Falta el relevo o el contrato. El cliente los firma en la app al elegir el plan, antes del código.");
+    return null;
+  }
   const code = ensureAccessCode(c);
   c.unpaid = false;
   c.startDate = c.startDate || todayKey();
@@ -6019,12 +6070,13 @@ function openNeedCode(planLabel) {
     <p class="tagline">Empezar</p>
     <h2>${escapeHtml(plan)}</h2>
     <ol class="join-steps">
-      <li>Relevo y salud</li>
-      <li>Contrato</li>
-      <li>Pague por PayPal o ATH Móvil</li>
-      <li>Cuando Miguel confirme, el código llega aquí</li>
+      <li>Sus datos</li>
+      <li>Firmar el relevo</li>
+      <li>Firmar el contrato</li>
+      <li>Pagar</li>
+      <li>El código llega cuando Miguel confirme el pago</li>
     </ol>
-    ${waiverSigned() ? "" : `<p class="muted">Primero el relevo. Después el pago. El código no sale al pulsar pagar.</p>`}
+    <p class="muted">El relevo y el contrato van ahora. El código no se entrega sin esas firmas.</p>
     <input class="field" id="leadName" placeholder="Nombre y apellido" value="${escAttr((state.profile && state.profile.name) || "")}">
     <select id="leadSex" class="field">
       <option value="">Sexo</option>
@@ -6035,17 +6087,12 @@ function openNeedCode(planLabel) {
     <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad">
     <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono 7874544038">
     <input class="field" id="leadEmail" inputmode="email" placeholder="Correo (para el recibo)">
-    ${waiverSigned() ? payButtonsHtml(plan) + paySecureHtml() : ""}
-    <button class="btn primary" id="leadSend">${waiverSigned() ? "Ya pagué · avisar por WhatsApp" : "Continuar al relevo"}</button>
-    <button class="btn ghost" id="leadHave">Ya tengo el código</button>
+    <button class="btn primary" id="leadSend">Continuar a firmar</button>
+    <button class="btn ghost" id="leadHave">Ya firmé y tengo el código</button>
     <button class="btn ghost" id="closeSheet">Ahora no</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  $$("[data-pay]", modal).forEach((b) => b.onclick = () => {
-    modal.remove();
-    openPayConfirm(b.dataset.pay, plan);
-  });
   modal.querySelector("#leadHave").onclick = () => { modal.remove(); openCodeEntry(); };
   modal.querySelector("#leadSend").onclick = () => {
     const name = cleanName($("#leadName", modal).value || "");
@@ -6074,18 +6121,9 @@ function openNeedCode(planLabel) {
     }
     persistClients();
     persist();
-    postLead(c).then((r) => {
-      toast(r && r.ok ? "Ya está en el estudio. Pague y Miguel le da el código." : "Guardado. Avise también por WhatsApp si puede.");
-    }).catch(() => {});
-    if (!waiverSigned()) {
-      modal.remove();
-      openWaiver(() => render());
-      return;
-    }
-    const lead = encodeLead(c);
-    const msg = waReady("want", { name, plan }) + `\nSexo: ${sex}\nEdad: ${age}\nTeléfono: ${phone}` + (email ? `\nCorreo: ${email}` : "") + `\n\nAñadir al estudio. El código de 6 dígitos se envía cuando pague.` + (lead ? `\n\n${lead}` : "");
-    try { window.open(waLink(msg), "_blank"); } catch (e) {}
+    postLead(c).catch(() => {});
     modal.remove();
+    continueJoin(plan);
   };
 }
 function openCodeEntry() {
@@ -6118,6 +6156,14 @@ function openCodeEntry() {
     }
     if (!a || a.pending) return toast("Código no válido o aún no está pagado");
     modal.remove();
+    if (!waiverSigned() || !contractSigned(a.plan)) {
+      if (a.name) state.profile.name = a.name;
+      if (a.plan) state.profile.plan = a.plan;
+      state._pendingAssign = a;
+      toast("Firme el relevo y el contrato. Después entra con este código.");
+      continueJoin(a.plan);
+      return;
+    }
     applyClientAssign(a);
     state.splash = false;
     store.set("nb_seen_cover", true);
@@ -6125,7 +6171,6 @@ function openCodeEntry() {
     persist();
     render();
     toast("Bienvenido. Hoy se entrena.");
-    if (!waiverSigned()) setTimeout(() => openWaiver(() => render()), 400);
   };
 }
 
@@ -6611,10 +6656,11 @@ function bindChrome() {
     const c = state.clients.find((x) => x.id === b.dataset.paid);
     if (!c) return;
     const done = confirmClientPaid(c);
-    toast(done && done.code ? "Código listo: " + done.code : "Pago marcado");
+    if (!done) { render(); return; }
+    toast("Código listo: " + done.code);
     render();
-    if (done && done.client) showShare(done.client);
-    if (done && done.payment) setTimeout(() => openReceipt(done.payment), 500);
+    if (done.client) showShare(done.client);
+    if (done.payment) setTimeout(() => openReceipt(done.payment), 500);
   });
   $$("[data-wa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.wa);
