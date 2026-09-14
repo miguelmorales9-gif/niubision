@@ -7191,7 +7191,7 @@ async function boot() {
     }
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=12").then((reg) => {
+    navigator.serviceWorker.register("/sw.js?v=13").then((reg) => {
       if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
       if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
     }).catch(() => {});
