@@ -1,4 +1,4 @@
-const CACHE = "nb-offline-v13";
+const CACHE = "nb-offline-v14";
 const SHELL = [
   "/favicon.svg",
   "/logo.png",
@@ -25,7 +25,7 @@ self.addEventListener("install", (e) => {
 });
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -103,6 +103,7 @@ self.addEventListener("fetch", (e) => {
   if (/\/api\//.test(u.pathname)) return;
   const same = u.origin === self.location.origin;
   const nav = e.request.mode === "navigate" || (same && (u.pathname === "/" || /index\.html|niubision\.html/.test(u.pathname)));
+  if (nav) return;
   const asset = same && /favicon|og\.jpg|icon-180|poster|manifest|studios\.json|mark\.(png|jpg)/.test(u.pathname + u.search);
   const img = /\.(png|jpe?g|webp|svg|gif)(\?|$)/i.test(u.pathname);
   if (!nav && !asset && !img) return;

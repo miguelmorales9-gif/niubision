@@ -7191,10 +7191,27 @@ async function boot() {
     }
   }
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js?v=13").then((reg) => {
-      if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
-      if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
-    }).catch(() => {});
+    const bootSw = async () => {
+      if (store.get("nb_sw") !== "14") {
+        store.set("nb_sw", "14");
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        } catch (e) {}
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+        } catch (e) {}
+        location.reload();
+        return;
+      }
+      try {
+        const reg = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+        if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
+        if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
+      } catch (e) {}
+    };
+    bootSw();
   }
   scheduleGymNudge();
   try {
