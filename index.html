@@ -1220,6 +1220,7 @@ function closeModals() {
   document.querySelectorAll(".modal").forEach((m) => { try { m.remove(); } catch (e) {} });
 }
 function persist() {
+  pruneOrphanDocs();
   persistClients();
   if (persist._busy) { persist._again = true; return; }
   persist._busy = true;
@@ -1279,6 +1280,12 @@ function slimClient(c) {
       lastSession: c.report.lastSession,
       accessCode: c.report.accessCode,
       clientId: c.report.clientId
+    } : undefined,
+    health: c.health ? {
+      name: c.health.name, date: c.health.date, phone: c.health.phone, emer: c.health.emer,
+      notes: c.health.notes, clearance: !!c.health.clearance, clientId: c.id,
+      q1: c.health.q1, q2: c.health.q2, q3: c.health.q3, q4: c.health.q4,
+      q5: c.health.q5, q6: c.health.q6, q7: c.health.q7
     } : undefined,
     waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date, signature: c.waiver.signature || "", text: c.waiver.text || "" } : undefined,
     contract: c.contract ? { id: c.contract.id, plan: c.contract.plan, name: c.contract.name, date: c.contract.date, signature: c.contract.signature || "" } : undefined
@@ -1350,6 +1357,90 @@ function revokedInState(st, digits, id) {
 function sweepRevoked() {
   state.clients = (state.clients || []).filter((c) => c && !isRevoked(c.accessCode, c.id));
 }
+function docPersonKey(row) {
+  if (!row) return "";
+  if (row.clientId) return "id:" + row.clientId;
+  const n = cleanName(row.name);
+  return n ? "n:" + n : "";
+}
+function latestByPerson(list) {
+  const by = {};
+  (list || []).forEach((row) => {
+    if (!row) return;
+    const key = docPersonKey(row) || String(row.id || "");
+    if (!key) return;
+    const prev = by[key];
+    const ta = Number(row.at) || Date.parse(row.date) || 0;
+    const tb = prev ? (Number(prev.at) || Date.parse(prev.date) || 0) : -1;
+    if (!prev || ta > tb || (ta === tb && String(row.id || "") > String(prev.id || ""))) by[key] = row;
+  });
+  return Object.keys(by).map((k) => by[k]);
+}
+function livingClientIndex() {
+  const ids = {};
+  const names = {};
+  (state.clients || []).forEach((c) => {
+    if (!c || isRevoked(c.accessCode, c.id)) return;
+    if (c.id) ids[c.id] = c;
+    if (c.name) names[cleanName(c.name)] = c;
+  });
+  return { ids, names };
+}
+function docBelongsToLiving(row, idx) {
+  if (!row) return false;
+  if (row.clientId && idx.ids[row.clientId]) return true;
+  if (row.name && idx.names[cleanName(row.name)]) return true;
+  return false;
+}
+function forgetPersonDocs(name, id) {
+  const n = cleanName(name);
+  const pid = String(id || "");
+  const hit = (row) => {
+    if (!row) return false;
+    if (pid && row.clientId && String(row.clientId) === pid) return true;
+    if (n && cleanName(row.name) === n) return true;
+    return false;
+  };
+  if (hit(state.health)) state.health = null;
+  if (hit(state.waiver)) state.waiver = null;
+  state.contracts = (state.contracts || []).filter((k) => !hit(k));
+  state.payments = (state.payments || []).filter((p) => !hit(p));
+  state.appointments = (state.appointments || []).filter((a) => !(pid && a.clientId === pid));
+  state.videos = (state.videos || []).filter((v) => !(pid && v.clientId === pid));
+  state.receipts = (state.receipts || []).filter((r) => !hit(r));
+  state.checkins = (state.checkins || []).filter((h) => !hit(h));
+  if (state.notes && pid) delete state.notes[pid];
+  try { store.set("nb_health", state.health); } catch (e) {}
+  try { store.set("nb_waiver", state.waiver); } catch (e) {}
+  try { store.set("nb_contracts", state.contracts); } catch (e) {}
+  try { idbVault.put("nb_health", state.health); idbVault.put("nb_waiver", state.waiver); idbVault.put("nb_contracts", state.contracts); } catch (e) {}
+}
+function pruneOrphanDocs() {
+  sweepRevoked();
+  const idx = livingClientIndex();
+  const guestFilling = (state.role === "guest" || !state.role) && !(state.profile && state.profile.unlocked);
+  const keepGlobal = (doc) => {
+    if (!doc) return false;
+    if (docBelongsToLiving(doc, idx)) return true;
+    if (guestFilling) {
+      const pname = cleanName((state.profile && state.profile.name) || "");
+      if (pname && cleanName(doc.name) === pname) return true;
+    }
+    return false;
+  };
+  state.contracts = latestByPerson((state.contracts || []).filter((k) => docBelongsToLiving(k, idx)));
+  state.payments = (state.payments || []).filter((p) => docBelongsToLiving(p, idx));
+  state.appointments = (state.appointments || []).filter((a) => a && a.clientId && idx.ids[a.clientId]);
+  state.videos = (state.videos || []).filter((v) => v && v.clientId && idx.ids[v.clientId]);
+  state.receipts = (state.receipts || []).filter((r) => docBelongsToLiving(r, idx));
+  state.checkins = (state.checkins || []).filter((h) => docBelongsToLiving(h, idx));
+  if (state.health && !keepGlobal(state.health)) state.health = null;
+  if (state.waiver && !keepGlobal(state.waiver)) state.waiver = null;
+  (state.clients || []).forEach((c) => {
+    const k = (state.contracts || []).find((x) => (c.id && x.clientId === c.id) || (c.name && cleanName(x.name) === cleanName(c.name)));
+    if (k) c.contract = { id: k.id, plan: k.plan, name: k.name, date: k.date, signature: k.signature || "" };
+  });
+}
 function clientSeatOpen() {
   const p = state.profile || {};
   if (!p.unlocked) return false;
@@ -1379,10 +1470,7 @@ function lockOutClient(msg) {
     if (code && String(c.accessCode) === String(code)) return false;
     return true;
   });
-  if (name) {
-    state.contracts = (state.contracts || []).filter((k) => cleanName(k.name) !== name);
-    state.payments = (state.payments || []).filter((p) => cleanName(p.name) !== name);
-  }
+  forgetPersonDocs(name, id);
   buryCode(code, id);
   clearClientSeat();
   persistClients();
@@ -1394,6 +1482,7 @@ function lockIfRevokedSeat() {
   if (!p.unlocked && state.role !== "client") return false;
   if (clientSeatOpen()) return false;
   const wasClient = state.role === "client";
+  forgetPersonDocs(p.name, p.clientId);
   clearClientSeat();
   persist();
   if (wasClient) toast("Acceso cerrado. Pague de nuevo para recibir un código.");
@@ -1409,28 +1498,14 @@ function dropClientRecords(c) {
   if (state.revoked.length > 400) state.revoked = state.revoked.slice(-400);
   buryCode(code, id);
   state.clients = (state.clients || []).filter((x) => x.id !== id);
-  state.contracts = (state.contracts || []).filter((k) => {
-    if (id && k.clientId && k.clientId === id) return false;
-    if (name && cleanName(k.name) === name) return false;
-    return true;
-  });
-  state.payments = (state.payments || []).filter((p) => {
-    if (id && p.clientId && p.clientId === id) return false;
-    if (code && String(p.accessCode || "") === code) return false;
-    if (name && cleanName(p.name) === name) return false;
-    return true;
-  });
-  state.appointments = (state.appointments || []).filter((a) => a.clientId !== id);
-  state.videos = (state.videos || []).filter((v) => v.clientId !== id);
-  state.receipts = (state.receipts || []).filter((r) => r.clientId !== id && cleanName(r.name) !== name);
-  state.checkins = (state.checkins || []).filter((h) => h.clientId !== id && cleanName(h.name) !== name);
-  if (state.notes && id) delete state.notes[id];
+  forgetPersonDocs(name, id);
   if (state.settings && state.settings.clientId === id) state.settings.clientId = "";
   persistRevoked();
   persistClients();
   if ((state.profile && ((id && state.profile.clientId === id) || (code && String(state.profile.accessCode) === code) || (name && cleanName(state.profile.name) === name))) || !clientSeatOpen()) {
     clearClientSeat();
   }
+  pruneOrphanDocs();
   persist();
 }
 async function hydrateVault() {
@@ -1460,6 +1535,7 @@ async function hydrateVault() {
     store.set("nb_dead_codes", uniq.slice(-500));
   }
   sweepRevoked();
+  pruneOrphanDocs();
   if (state.profile && state.profile.unlocked && !clientSeatOpen()) clearClientSeat();
 }
 function pickReport(a, b) {
@@ -1492,7 +1568,9 @@ function mergeRows(localArr, remoteArr) {
       unpaid: (x.unpaid === false || prev.unpaid === false) ? false : (x.unpaid || prev.unpaid),
       report: pickReport(prev.report, x.report),
       lastSession: pickSession(prev.lastSession, x.lastSession),
-      waiver: (x.waiver && x.waiver.signature) ? x.waiver : (prev.waiver || x.waiver)
+      waiver: (x.waiver && x.waiver.date >= ((prev.waiver && prev.waiver.date) || "")) ? x.waiver : (prev.waiver || x.waiver),
+      health: (x.health && x.health.date >= ((prev.health && prev.health.date) || "")) ? x.health : (prev.health || x.health),
+      contract: (x.contract && x.contract.date >= ((prev.contract && prev.contract.date) || "")) ? x.contract : (prev.contract || x.contract)
     }) : Object.assign({}, x);
     if (prev) {
       const i = list.indexOf(prev);
@@ -1583,7 +1661,8 @@ function mergeStudio(prev, next) {
     return Object.assign({}, a, { clients, revoked, updatedAt: Date.now() });
   }
   if (op === "revoke") {
-    return Object.assign({}, a, { clients: (a.clients || []).filter(alive), revoked, updatedAt: Date.now() });
+    const cut = Object.assign({}, a, { clients: (a.clients || []).filter(alive), revoked, updatedAt: Date.now() });
+    return scrubCloudState(cut);
   }
   const clients = mergeRows(a.clients || [], (b.clients || []).filter(alive));
   const inbox = mergeRows(a.inbox || [], b.inbox || []);
@@ -1592,7 +1671,24 @@ function mergeStudio(prev, next) {
     clients, revoked, inbox, payments, updatedAt: Date.now()
   });
   delete out._op;
-  return out;
+  return scrubCloudState(out);
+}
+function scrubCloudState(st) {
+  if (!st || typeof st !== "object") return st;
+  const clients = (st.clients || []).filter((c) => c && !revokedInState(st, c.accessCode, c.id));
+  st.clients = clients;
+  const ids = {};
+  const names = {};
+  clients.forEach((c) => {
+    if (c.id) ids[c.id] = 1;
+    if (c.name) names[cleanName(c.name)] = 1;
+  });
+  const alive = (row) => row && ((row.clientId && ids[row.clientId]) || (row.name && names[cleanName(row.name)]));
+  st.contracts = latestByPerson((st.contracts || []).filter(alive));
+  st.payments = (st.payments || []).filter(alive);
+  if (st.health && !alive(st.health)) st.health = null;
+  if (st.waiver && !alive(st.waiver)) st.waiver = null;
+  return st;
 }
 async function mirrorPublic(op, patch) {
   const body = Object.assign({ _op: op }, patch || {});
@@ -1836,8 +1932,8 @@ function applyCloud(d) {
   }
   if (Array.isArray(d.clients)) state.clients = mergeRows(state.clients, d.clients);
   sweepRevoked();
-  if (Array.isArray(d.payments)) state.payments = mergeRows(state.payments || [], d.payments);
-  if (Array.isArray(d.contracts)) state.contracts = mergeRows(state.contracts || [], d.contracts);
+  if (Array.isArray(d.payments)) state.payments = (d.payments || []).filter((p) => p && !isRevoked(p.accessCode, p.clientId));
+  if (Array.isArray(d.contracts)) state.contracts = latestByPerson(d.contracts);
   if (d.history && Array.isArray(d.history)) {
     const seen = {};
     const hist = [];
@@ -1856,8 +1952,29 @@ function applyCloud(d) {
   if (d.notes) state.notes = Object.assign({}, d.notes, state.notes);
   if (d.customRoutines) state.customRoutines = d.customRoutines;
   if (d.routineEdits) state.routineEdits = d.routineEdits;
-  if (d.health) state.health = d.health;
-  if (d.waiver && !state.waiver) state.waiver = d.waiver;
+  if (Array.isArray(d.clients)) {
+    (state.clients || []).forEach((c) => {
+      const hit = (d.clients || []).find((x) => (c.id && x.id === c.id) || (c.name && x.name && cleanName(c.name) === cleanName(x.name)));
+      if (!hit) return;
+      if (hit.health) c.health = hit.health;
+      if (hit.waiver) c.waiver = hit.waiver;
+      if (hit.contract) c.contract = hit.contract;
+    });
+  }
+  pruneOrphanDocs();
+  const living = livingClientIndex();
+  if (d.health && docBelongsToLiving(d.health, living)) {
+    const who = living.ids[d.health.clientId] || living.names[cleanName(d.health.name)];
+    if (who) who.health = d.health;
+    const cur = currentClient();
+    if (cur && who && cur.id === who.id) state.health = d.health;
+  }
+  if (d.waiver && docBelongsToLiving(d.waiver, living)) {
+    const who = living.ids[d.waiver.clientId] || living.names[cleanName(d.waiver.name)];
+    if (who) who.waiver = d.waiver;
+    const cur = currentClient();
+    if (cur && who && cur.id === who.id) state.waiver = d.waiver;
+  }
   if (d.appointments) state.appointments = mergeRows(state.appointments || [], d.appointments);
   if (d.videos) state.videos = mergeRows(state.videos || [], d.videos);
   if (typeof d.aiCredits === "number") state.aiCredits = Math.max(state.aiCredits || 0, d.aiCredits);
@@ -4416,8 +4533,11 @@ function openHealth(planLabel) {
       row[q.id] = sel.value;
     }
     const flagged = HEALTH_ITEMS.some((q) => row[q.id] === "sí");
+    const who = selfClient() || (state.clients || []).find((x) => cleanName(x.name) === name);
+    if (who) row.clientId = who.id;
     state.health = row;
     state.profile.name = name;
+    if (who) who.health = row;
     persist();
     modal.remove();
     if (flagged) return openClearance(planLabel);
@@ -4488,7 +4608,6 @@ function openContract(planLabel) {
       health: state.health,
       clientId: (selfClient() && selfClient().id) || ""
     };
-    state.contracts.push(rec);
     state.profile.name = nm;
     const short = planLabel.includes("Base") ? "Base" : planLabel.includes("Premium") ? "Premium" : planLabel.includes("Estándar") ? "Estándar" : planLabel.includes("Pack") ? planLabel : state.profile.plan;
     state.profile.plan = short;
@@ -4505,6 +4624,12 @@ function openContract(planLabel) {
     c.contract = rec;
     normalizeClient(c);
     rec.clientId = c.id;
+    state.contracts = (state.contracts || []).filter((k) => {
+      if (c.id && k.clientId === c.id) return false;
+      if (cleanName(k.name) === nm) return false;
+      return true;
+    });
+    state.contracts.push(rec);
     state.settings.clientId = c.id;
     persistClients();
     persist();
