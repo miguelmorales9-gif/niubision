@@ -1560,8 +1560,88 @@ async function restPut(id, body) {
   });
   return res.ok;
 }
+function mergeStudio(prev, next) {
+  const a = prev && typeof prev === "object" ? prev : {};
+  const b = next && typeof next === "object" ? next : {};
+  const op = String(b._op || "");
+  const revoked = mergeRevoked(a.revoked, b.revoked);
+  const dead = {};
+  const deadIds = {};
+  (revoked || []).forEach((r) => {
+    if (r && r.code) dead[String(r.code)] = 1;
+    if (r && r.clientId) deadIds[String(r.clientId)] = 1;
+  });
+  const alive = (c) => c && !dead[String(c.accessCode || "")] && !deadIds[String(c.id || "")];
+  if (op === "report") {
+    const clients = (a.clients || []).map((c) => {
+      const hit = (b.clients || []).find((x) => (c.id && x.id === c.id) || (c.accessCode && x.accessCode === c.accessCode));
+      if (!hit || !hit.report) return c;
+      return Object.assign({}, c, { report: pickReport(c.report, hit.report), lastSession: pickSession(c.lastSession, hit.report.lastSession) });
+    });
+    return Object.assign({}, a, { clients, revoked, updatedAt: Date.now() });
+  }
+  if (op === "revoke") {
+    return Object.assign({}, a, { clients: (a.clients || []).filter(alive), revoked, updatedAt: Date.now() });
+  }
+  const clients = mergeRows(a.clients || [], (b.clients || []).filter(alive));
+  const inbox = mergeRows(a.inbox || [], b.inbox || []);
+  const payments = mergeRows(a.payments || [], b.payments || []);
+  const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : b, {
+    clients, revoked, inbox, payments, updatedAt: Date.now()
+  });
+  delete out._op;
+  return out;
+}
+async function mirrorPublic(op, patch) {
+  const body = Object.assign({ _op: op }, patch || {});
+  let ok = false;
+  try {
+    const got = await restGet(NB_CLOUD.id);
+    const wrap = {
+      studioKey: studioKey(),
+      token: (state.settings && state.settings.cloudToken) || NB_CLOUD.token,
+      state: mergeStudio(got && got.state, body),
+      updatedAt: Date.now()
+    };
+    if (await restPut(NB_CLOUD.id, wrap)) {
+      adoptCloud(NB_CLOUD.id, "rest", wrap.token);
+      ok = true;
+    }
+  } catch (e) {}
+  const blobId = (!isCrudId(state.settings && state.settings.cloudId) && ((state.settings && state.settings.cloudId) || store.get("nb_blob_id") || NB_CLOUD.id)) || "";
+  if (blobId && String(blobId).indexOf("api") < 0) {
+    try {
+      const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
+      const row = await res.json().catch(() => null);
+      const stateRow = mergeStudio(row && row.state, body);
+      const put = await cloudGet(JB_CLOUD + "/" + blobId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ studioKey: studioKey(), token: NB_CLOUD.token, state: stateRow })
+      });
+      if (put.ok) ok = true;
+    } catch (e) {}
+  }
+  return ok;
+}
+function pingCoach(title, text) {
+  const line = String(title || "NiuBision") + " — " + String(text || "");
+  try {
+    fetch("https://ntfy.sh/niubision-miguel-estudio", {
+      method: "POST",
+      headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter" },
+      body: String(text || "")
+    }).catch(() => {});
+  } catch (e) {}
+  try {
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      new Notification(String(title || "NiuBision"), { body: String(text || ""), icon: "/logo.png" });
+    }
+  } catch (e) {}
+  return line;
+}
 function allowPublicCloud() {
-  try { return !/niubision\.com$/i.test(location.hostname || ""); } catch (e) { return false; }
+  return true;
 }
 async function restGet(id) {
   if (!allowPublicCloud()) return null;
@@ -1876,6 +1956,7 @@ async function cloudPushClient() {
       if (res.ok) return { ok: true };
     } catch (e) {}
   }
+  if (await mirrorPublic("report", { clients: [{ id: report.clientId, accessCode: report.accessCode, report }] })) return { ok: true };
   return { ok: false };
 }
 let leadTimer = null;
@@ -1889,6 +1970,7 @@ async function postLead(c) {
   if (!who || !who.name) return { ok: false };
   const bases = apiBases();
   const body = JSON.stringify({ studioKey: "NIUBI", client: slimClient(who) });
+  let ok = false;
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/lead", {
@@ -1896,15 +1978,18 @@ async function postLead(c) {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) ok = true;
     } catch (e) {}
   }
-  return { ok: false };
+  const inbox = [{ id: "in" + Date.now(), type: "lead", name: who.name, plan: who.plan, at: Date.now(), clientId: who.id }];
+  if (await mirrorPublic("lead", { clients: [slimClient(who)], inbox })) ok = true;
+  pingCoach("Lead NiuBision", (who.name || "Cliente") + " · " + (who.plan || ""));
+  return { ok };
 }
 async function postPayNotice(row) {
   if (!row) return { ok: false };
   const bases = apiBases();
-  const body = JSON.stringify({
+  const payload = {
     studioKey: "NIUBI",
     name: row.name,
     plan: row.plan,
@@ -1913,18 +1998,22 @@ async function postPayNotice(row) {
     clientId: row.clientId,
     phone: state.profile.phone || "",
     email: state.profile.email || ""
-  });
+  };
+  let ok = false;
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body
+        body: JSON.stringify(payload)
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) ok = true;
     } catch (e) {}
   }
-  return { ok: false };
+  const inbox = [{ id: "in" + Date.now(), type: "pay", name: row.name, plan: row.plan, at: Date.now(), clientId: row.clientId, amount: row.amount, method: row.method }];
+  if (await mirrorPublic("pay", { payments: [row], inbox })) ok = true;
+  pingCoach("Pago NiuBision", (row.name || "Cliente") + " · " + (row.amount || "") + " USD · " + (row.method || ""));
+  return { ok };
 }
 async function postRevoke(c) {
   if (!c) return { ok: false };
@@ -1936,6 +2025,7 @@ async function postRevoke(c) {
     name: c.name || "",
     phone: c.phone || ""
   });
+  let ok = false;
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/revoke", {
@@ -1943,18 +2033,26 @@ async function postRevoke(c) {
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, Accept: "application/json" },
         body
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) ok = true;
     } catch (e) {}
   }
-  return { ok: false };
+  if (await mirrorPublic("revoke", { revoked: [{ code: c.accessCode || "", clientId: c.id || "", name: c.name || "", phone: c.phone || "", at: Date.now() }] })) ok = true;
+  return { ok };
 }
 function maybeCoachPull() {
   if (state.role !== "coach") return;
   const now = Date.now();
   if (maybeCoachPull._at && now - maybeCoachPull._at < 12000) return;
   maybeCoachPull._at = now;
+  const before = ((state.inbox || [])[0] && (state.inbox[0].id || state.inbox[0].at)) || "";
   cloudPull().then((r) => {
-    if (r && r.ok && state.role === "coach" && (state.view === "home" || state.view === "people")) render();
+    if (!(r && r.ok) || state.role !== "coach") return;
+    const after = ((state.inbox || [])[0] && (state.inbox[0].id || state.inbox[0].at)) || "";
+    if (after && after !== before) {
+      const n = state.inbox[0];
+      pingCoach(n.type === "pay" ? "Pago NiuBision" : "Lead NiuBision", (n.name || "") + " · " + (n.plan || ""));
+    }
+    if (state.view === "home" || state.view === "people") render();
   }).catch(() => {});
 }
 function maybeClientPull() {
@@ -3623,7 +3721,10 @@ function paypalHref(amount, item) {
       item_name: item || "NiuBision",
       amount: String(amount || ""),
       no_shipping: "1",
-      no_note: "1"
+      no_note: "1",
+      "return": "https://niubision.com/?pago=ok",
+      cancel_return: "https://niubision.com/?pago=cancel",
+      rm: "1"
     });
     return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
   }
@@ -3761,9 +3862,12 @@ async function runPay(method, planLabel) {
   }
   if (method === "ath") {
     const num = cfg.ath.replace(/\D/g, "");
+    const amt = info.amount || "";
+    const clip = amt ? num + " · " + amt + " USD" : num;
     if (num) {
-      await copyText(num);
-      toast("Número ATH copiado. Ábralo en ATH Móvil, no lo pegue en otro chat.");
+      await copyText(clip);
+      toast(amt ? ("ATH " + num + " · " + amt + " USD copiado. Ábralo en ATH Móvil.") : "Número ATH copiado. Ábralo en ATH Móvil, no lo pegue en otro chat.");
+      try { window.open("athmovil://", "_blank"); } catch (e) {}
     } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
@@ -6986,6 +7090,14 @@ async function boot() {
   });
   try { await loadStudioPointer(); } catch (e) {}
   try { await hydrateVault(); } catch (e) {}
+  try {
+    const q = new URLSearchParams(location.search || "");
+    if (q.get("pago") === "ok") toast("Pago enviado. El código llega cuando Miguel confirme.");
+    if (q.get("pago") === "cancel") toast("Pago cancelado. Puede intentarlo de nuevo.");
+  } catch (e) {}
+  if (state.role === "coach" && typeof Notification !== "undefined" && Notification.permission === "default") {
+    try { Notification.requestPermission(); } catch (e) {}
+  }
   applyHash();
   if (state._pendingCode) {
     try {
