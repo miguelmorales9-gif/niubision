@@ -2446,9 +2446,12 @@ async function cloudPush() {
     if (got && got.state && Array.isArray(got.state.clients)) {
       mergeRemoteReports(payload, got.state.clients);
     }
-    const body = { studioKey: studioKey(), token: state.settings.cloudToken || NB_CLOUD.token, state: payload, updatedAt: Date.now() };
-    if (await restPut(NB_CLOUD.id, body)) {
-      adoptCloud(NB_CLOUD.id, "rest", body.token);
+    const body = { studioKey: studioKey(), token: state.settings.cloudToken || NB_CLOUD.token, state: payload, updatedAt: Date.now(), id: "github" };
+    const restOk = await restPut(NB_CLOUD.id, body);
+    let ghOk = false;
+    try { ghOk = await githubSave(body); } catch (e) {}
+    if (restOk || ghOk) {
+      adoptCloud(ghOk ? "github" : NB_CLOUD.id, ghOk ? "github" : "rest", body.token);
       return { ok: true };
     }
   } catch (e) {}
@@ -2553,6 +2556,18 @@ async function cloudPull() {
     }
   }
   try {
+    const rows = await githubLoad();
+    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(studioKey()).toUpperCase()) || rows[0];
+    if (hit && hit.state && Array.isArray(hit.state.clients) && hit.state.clients.length) {
+      save(hit.state);
+      adoptCloud("github", "github", hit.token || state.settings.cloudToken);
+      try {
+        await restPut(NB_CLOUD.id, { studioKey: studioKey(), token: hit.token || NB_CLOUD.token, state: hit.state, updatedAt: hit.updatedAt || Date.now(), id: "github" });
+      } catch (e2) {}
+      return { ok: true, data: { state: hit.state } };
+    }
+  } catch (e) {}
+  try {
     const got = await restGet((isRestId(state.settings.cloudId) && state.settings.cloudId) || NB_CLOUD.id);
     if (got && got.state) {
       save(got.state);
@@ -2614,6 +2629,25 @@ async function cloudPull() {
   } catch (e) {}
   return { ok: false };
 }
+async function githubFile(url) {
+  const res = await cloudGet(url, {
+    headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }
+  });
+  if (!res.ok) return { meta: null, data: null };
+  const meta = await res.json().catch(() => null);
+  if (!meta) return { meta: null, data: null };
+  if (meta.sha) githubFile.sha = meta.sha;
+  let data = null;
+  if (meta.content) {
+    try {
+      const bin = atob(String(meta.content).replace(/\n/g, ""));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      data = JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) {}
+  } else if (meta.state || meta.studioKey) data = meta;
+  return { meta, data };
+}
 async function githubLoad() {
   const urls = [
     GH_STUDIO,
@@ -2622,20 +2656,71 @@ async function githubLoad() {
   const out = [];
   for (let i = 0; i < urls.length; i++) {
     try {
-      const res = await cloudGet(urls[i], {
-        headers: { Accept: "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28" }
-      });
-      if (!res.ok) continue;
-      const data = await res.json().catch(() => null);
+      const { data } = await githubFile(urls[i]);
       if (Array.isArray(data)) out.push.apply(out, data);
       else if (data && typeof data === "object") out.push(data);
     } catch (e) {}
   }
   return out;
 }
+function utf8ToB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let s = "";
+  bytes.forEach((b) => { s += String.fromCharCode(b); });
+  return btoa(s);
+}
+async function githubSave(wrap) {
+  if (!wrap) return false;
+  let sha = githubFile.sha || "";
+  if (!sha) {
+    try {
+      const got = await githubFile(GH_STUDIO);
+      sha = (got.meta && got.meta.sha) || "";
+    } catch (e) {}
+  }
+  const body = {
+    message: "studio cloud",
+    content: utf8ToB64(JSON.stringify(wrap)),
+    branch: "main"
+  };
+  if (sha) body.sha = sha;
+  const headers = {
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+  const tok = (state.settings && state.settings.ghToken) || store.get("nb_gh") || "";
+  if (tok) headers.Authorization = "Bearer " + tok;
+  try {
+    const res = await fetch(GH_STUDIO, { method: "PUT", headers, body: JSON.stringify(body), mode: "cors", credentials: "omit" });
+    if (!res.ok) return false;
+    const saved = await res.json().catch(() => null);
+    if (saved && saved.content && saved.content.sha) githubFile.sha = saved.content.sha;
+    return true;
+  } catch (e) { return false; }
+}
+async function registerGithub() {
+  const token = state.settings.cloudToken || NB_CLOUD.token;
+  const wrap = { studioKey: studioKey(), token, state: cloudPayload(), updatedAt: Date.now(), id: "github" };
+  const rows = await githubLoad();
+  const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === studioKey()) || rows[0];
+  if (hit && hit.state) {
+    if (Array.isArray(hit.state.clients)) mergeRemoteReports(wrap.state, hit.state.clients);
+    applyCloud(hit.state);
+  }
+  try { await restPut(NB_CLOUD.id, wrap); } catch (e) {}
+  try { await githubSave(wrap); } catch (e) {}
+  adoptCloud("github", "github", token);
+  persist();
+  return { token, id: "github" };
+}
 async function cloudRegisterStudio() {
   if (!isOnline()) throw new Error("Sin conexión. El trabajo queda en este teléfono.");
   let last = "No se pudo conectar la nube";
+  try {
+    const out = await registerGithub();
+    if (out && out.token) return out;
+  } catch (e) { last = cloudErr(e); }
   try {
     const out = await registerNative();
     if (out && out.token) return out;
@@ -2707,6 +2792,19 @@ async function lookupAccess(code) {
         remember("api", "api");
         return data.client;
       }
+    }
+  } catch (e) {}
+  try {
+    const rows = await githubLoad();
+    const wrap = rows.find((r) => String(r.studioKey || "").toUpperCase() === "NIUBI") || rows[0];
+    const list = (wrap && wrap.state && wrap.state.clients) || [];
+    if (revokedInState(wrap && wrap.state, digits)) return null;
+    const ghHit = list.find((x) => String(x.accessCode) === digits);
+    if (ghHit) {
+      if (ghHit.unpaid) return null;
+      remember("github", "github");
+      if (wrap.state) applyCloud(wrap.state);
+      return ghHit;
     }
   } catch (e) {}
   try {
@@ -4856,8 +4954,8 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
-      <p class="muted">Una sola nube para todos los teléfonos. Guarda clientes, pagos y el trabajo que cada cliente cierra.</p>
-      <p class="${state.settings.cloudId ? "ok" : "muted"}">${state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."}</p>
+      <p class="muted">Nube real en GitHub (niubision-data). Clientes, pagos y contratos viven ahí, no solo en este teléfono. Pulse conectar una vez.</p>
+      <p class="${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "ok" : "muted"}">${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "Conectado a GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez.")}</p>
       <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
       <button class="btn ghost" id="cloudNow">Sincronizar ahora</button>
     </div>
