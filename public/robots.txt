@@ -3,6 +3,8 @@ Allow: /
 Allow: /sitemap.xml
 Allow: /logo.png
 Allow: /og.jpg
+Allow: /#privacy
+Allow: /#terms
 Disallow: /studios.json
 Disallow: /__grok/
 Disallow: /api/

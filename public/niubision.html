@@ -1288,7 +1288,8 @@ function slimClient(c) {
       q5: c.health.q5, q6: c.health.q6, q7: c.health.q7
     } : undefined,
     waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date, signature: c.waiver.signature || "", text: c.waiver.text || "" } : undefined,
-    contract: c.contract ? { id: c.contract.id, plan: c.contract.plan, name: c.contract.name, date: c.contract.date, signature: c.contract.signature || "" } : undefined
+    contract: c.contract ? { id: c.contract.id, plan: c.contract.plan, name: c.contract.name, date: c.contract.date, signature: c.contract.signature || "" } : undefined,
+    photos: Array.isArray(c.photos) ? c.photos.slice(0, 6) : undefined
   };
 }
 function persistClients() {
@@ -1520,7 +1521,9 @@ async function hydrateVault() {
   state.clients = await take("nb_clients", state.clients);
   if (!state.clients.length) {
     const bak = await idbVault.get("nb_clients_bak");
-    if (Array.isArray(bak) && bak.length) state.clients = bak;
+    if (Array.isArray(bak) && bak.length) {
+      state.clients = bak.filter((c) => c && !isRevoked(c.accessCode, c.id));
+    }
   }
   state.payments = await take("nb_payments", state.payments);
   state.contracts = await take("nb_contracts", state.contracts);
@@ -1570,7 +1573,8 @@ function mergeRows(localArr, remoteArr) {
       lastSession: pickSession(prev.lastSession, x.lastSession),
       waiver: (x.waiver && x.waiver.date >= ((prev.waiver && prev.waiver.date) || "")) ? x.waiver : (prev.waiver || x.waiver),
       health: (x.health && x.health.date >= ((prev.health && prev.health.date) || "")) ? x.health : (prev.health || x.health),
-      contract: (x.contract && x.contract.date >= ((prev.contract && prev.contract.date) || "")) ? x.contract : (prev.contract || x.contract)
+      contract: (x.contract && x.contract.date >= ((prev.contract && prev.contract.date) || "")) ? x.contract : (prev.contract || x.contract),
+      photos: (x.photos && x.photos.length) ? x.photos : ((prev && prev.photos) || [])
     }) : Object.assign({}, x);
     if (prev) {
       const i = list.indexOf(prev);
@@ -1590,8 +1594,8 @@ const JB_CLOUD = "https://jsonblob.com/api/jsonBlob";
 const CR_CLOUD = "https://crudcrud.com/api/25e3d135532e4964b496a8f7141e838d";
 const REST_CLOUD = "https://api.restful-api.dev/objects";
 const GH_STUDIO = "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studio.json";
-const CLOUD_API = "https://niubision-api.miguel-morales9.workers.dev/api";
-const CLOUD_API_CUSTOM = "https://api.niubision.com/api";
+const CLOUD_API = "https://api.niubision.com/api";
+const CLOUD_API_CUSTOM = "https://niubision-api.miguel-morales9.workers.dev/api";
 const NB_CLOUD = {
   key: "NIUBI",
   token: "nb-cloud-v1",
@@ -1992,8 +1996,8 @@ function applyCloud(d) {
   }
   if (Array.isArray(d.clients)) state.clients = mergeRows(state.clients, d.clients);
   sweepRevoked();
-  if (Array.isArray(d.payments)) state.payments = (d.payments || []).filter((p) => p && !isRevoked(p.accessCode, p.clientId));
-  if (Array.isArray(d.contracts)) state.contracts = latestByPerson(d.contracts);
+  if (Array.isArray(d.payments) && d.payments.length) state.payments = mergeRows(state.payments || [], d.payments).filter((p) => p && !isRevoked(p.accessCode, p.clientId));
+  if (Array.isArray(d.contracts) && d.contracts.length) state.contracts = latestByPerson(mergeRows(state.contracts || [], d.contracts));
   if (d.history && Array.isArray(d.history)) {
     const seen = {};
     const hist = [];
@@ -2019,6 +2023,7 @@ function applyCloud(d) {
       if (hit.health) c.health = hit.health;
       if (hit.waiver) c.waiver = hit.waiver;
       if (hit.contract) c.contract = hit.contract;
+      if (hit.photos && hit.photos.length && !(c.photos && c.photos.length)) c.photos = hit.photos;
     });
   }
   pruneOrphanDocs();
@@ -2037,7 +2042,7 @@ function applyCloud(d) {
   }
   if (d.appointments) state.appointments = mergeRows(state.appointments || [], d.appointments);
   if (d.videos) state.videos = mergeRows(state.videos || [], d.videos);
-  if (Array.isArray(d.receipts)) state.receipts = mergeRows(state.receipts || [], d.receipts);
+  if (Array.isArray(d.receipts) && d.receipts.length) state.receipts = mergeRows(state.receipts || [], d.receipts);
   if (typeof d.aiCredits === "number") state.aiCredits = Math.max(state.aiCredits || 0, d.aiCredits);
   if (d.settings) {
     if (d.settings.wa) state.settings.wa = d.settings.wa;
@@ -4090,7 +4095,7 @@ function paypalHref(amount, item, invoice) {
       custom: inv,
       "return": ret,
       cancel_return: "https://niubision.com/?pago=cancel",
-      notify_url: (String(CLOUD_API).replace(/\/api$/, "") + "/api/paypal"),
+      notify_url: "https://api.niubision.com/api/paypal",
       rm: "2"
     });
     return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
@@ -4994,7 +4999,7 @@ function openStudioSettings() {
     <div class="card">
       <h3>Nube del estudio</h3>
       <p class="muted">Servidor: Cloudflare. Respaldo diario a GitHub. Recibos al correo del estudio.</p>
-      <input class="field" id="cloudApiUrl" placeholder="https://niubision-api.su-cuenta.workers.dev/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
+      <input class="field" id="cloudApiUrl" placeholder="https://api.niubision.com/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
       <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
       <p class="${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "ok" : (state.settings.cloudId ? "ok" : "muted")}">${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "Conectado a la nube · estudio " + escapeHtml(studioKey()) : (state.settings.cloudKind === "github" ? "Respaldo GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."))}</p>
       <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
@@ -5882,7 +5887,7 @@ function privacyView() {
     <h3>En este teléfono</h3>
     <p>Nombre, plan, código, series, peso, medidas, hábitos, fotos de progreso (hasta 6, comprimidas) y firmas del relevo y del contrato. Eso vive en el almacenamiento del navegador de este aparato.</p>
     <h3>Con el entrenador</h3>
-    <p>Si hay nube del estudio, el resumen de la sesión (día, series, peso, check-in) llega al panel. Las fotos no se publican. El video de técnica se envía por WhatsApp, no se sube al sitio.</p>
+    <p>Si hay nube del estudio, el resumen de la sesión (día, series, peso, check-in) y hasta 6 fotos de progreso comprimidas llegan al panel del entrenador. El video de técnica se envía por WhatsApp, no se sube al sitio.</p>
     <h3>Pagos</h3>
     <p>PayPal y ATH Móvil son de ellos, no de NiuBision. No pedimos ni guardamos números de tarjeta, PIN, CVV ni claves de ATH.</p>
     <h3>WhatsApp</h3>
@@ -7634,7 +7639,21 @@ function render() {
   }, 180);
 }
 
+function applyDeepLink() {
+  let view = "";
+  try {
+    const h = String(location.hash || "").replace(/^#\/?/, "").split("?")[0].toLowerCase();
+    const q = new URLSearchParams(location.search || "");
+    view = h || String(q.get("view") || "").toLowerCase();
+  } catch (e) { return; }
+  if (view !== "privacy" && view !== "privacidad" && view !== "terms" && view !== "terminos") return;
+  if (state.role === "coach") return;
+  state.splash = false;
+  state.role = state.role || "guest";
+  state.view = (view === "terms" || view === "terminos") ? "terms" : "privacy";
+}
 async function boot() {
+  applyDeepLink();
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     state._installEvt = e;
@@ -7729,8 +7748,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "14") {
-        store.set("nb_sw", "14");
+      if (store.get("nb_sw") !== "15") {
+        store.set("nb_sw", "15");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -7788,7 +7807,7 @@ boot();
       <li>Armado de rutina — 12 USD</li>
     </ul>
     <p>Precio final. PayPal o ATH Móvil. Acceso con código de 6 dígitos.</p>
-    <p><a rel="me" href="https://www.facebook.com/NiuBision">Facebook oficial</a> · <a href="https://wa.me/17874544038">WhatsApp 7874544038</a> · <a href="https://niubision.com/">niubision.com</a></p>
+    <p><a href="https://niubision.com/#privacy">Privacidad</a> · <a href="https://niubision.com/#terms">Términos</a> · <a rel="me" href="https://www.facebook.com/NiuBision">Facebook oficial</a> · <a href="https://wa.me/17874544038">WhatsApp 7874544038</a></p>
   </main>
 </noscript>
 </body>
