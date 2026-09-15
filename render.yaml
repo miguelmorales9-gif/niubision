@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: niubision-api
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install pg
+    startCommand: node cloud/server.mjs
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATABASE_URL
+        sync: false

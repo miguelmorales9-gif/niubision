@@ -1590,6 +1590,7 @@ const JB_CLOUD = "https://jsonblob.com/api/jsonBlob";
 const CR_CLOUD = "https://crudcrud.com/api/25e3d135532e4964b496a8f7141e838d";
 const REST_CLOUD = "https://api.restful-api.dev/objects";
 const GH_STUDIO = "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studio.json";
+const CLOUD_API = "https://api.niubision.com/api";
 const NB_CLOUD = {
   key: "NIUBI",
   token: "nb-cloud-v1",
@@ -1841,14 +1842,18 @@ async function loadStudioPointer() {
   } catch (e) {}
 }
 function defaultCloudUrl() {
+  const fromSet = state.settings && String(state.settings.cloudUrl || "").trim();
+  if (fromSet && /^https:\/\//i.test(fromSet) && !/crudcrud|jsonblob|restful-api/i.test(fromSet)) {
+    return fromSet.replace(/\/$/, "");
+  }
+  const fromFile = store.get("nb_api", "");
+  if (fromFile && /^https:\/\//i.test(fromFile) && !/crudcrud|jsonblob|restful-api/i.test(fromFile)) return fromFile.replace(/\/$/, "");
   try {
     if (!isPagesHost() && /^https?:/i.test(location.href)) {
       return new URL("/api", location.href).origin + "/api";
     }
   } catch (e) {}
-  const fromFile = store.get("nb_api", "");
-  if (fromFile && !/crudcrud|jsonblob|restful-api/i.test(fromFile)) return fromFile;
-  return "/api";
+  return CLOUD_API;
 }
 function apiBases() {
   const out = [];
@@ -1860,6 +1865,7 @@ function apiBases() {
   };
   add(state.settings && state.settings.cloudUrl);
   add(store.get("nb_api", ""));
+  add(CLOUD_API);
   try {
     if (!isPagesHost() && /^https?:/i.test(location.href)) add(new URL("/api", location.href).origin + "/api");
   } catch (e) {}
@@ -4051,7 +4057,7 @@ function paypalHref(amount, item, invoice) {
       custom: inv,
       "return": ret,
       cancel_return: "https://niubision.com/?pago=cancel",
-      notify_url: "https://niubision.com/api/paypal",
+      notify_url: (String(CLOUD_API).replace(/\/api$/, "") + "/api/paypal"),
       rm: "2"
     });
     return "https://www.paypal.com/cgi-bin/webscr?" + q.toString();
@@ -4954,7 +4960,9 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
-      <p class="muted">Nube real en GitHub (niubision-data). Clientes, pagos y contratos viven ahí, no solo en este teléfono. Pulse conectar una vez.</p>
+      <p class="muted">Servidor propio: api.niubision.com. Si Render le da otra URL, péguela aquí.</p>
+      <input class="field" id="cloudApiUrl" placeholder="https://api.niubision.com/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
+      <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
       <p class="${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "ok" : "muted"}">${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "Conectado a GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez.")}</p>
       <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
       <button class="btn ghost" id="cloudNow">Sincronizar ahora</button>
@@ -5005,6 +5013,15 @@ function openStudioSettings() {
     state.settings.pay = { paypal, ath: ($("#payAth", modal) && $("#payAth", modal).value || "").trim() };
     persist();
     toast("Métodos de pago guardados");
+  };
+  const saveUrl = $("#saveCloudUrl", modal);
+  if (saveUrl) saveUrl.onclick = () => {
+    const u = ($("#cloudApiUrl", modal) && $("#cloudApiUrl", modal).value || "").trim().replace(/\/$/, "");
+    if (u && !/^https:\/\//i.test(u)) return toast("Use un enlace https");
+    state.settings.cloudUrl = u || CLOUD_API;
+    store.set("nb_api", state.settings.cloudUrl);
+    persist();
+    toast("URL del servidor guardada");
   };
   const cc = $("#cloudConnect", modal);
   if (cc) cc.onclick = async () => {

@@ -1,0 +1,7 @@
+name = "niubision-api"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[[kv_namespaces]]
+binding = "STUDIO"
+id = "REPLACE_AFTER_CREATE"
