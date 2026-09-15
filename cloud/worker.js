@@ -100,6 +100,7 @@ export default {
     const path = url.pathname.replace(/\/$/, "") || "/";
     const method = req.method.toUpperCase();
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, PUT, OPTIONS", "access-control-allow-headers": "Content-Type, Authorization" } });
+    if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO. En Cloudflare: Settings → Bindings → KV → STUDIO" }, 500);
     if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv" });
     if (path === "/api/studio") {
       let key = (url.searchParams.get("key") || "NIUBI").toUpperCase();

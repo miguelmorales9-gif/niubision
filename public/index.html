@@ -4960,8 +4960,8 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
-      <p class="muted">Servidor propio: api.niubision.com. Si Render le da otra URL, péguela aquí.</p>
-      <input class="field" id="cloudApiUrl" placeholder="https://api.niubision.com/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
+      <p class="muted">Servidor gratis: Cloudflare Worker. Pegue aquí la URL que termine en workers.dev/api</p>
+      <input class="field" id="cloudApiUrl" placeholder="https://niubision-api.su-cuenta.workers.dev/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
       <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
       <p class="${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "ok" : "muted"}">${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "Conectado a GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez.")}</p>
       <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
