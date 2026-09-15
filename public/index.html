@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NiuBision">
 <title>NiuBision | Miguel Morales, entrenador personal en Puerto Rico</title>
-<meta name="description" content="Sitio oficial de NiuBision: entrenamiento personal y coaching en línea en Puerto Rico. Miguel Morales, veterano y certificado por el DRD. Niubi + visión. See the work. Enjoy the day.">
+<meta name="description" content="Sitio oficial de NiuBision: entrenamiento personal y coaching en línea en Puerto Rico. Miguel Morales, veterano del Ejército de EE. UU. y certificado por el DRD. Niubi + visión. See the work. Enjoy the day. No es tienda de ropa ni NiuVision Media.">
 <meta name="keywords" content="NiuBision, NiuBision Puerto Rico, Miguel Morales entrenador personal, entrenador personal Puerto Rico, coaching online Puerto Rico, certificado DRD, niubision.com">
 <meta name="author" content="Miguel Morales">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
@@ -1591,6 +1591,7 @@ const CR_CLOUD = "https://crudcrud.com/api/25e3d135532e4964b496a8f7141e838d";
 const REST_CLOUD = "https://api.restful-api.dev/objects";
 const GH_STUDIO = "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studio.json";
 const CLOUD_API = "https://niubision-api.miguel-morales9.workers.dev/api";
+const CLOUD_API_CUSTOM = "https://api.niubision.com/api";
 const NB_CLOUD = {
   key: "NIUBI",
   token: "nb-cloud-v1",
@@ -1864,6 +1865,7 @@ function apiBases() {
     if (out.indexOf(n) < 0) out.push(n);
   };
   add(CLOUD_API);
+  add(CLOUD_API_CUSTOM);
   add(state.settings && state.settings.cloudUrl);
   add(store.get("nb_api", ""));
   add(CLOUD_API);
@@ -2368,16 +2370,12 @@ async function registerNative() {
   for (let i = 0; i < bases.length; i++) {
     const base = bases[i];
     try {
-      let res = await cloudGet(base + "/studio?key=" + encodeURIComponent(key), { headers: { Accept: "application/json" } });
-      let data = await res.json().catch(() => ({}));
-      if (!(res.ok && data.token)) {
-        res = await cloudGet(base + "/studio", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ studioKey: key })
-        });
-        data = await res.json().catch(() => ({}));
-      }
+      const res = await cloudGet(base + "/studio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", "X-Nb-Pin": STUDIO_PIN },
+        body: JSON.stringify({ studioKey: key, pin: STUDIO_PIN })
+      });
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.token) {
         state.settings.cloudUrl = base;
         state.settings.cloudKind = "api";
@@ -2790,13 +2788,10 @@ async function lookupAccess(code) {
       if (res.ok && data.client) {
         if (data.client.unpaid) return null;
         if (isRevoked(data.client.accessCode, data.client.id)) return null;
-        if (data.token) {
-          state.settings.cloudToken = data.token;
-          state.settings.cloudUrl = bases[i];
-          state.settings.cloudKind = "api";
-          store.set("nb_api", bases[i]);
-        }
-        if (data.state) applyCloud(data.state);
+        if (data.library) {
+          if (Array.isArray(data.library.customRoutines)) state.customRoutines = data.library.customRoutines;
+          if (data.library.routineEdits) state.routineEdits = data.library.routineEdits;
+        } else if (data.state) applyCloud(data.state);
         remember("api", "api");
         return data.client;
       }
@@ -3260,6 +3255,39 @@ function saveAiRoutine(rt, client) {
   }
   persist();
 }
+function emailReceipt(row) {
+  if (!row) return;
+  const payload = {
+    date: row.date,
+    name: row.name,
+    plan: row.plan,
+    amount: row.amount,
+    method: row.method,
+    status: row.status || "recibido",
+    accessCode: row.accessCode || "",
+    email: row.email || (state.profile && state.profile.email) || ""
+  };
+  const bases = apiBases();
+  const send = (base) => cloudGet(base + "/receipt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(payload)
+  }).catch(() => null);
+  Promise.all(bases.slice(0, 2).map(send)).catch(() => {});
+  const text = "Recibo NiuBision\n" + (payload.name || "") + " · " + (payload.plan || "") + " · " + (payload.amount || "") + " USD · " + (payload.method || "");
+  fetch("https://ntfy.sh/niubision-recibo", {
+    method: "POST",
+    headers: { Title: "Recibo NiuBision", Email: "miguel.morales9@gmail.com" },
+    body: text
+  }).catch(() => {});
+  if (payload.email && payload.email !== "miguel.morales9@gmail.com") {
+    fetch("https://ntfy.sh/niubision-recibo", {
+      method: "POST",
+      headers: { Title: "Recibo NiuBision", Email: payload.email },
+      body: text
+    }).catch(() => {});
+  }
+}
 function printReceipt(row) {
   const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
   const blob = new Blob([html], { type: "text/html" });
@@ -3279,12 +3307,15 @@ function openReceipt(row) {
     <p class="muted">${escapeHtml(row.name || "Cliente")} · ${escapeHtml(row.date)} · ${escapeHtml(row.method)} · ${escapeHtml(row.status || "iniciado")}</p>
     <p class="muted">Precio final. El cobro lo confirma PayPal o ATH Móvil.</p>
     <button class="btn primary" id="printRec">Imprimir o guardar PDF</button>
+    <button class="btn ghost" id="mailRec">Enviar recibo por correo</button>
     <button class="btn ghost" id="waRec">WhatsApp del recibo</button>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   modal.querySelector("#printRec").onclick = () => printReceipt(row);
+  const mailBtn = modal.querySelector("#mailRec");
+  if (mailBtn) mailBtn.onclick = () => { emailReceipt(row); toast("Recibo enviado a su correo"); };
   const wr = modal.querySelector("#waRec");
   if (wr) wr.onclick = () => window.open(waLink(receiptText(row)), "_blank");
 }
@@ -4962,7 +4993,7 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
-      <p class="muted">Servidor gratis: Cloudflare Worker. Pegue aquí la URL que termine en workers.dev/api</p>
+      <p class="muted">Servidor: Cloudflare. Respaldo diario a GitHub. Recibos al correo del estudio.</p>
       <input class="field" id="cloudApiUrl" placeholder="https://niubision-api.su-cuenta.workers.dev/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
       <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
       <p class="${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "ok" : (state.settings.cloudId ? "ok" : "muted")}">${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "Conectado a la nube · estudio " + escapeHtml(studioKey()) : (state.settings.cloudKind === "github" ? "Respaldo GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."))}</p>
@@ -6175,6 +6206,9 @@ function confirmClientPaid(c, method) {
   persistClients();
   persist();
   stashReceipt(c, p);
+  p.email = c.email || p.email || "";
+  p.accessCode = code;
+  emailReceipt(p);
   cloudPush().catch(() => {});
   deliverReceipt(c, p);
   return { client: c, payment: p, code };

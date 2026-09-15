@@ -1,7 +1,10 @@
 User-agent: *
 Allow: /
 Allow: /sitemap.xml
+Allow: /logo.png
+Allow: /og.jpg
 Disallow: /studios.json
 Disallow: /__grok/
+Disallow: /api/
 
 Sitemap: https://niubision.com/sitemap.xml
