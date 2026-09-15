@@ -1859,10 +1859,11 @@ function apiBases() {
   const out = [];
   const add = (u) => {
     const n = String(u || "").replace(/\/$/, "");
-    if (!n || /crudcrud|jsonblob|restful-api/i.test(n)) return;
+    if (!n || /crudcrud|jsonblob|restful-api|github/i.test(n)) return;
     if (n === "/api" && isPagesHost()) return;
     if (out.indexOf(n) < 0) out.push(n);
   };
+  add(CLOUD_API);
   add(state.settings && state.settings.cloudUrl);
   add(store.get("nb_api", ""));
   add(CLOUD_API);
@@ -2382,6 +2383,7 @@ async function registerNative() {
         state.settings.cloudKind = "api";
         state.settings.cloudToken = data.token;
         store.set("nb_api", base);
+        adoptCloud("api", "api", data.token);
         persist();
         return data;
       }
@@ -2724,11 +2726,11 @@ async function cloudRegisterStudio() {
   if (!isOnline()) throw new Error("Sin conexión. El trabajo queda en este teléfono.");
   let last = "No se pudo conectar la nube";
   try {
-    const out = await registerGithub();
+    const out = await registerNative();
     if (out && out.token) return out;
   } catch (e) { last = cloudErr(e); }
   try {
-    const out = await registerNative();
+    const out = await registerGithub();
     if (out && out.token) return out;
   } catch (e) { last = cloudErr(e); }
   try {
@@ -4963,7 +4965,7 @@ function openStudioSettings() {
       <p class="muted">Servidor gratis: Cloudflare Worker. Pegue aquí la URL que termine en workers.dev/api</p>
       <input class="field" id="cloudApiUrl" placeholder="https://niubision-api.su-cuenta.workers.dev/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
       <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
-      <p class="${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "ok" : "muted"}">${state.settings.cloudKind === "github" || state.settings.cloudId === "github" ? "Conectado a GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez.")}</p>
+      <p class="${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "ok" : (state.settings.cloudId ? "ok" : "muted")}">${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "Conectado a la nube · estudio " + escapeHtml(studioKey()) : (state.settings.cloudKind === "github" ? "Respaldo GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."))}</p>
       <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
       <button class="btn ghost" id="cloudNow">Sincronizar ahora</button>
     </div>
