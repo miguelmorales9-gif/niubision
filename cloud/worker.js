@@ -17,8 +17,18 @@ function mergeStudio(prev, next) {
   });
   const dead = new Set(revoked.map((r) => String(r.code || "")).filter((c) => /^\d{6}$/.test(c)));
   const deadIds = new Set(revoked.map((r) => String(r.clientId || "")).filter(Boolean));
+  const deadNames = new Set(revoked.map((r) => String(r.name || "").toLowerCase().trim()).filter(Boolean));
   const keyOf = (c) => (c.id ? "id:" + c.id : c.accessCode ? "a:" + c.accessCode : "n:" + String(c.name || "").toLowerCase());
-  const alive = (c) => c && !(c.id && deadIds.has(String(c.id))) && !(c.accessCode && dead.has(String(c.accessCode)));
+  const alive = (c) => c && !(c.id && deadIds.has(String(c.id))) && !(c.accessCode && dead.has(String(c.accessCode))) && !(c.name && deadNames.has(String(c.name).toLowerCase().trim()));
+  const gone = (x) => {
+    if (!x) return true;
+    if (x.clientId && deadIds.has(String(x.clientId))) return true;
+    if (x.id && deadIds.has(String(x.id))) return true;
+    if (x.accessCode && dead.has(String(x.accessCode))) return true;
+    if (x.code && dead.has(String(x.code))) return true;
+    if (x.name && deadNames.has(String(x.name).toLowerCase().trim())) return true;
+    return false;
+  };
   if (op === "paid") {
     const invoice = String(b.invoice || "");
     const clientId = String(b.clientId || "");
@@ -42,7 +52,20 @@ function mergeStudio(prev, next) {
     });
     return Object.assign({}, a, { clients, payments, revoked, updatedAt: Date.now() });
   }
-  if (op === "revoke") return Object.assign({}, a, { clients: (a.clients || []).filter(alive), revoked, updatedAt: Date.now() });
+  if (op === "revoke") {
+    return Object.assign({}, a, {
+      clients: (a.clients || []).filter(alive),
+      payments: (a.payments || []).filter((p) => !gone(p)),
+      inbox: (a.inbox || []).filter((n) => !gone(n)),
+      contracts: (a.contracts || []).filter((k) => !gone(k)),
+      receipts: (a.receipts || []).filter((r) => !gone(r)),
+      checkins: (a.checkins || []).filter((h) => !gone(h)),
+      appointments: (a.appointments || []).filter((x) => !gone(x)),
+      videos: (a.videos || []).filter((v) => !gone(v)),
+      revoked,
+      updatedAt: Date.now()
+    });
+  }
   if (op === "report") {
     const clients = (a.clients || []).map((c) => {
       const hit = (b.clients || []).find((x) => (c.id && x.id === c.id) || (c.accessCode && x.accessCode === c.accessCode));
@@ -66,8 +89,10 @@ function mergeStudio(prev, next) {
   const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : b, {
     clients: Array.from(map.values()),
     revoked,
-    inbox: [].concat(a.inbox || [], b.inbox || []).slice(-40),
-    payments: Array.from(payMap.values()).slice(-80),
+    inbox: (Array.isArray(b.inbox) && !op ? b.inbox : [].concat(a.inbox || [], b.inbox || [])).filter((n) => !gone(n)).slice(-40),
+    payments: (Array.isArray(b.payments) && !op ? b.payments : Array.from(payMap.values())).filter((p) => !gone(p)).slice(-80),
+    contracts: (Array.isArray(b.contracts) && !op ? b.contracts : (b.contracts || a.contracts || [])).filter((k) => !gone(k)),
+    receipts: (Array.isArray(b.receipts) && !op ? b.receipts : (b.receipts || a.receipts || [])).filter((r) => !gone(r)),
     updatedAt: Date.now()
   });
   delete out._op;

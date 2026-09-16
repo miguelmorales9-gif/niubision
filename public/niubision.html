@@ -1411,6 +1411,7 @@ function forgetPersonDocs(name, id) {
   state.videos = (state.videos || []).filter((v) => !(pid && v.clientId === pid));
   state.receipts = (state.receipts || []).filter((r) => !hit(r));
   state.checkins = (state.checkins || []).filter((h) => !hit(h));
+  state.inbox = (state.inbox || []).filter((n) => !hit(n));
   if (state.notes && pid) delete state.notes[pid];
   try { store.set("nb_health", state.health); } catch (e) {}
   try { store.set("nb_waiver", state.waiver); } catch (e) {}
@@ -1435,6 +1436,7 @@ function pruneOrphanDocs() {
   state.appointments = (state.appointments || []).filter((a) => a && a.clientId && idx.ids[a.clientId]);
   state.videos = (state.videos || []).filter((v) => v && v.clientId && idx.ids[v.clientId]);
   state.receipts = (state.receipts || []).filter((r) => docBelongsToLiving(r, idx));
+  state.inbox = (state.inbox || []).filter((n) => docBelongsToLiving(n, idx) && !isRevoked(n.accessCode, n.clientId));
   state.checkins = (state.checkins || []).filter((h) => docBelongsToLiving(h, idx));
   if (state.health && !keepGlobal(state.health)) state.health = null;
   if (state.waiver && !keepGlobal(state.waiver)) state.waiver = null;
@@ -1509,6 +1511,7 @@ function dropClientRecords(c) {
   }
   pruneOrphanDocs();
   persist();
+  postRevoke(c).then(() => cloudPush()).catch(() => { cloudPush().catch(() => {}); });
 }
 async function hydrateVault() {
   const take = async (k, cur) => {
@@ -1971,8 +1974,8 @@ function cloudPayload() {
         active: list.filter((c) => clientStatus(c) === "activo").length
       };
     })(),
-    revoked: revokedList().map((r) => ({ code: r.code || "", clientId: r.clientId || "", at: r.at || 0 })),
-    inbox: (state.inbox || []).slice(0, 40),
+    revoked: revokedList().map((r) => ({ code: r.code || "", clientId: r.clientId || "", name: r.name || "", at: r.at || 0 })),
+    inbox: (state.inbox || []).filter((n) => n && !isRevoked(n.accessCode, n.clientId)).slice(0, 40),
     updatedAt: Date.now()
   };
 }
@@ -1983,7 +1986,8 @@ function applyCloud(d) {
     persistRevoked();
   }
   if (Array.isArray(d.inbox)) {
-    state.inbox = mergeRows(state.inbox || [], d.inbox);
+    const idx = livingClientIndex();
+    state.inbox = mergeRows(state.inbox || [], d.inbox).filter((n) => n && docBelongsToLiving(n, idx) && !isRevoked(n.accessCode, n.clientId));
     try { store.set("nb_inbox", state.inbox); } catch (e) {}
   }
   if (d.floor) state.floor = d.floor;
@@ -4275,9 +4279,12 @@ function recentInbox() {
   const seen = {};
   const out = [];
   const cut = Date.now() - 48 * 3600 * 1000;
+  const idx = livingClientIndex();
   (state.inbox || []).slice().reverse().forEach((n) => {
     if (!n) return;
     if (n.at && n.at < cut) return;
+    if (isRevoked(n.accessCode, n.clientId)) return;
+    if (!docBelongsToLiving(n, idx)) return;
     const k = (n.type || "n") + ":" + (n.clientId || cleanName(n.name || "") || n.id);
     if (seen[k]) return;
     seen[k] = 1;
@@ -7270,9 +7277,7 @@ function bindChrome() {
     if (!c) return;
     if (!confirm("¿Eliminar a " + c.name + "?\n\nSe borra su código, contrato y expediente. No entra a entrenar hasta que pague y reciba un código nuevo.")) return;
     dropClientRecords(c);
-    postRevoke(c).catch(() => {});
-    toast("Cliente, código y expediente eliminados");
-    cloudPush().catch(() => {});
+    toast("Cliente, código y expediente eliminados de la app y de la nube");
     render();
   });
   $$("[data-delk]").forEach((b) => b.onclick = () => {
@@ -7819,8 +7824,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "16") {
-        store.set("nb_sw", "16");
+      if (store.get("nb_sw") !== "17") {
+        store.set("nb_sw", "17");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
