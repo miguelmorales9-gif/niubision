@@ -39,11 +39,12 @@ function mergeStudio(prev, next) {
     const used = new Set((a.clients || []).map((c) => String(c.accessCode || "")));
     const gen = () => String(100000 + Math.floor(Math.random() * 900000));
     const clients = (a.clients || []).map((c) => {
-      const hit = (clientId && c.id === clientId) || (b.name && String(c.name || "").toLowerCase() === String(b.name || "").toLowerCase());
+      const hit = (clientId && c.id === clientId)
+        || (invoice && (c.id === invoice || c.accessCode === invoice));
       if (!hit) return c;
       let code = String(c.accessCode || "");
-      if (!/^\d{6}$/.test(code)) {
-        code = gen();
+      if (!/^\d{6}$/.test(code) || used.has(code)) {
+        do { code = gen(); } while (used.has(code));
         used.add(code);
       }
       return Object.assign({}, c, { unpaid: false, accessCode: code });
@@ -313,10 +314,12 @@ async function handle(req, env) {
       clientId: body.clientId || "",
       email: body.email || ""
     };
+    const inbox = (row.state && row.state.inbox) || [];
+    const dupPay = inbox.some((n) => n && n.type === "pay" && n.clientId === payment.clientId && String(n.amount || "") === String(payment.amount || "") && (Date.now() - (n.at || 0) < 30 * 60 * 1000));
     row.state = mergeStudio(row.state || {}, {
       _op: "pay",
       payments: [payment],
-      inbox: [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, amount: payment.amount, method: payment.method }]
+      inbox: dupPay ? [] : [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, amount: payment.amount, method: payment.method }]
     });
     await putRow(env, row);
     return json({ ok: true });
