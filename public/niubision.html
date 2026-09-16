@@ -1289,7 +1289,7 @@ function slimClient(c) {
     } : undefined,
     waiver: c.waiver ? { name: c.waiver.name, date: c.waiver.date, signature: c.waiver.signature || "", text: c.waiver.text || "" } : undefined,
     contract: c.contract ? { id: c.contract.id, plan: c.contract.plan, name: c.contract.name, date: c.contract.date, signature: c.contract.signature || "" } : undefined,
-    photos: Array.isArray(c.photos) ? c.photos.slice(0, 6) : undefined
+    photos: Array.isArray(c.photos) ? c.photos.filter((p) => String(p || "").length < 220000).slice(0, 6) : undefined
   };
 }
 function persistClients() {
@@ -1567,7 +1567,6 @@ function mergeRows(localArr, remoteArr) {
     const prev = (x.id && byId["id:" + x.id])
       || (x.accessCode && byCode["a:" + String(x.accessCode)])
       || (phone.length >= 10 && byPhone["p:" + phone])
-      || (x.name && byName["n:" + cleanName(x.name)])
       || null;
     const row = prev ? Object.assign({}, prev, x, {
       accessCode: x.accessCode || prev.accessCode,
@@ -4381,13 +4380,19 @@ async function runPay(method, planLabel) {
     const amt = info.amount || "";
     const ref = row.ref || row.id;
     const clip = [num, amt ? amt + " USD" : "", "ref " + ref].filter(Boolean).join(" · ");
+    const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + "&note=" + encodeURIComponent(ref);
     if (num) {
       await copyText(clip);
-      toast("ATH " + num + (amt ? " · " + amt + " USD" : "") + " · " + ref + " copiado.");
-      const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + "&note=" + encodeURIComponent(ref);
-      try { window.location.href = deep; } catch (e) {
-        try { window.open("athmovil://", "_blank"); } catch (e2) {}
-      }
+      toast("ATH " + num + (amt ? " · " + amt + " USD" : "") + " copiado. Ábralo en ATH Móvil.");
+      try {
+        const a = document.createElement("a");
+        a.href = deep;
+        a.rel = "noopener";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { try { a.remove(); } catch (e3) {} }, 800);
+      } catch (e) {}
     } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
@@ -6724,7 +6729,7 @@ function openNeedCode(planLabel) {
     const age = parseInt($("#leadAge", modal).value, 10);
     const phone = ($("#leadPhone", modal).value || "").replace(/\D/g, "");
     const email = ($("#leadEmail", modal).value || "").trim();
-    if (!name || name.split(" ").length < 1) return toast("Escriba su nombre");
+    if (!name || name.split(/\s+/).filter(Boolean).length < 2) return toast("Nombre y apellido");
     if (!sex) return toast("Indique el sexo");
     if (!(age >= 14 && age <= 90)) return toast("Edad entre 14 y 90");
     if (phone.length < 10) return toast("Teléfono de 10 dígitos");
@@ -7842,8 +7847,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "18") {
-        store.set("nb_sw", "18");
+      if (store.get("nb_sw") !== "19") {
+        store.set("nb_sw", "19");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));

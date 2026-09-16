@@ -209,7 +209,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 18 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 19 });
 
   if (path === "/api/studio") {
     let body = {};
@@ -288,10 +288,12 @@ async function handle(req, env) {
       phone: String(c.phone || ""),
       email: String(c.email || "")
     };
+    const inbox = (row.state && row.state.inbox) || [];
+    const dup = inbox.some((n) => n && n.clientId === client.id && (Date.now() - (n.at || 0) < 30 * 60 * 1000));
     row.state = mergeStudio(row.state || {}, {
       _op: "lead",
       clients: [client],
-      inbox: [{ id: "in" + Date.now(), type: "lead", name: client.name, plan: client.plan, at: Date.now(), clientId: client.id }]
+      inbox: dup ? [] : [{ id: "in" + Date.now(), type: "lead", name: client.name, plan: client.plan, at: Date.now(), clientId: client.id }]
     });
     await putRow(env, row);
     return json({ ok: true, state: { inbox: row.state.inbox } });
