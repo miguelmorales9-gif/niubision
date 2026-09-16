@@ -1240,7 +1240,8 @@ function persist() {
     store.set("nb_health", state.health);
     store.set("nb_contracts", state.contracts);
     store.set("nb_waiver", state.waiver);
-    store.set("nb_payments", state.payments || []);
+    state.payments = dedupePayments(state.payments || []);
+    store.set("nb_payments", state.payments);
     store.set("nb_weighins", state.weighins);
     store.set("nb_measures", state.measures);
     const ph = state.photos || [];
@@ -1430,7 +1431,7 @@ function pruneOrphanDocs() {
     return false;
   };
   state.contracts = latestByPerson((state.contracts || []).filter((k) => docBelongsToLiving(k, idx)));
-  state.payments = (state.payments || []).filter((p) => docBelongsToLiving(p, idx));
+  state.payments = dedupePayments((state.payments || []).filter((p) => docBelongsToLiving(p, idx)));
   state.appointments = (state.appointments || []).filter((a) => a && a.clientId && idx.ids[a.clientId]);
   state.videos = (state.videos || []).filter((v) => v && v.clientId && idx.ids[v.clientId]);
   state.receipts = (state.receipts || []).filter((r) => docBelongsToLiving(r, idx));
@@ -1996,7 +1997,7 @@ function applyCloud(d) {
   }
   if (Array.isArray(d.clients)) state.clients = mergeRows(state.clients, d.clients);
   sweepRevoked();
-  if (Array.isArray(d.payments) && d.payments.length) state.payments = mergeRows(state.payments || [], d.payments).filter((p) => p && !isRevoked(p.accessCode, p.clientId));
+  if (Array.isArray(d.payments) && d.payments.length) state.payments = dedupePayments(mergeRows(state.payments || [], d.payments).filter((p) => p && !isRevoked(p.accessCode, p.clientId)));
   if (Array.isArray(d.contracts) && d.contracts.length) state.contracts = latestByPerson(mergeRows(state.contracts || [], d.contracts));
   if (d.history && Array.isArray(d.history)) {
     const seen = {};
@@ -2541,7 +2542,8 @@ async function cloudPull() {
     store.set("nb_routine_edits", state.routineEdits);
     store.set("nb_health", state.health);
     store.set("nb_contracts", state.contracts);
-    store.set("nb_payments", state.payments || []);
+    state.payments = dedupePayments(state.payments || []);
+    store.set("nb_payments", state.payments);
     store.set("nb_appointments", state.appointments || []);
     store.set("nb_videos", state.videos || []);
     store.set("nb_ai_credits", state.aiCredits || 0);
@@ -3097,9 +3099,15 @@ function clientStatus(c) {
   if (!c) return "activo";
   const left = daysLeft(c);
   const sess = sessionsLeft(c);
-  if (sess === 0) return "vencido";
+  const meta = planMeta(c.plan);
+  if (meta.kind === "once" || meta.kind === "addon") {
+    if (sess === 0) return "vencido";
+    return "activo";
+  }
+  if (sess === 0 && meta.sessions) return "vencido";
   if (left != null && left < 0) return "vencido";
-  if ((left != null && left <= 7) || (sess != null && sess <= 2)) return "por vencer";
+  if (left != null && left <= 7) return "por vencer";
+  if (meta.kind === "pack" && sess != null && sess <= 2) return "por vencer";
   return "activo";
 }
 function normalizeClient(c) {
@@ -4137,6 +4145,16 @@ function recordPay(planLabel, method, status) {
   row.invoice = row.id;
   row.ref = "NB-" + String(row.id).replace(/\D/g, "").slice(-6);
   state.payments = state.payments || [];
+  const twin = state.payments.find((p) => p && p.status !== "recibido" && (
+    (row.clientId && p.clientId === row.clientId && p.date === row.date) ||
+    (who && p.name && cleanName(p.name) === cleanName(who) && p.date === row.date && p.plan === row.plan)
+  ));
+  if (twin) {
+    twin.method = method;
+    twin.status = status || twin.status || "iniciado";
+    persist();
+    return twin;
+  }
   state.payments.push(row);
   const last = (state.contracts || [])[state.contracts.length - 1];
   if (last && last.plan === planLabel && !last.payMethod) last.payMethod = method;
@@ -4196,10 +4214,19 @@ async function watchInvoice(inv) {
   }
 }
 function ensureRenewals() {
+  let added = false;
   (state.clients || []).forEach((c) => {
-    if (clientStatus(c) !== "por vencer" && clientStatus(c) !== "vencido") return;
-    const pending = (state.payments || []).some((p) => p.clientId === c.id && p.status !== "recibido");
-    if (pending) return;
+    if (!c) return;
+    normalizeClient(c);
+    const st = clientStatus(c);
+    if (st !== "por vencer" && st !== "vencido") return;
+    const inv = "ren-" + c.id;
+    const has = (state.payments || []).some((p) => p && (
+      p.invoice === inv ||
+      (p.clientId === c.id && p.status !== "recibido") ||
+      (p.name && cleanName(p.name) === cleanName(c.name) && p.status === "renovar")
+    ));
+    if (has) return;
     const info = planPriceOf(c.plan);
     state.payments = state.payments || [];
     state.payments.push({
@@ -4211,10 +4238,42 @@ function ensureRenewals() {
       status: "renovar",
       name: c.name,
       clientId: c.id,
-      invoice: "ren-" + c.id,
+      invoice: inv,
       ref: "NB-R" + String(c.id).replace(/\D/g, "").slice(-4)
     });
+    added = true;
   });
+  if (added) persist();
+}
+function dedupePayments(list) {
+  const map = {};
+  const rank = (x) => (x && x.status === "recibido" ? 3 : x && x.status === "renovar" ? 1 : 2);
+  (list || []).forEach((p) => {
+    if (!p || typeof p !== "object") return;
+    const k = (p.invoice && ("i:" + p.invoice))
+      || (p.clientId && p.date && ("c:" + p.clientId + "|" + p.date + "|" + (p.amount || "")))
+      || (p.name && p.date && ("n:" + cleanName(p.name) + "|" + p.date + "|" + (p.amount || "")))
+      || ("id:" + (p.id || Math.random()));
+    const prev = map[k];
+    if (!prev || rank(p) > rank(prev) || String(p.date || "") > String(prev.date || "")) {
+      map[k] = prev ? Object.assign({}, prev, p) : p;
+    }
+  });
+  return Object.keys(map).map((k) => map[k]);
+}
+function recentInbox() {
+  const seen = {};
+  const out = [];
+  const cut = Date.now() - 48 * 3600 * 1000;
+  (state.inbox || []).slice().reverse().forEach((n) => {
+    if (!n) return;
+    if (n.at && n.at < cut) return;
+    const k = (n.type || "n") + ":" + (n.clientId || cleanName(n.name || "") || n.id);
+    if (seen[k]) return;
+    seen[k] = 1;
+    out.push(n);
+  });
+  return out.slice(0, 3);
 }
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
@@ -5992,7 +6051,8 @@ function pricesView() {
 }
 
 function peopleView() {
-  const inbox = (state.inbox || []).slice(0, 8);
+  const inbox = recentInbox();
+  const pays = dedupePayments(state.payments || []).slice().reverse();
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
@@ -6005,7 +6065,7 @@ function peopleView() {
       <button class="btn primary" id="ingestLead" type="button">Añadir desde el aviso</button>
     </div>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
-    ${(state.payments || []).length ? `<div class="card"><h3>Pagos</h3>${(state.payments || []).slice().reverse().map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method)}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
+    ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
     ${!Array.isArray(state.clients) || !state.clients.length ? "<p class='muted'>Aún no hay clientes. Añada el primero abajo.</p>" : (state.clients || []).map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
