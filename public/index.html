@@ -4247,19 +4247,29 @@ function ensureRenewals() {
 }
 function dedupePayments(list) {
   const map = {};
-  const rank = (x) => (x && x.status === "recibido" ? 3 : x && x.status === "renovar" ? 1 : 2);
+  const rank = (x) => (x && x.status === "recibido" ? 3 : x && x.status === "iniciado" ? 2 : 1);
   (list || []).forEach((p) => {
     if (!p || typeof p !== "object") return;
-    const k = (p.invoice && ("i:" + p.invoice))
-      || (p.clientId && p.date && ("c:" + p.clientId + "|" + p.date + "|" + (p.amount || "")))
-      || (p.name && p.date && ("n:" + cleanName(p.name) + "|" + p.date + "|" + (p.amount || "")))
-      || ("id:" + (p.id || Math.random()));
+    const who = (p.clientId || "") + "|" + cleanName(p.name || "");
+    const inv = String(p.invoice || "");
+    const k = (inv.indexOf("ren-") === 0 && p.status !== "recibido")
+      ? "ren:" + inv
+      : ("p:" + who + "|" + (p.date || "") + "|" + String(p.amount || ""));
     const prev = map[k];
-    if (!prev || rank(p) > rank(prev) || String(p.date || "") > String(prev.date || "")) {
-      map[k] = prev ? Object.assign({}, prev, p) : p;
-    }
+    if (!prev || rank(p) > rank(prev)) map[k] = prev ? Object.assign({}, prev, p, { status: rank(p) >= rank(prev) ? p.status : prev.status }) : p;
+    else if (prev && rank(p) === rank(prev) && String(p.id || "") > String(prev.id || "")) map[k] = Object.assign({}, prev, p);
   });
-  return Object.keys(map).map((k) => map[k]);
+  const rows = Object.keys(map).map((k) => map[k]);
+  const got = {};
+  rows.forEach((p) => {
+    if (p.status !== "recibido") return;
+    got[(p.clientId || "") + "|" + cleanName(p.name || "") + "|" + (p.date || "") + "|" + String(p.amount || "")] = 1;
+  });
+  return rows.filter((p) => {
+    if (p.status === "recibido") return true;
+    const k = (p.clientId || "") + "|" + cleanName(p.name || "") + "|" + (p.date || "") + "|" + String(p.amount || "");
+    return !got[k];
+  });
 }
 function recentInbox() {
   const seen = {};
@@ -7780,6 +7790,7 @@ async function boot() {
     state.settings.cloudUrl = defaultCloudUrl();
   }
   if (lockIfRevokedSeat()) {}
+  state.payments = dedupePayments(state.payments || []);
   persist();
   if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
     state.role = null;
@@ -7808,8 +7819,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "15") {
-        store.set("nb_sw", "15");
+      if (store.get("nb_sw") !== "16") {
+        store.set("nb_sw", "16");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));

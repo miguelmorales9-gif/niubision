@@ -54,11 +54,20 @@ function mergeStudio(prev, next) {
   const map = new Map();
   (a.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), c));
   (b.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), Object.assign({}, map.get(keyOf(c)) || {}, c)));
+  const payMap = new Map();
+  [].concat(a.payments || [], b.payments || []).forEach((p) => {
+    if (!p || typeof p !== "object") return;
+    const who = String(p.clientId || "") + "|" + String(p.name || "").toLowerCase();
+    const k = who + "|" + String(p.date || "") + "|" + String(p.amount || "");
+    const prev = payMap.get(k);
+    const rank = (x) => (x && x.status === "recibido" ? 2 : 1);
+    if (!prev || rank(p) >= rank(prev)) payMap.set(k, Object.assign({}, prev || {}, p));
+  });
   const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : b, {
     clients: Array.from(map.values()),
     revoked,
-    inbox: [].concat(a.inbox || [], b.inbox || []).slice(-80),
-    payments: [].concat(a.payments || [], b.payments || []).slice(-200),
+    inbox: [].concat(a.inbox || [], b.inbox || []).slice(-40),
+    payments: Array.from(payMap.values()).slice(-80),
     updatedAt: Date.now()
   });
   delete out._op;
