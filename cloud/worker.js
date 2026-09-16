@@ -17,16 +17,14 @@ function mergeStudio(prev, next) {
   });
   const dead = new Set(revoked.map((r) => String(r.code || "")).filter((c) => /^\d{6}$/.test(c)));
   const deadIds = new Set(revoked.map((r) => String(r.clientId || "")).filter(Boolean));
-  const deadNames = new Set(revoked.map((r) => String(r.name || "").toLowerCase().trim()).filter(Boolean));
   const keyOf = (c) => (c.id ? "id:" + c.id : c.accessCode ? "a:" + c.accessCode : "n:" + String(c.name || "").toLowerCase());
-  const alive = (c) => c && !(c.id && deadIds.has(String(c.id))) && !(c.accessCode && dead.has(String(c.accessCode))) && !(c.name && deadNames.has(String(c.name).toLowerCase().trim()));
+  const alive = (c) => c && !(c.id && deadIds.has(String(c.id))) && !(c.accessCode && dead.has(String(c.accessCode)));
   const gone = (x) => {
     if (!x) return true;
     if (x.clientId && deadIds.has(String(x.clientId))) return true;
     if (x.id && deadIds.has(String(x.id))) return true;
     if (x.accessCode && dead.has(String(x.accessCode))) return true;
     if (x.code && dead.has(String(x.code))) return true;
-    if (x.name && deadNames.has(String(x.name).toLowerCase().trim())) return true;
     return false;
   };
   if (op === "paid") {
@@ -211,7 +209,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv" });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 18 });
 
   if (path === "/api/studio") {
     let body = {};
@@ -278,8 +276,12 @@ async function handle(req, env) {
     const c = body.client || {};
     if (!c.name) return json({ error: "Falta el nombre" }, 400);
     const row = await rowOf(env, "NIUBI");
+    const revoked = (row.state && row.state.revoked) || [];
+    const deadIds = new Set(revoked.map((r) => String(r.clientId || "")).filter(Boolean));
+    let cid = String(c.id || "c" + Date.now());
+    if (deadIds.has(cid)) cid = "c" + Date.now();
     const client = {
-      id: String(c.id || "c" + Date.now()),
+      id: cid,
       name: String(c.name).slice(0, 80),
       plan: String(c.plan || "Estandar"),
       unpaid: c.unpaid !== false,

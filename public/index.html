@@ -1261,7 +1261,6 @@ function persist() {
       scheduleCloudPush();
     }
     else if (state.role === "client") scheduleClientPush();
-    else if (state.role === "guest") scheduleLeadPush();
   } finally {
     persist._busy = false;
     if (persist._again) { persist._again = false; persist(); }
@@ -2192,6 +2191,11 @@ function scheduleLeadPush() {
 async function postLead(c) {
   const who = c || (state.clients || []).filter((x) => x.unpaid).slice(-1)[0];
   if (!who || !who.name) return { ok: false };
+  if (isRevoked(who.accessCode, who.id)) return { ok: false, revoked: true };
+  const stamp = String(who.id || who.phone || who.name);
+  if (postLead._last === stamp && Date.now() - (postLead._at || 0) < 10 * 60 * 1000) return { ok: true, skip: true };
+  postLead._last = stamp;
+  postLead._at = Date.now();
   const bases = apiBases();
   const body = JSON.stringify({ studioKey: "NIUBI", client: slimClient(who) });
   let ok = false;
@@ -3686,12 +3690,26 @@ function loadSession(rt) {
   }
   const day = rt.daysPlan[dayIndex(rt) % rt.daysPlan.length];
   const saved = store.get(sessionKey(rt), null);
-  if (saved && saved.items && saved.items.length === day.items.length) return saved;
+  const by = {};
+  ((saved && saved.items) || []).forEach((it, i) => {
+    if (!it) return;
+    if (it.exId) by["id:" + it.exId] = it;
+    if (it.name) by["n:" + String(it.name).toLowerCase()] = it;
+    by["i:" + i] = it;
+  });
   return {
-    items: day.items.map((it) => ({
-      name: it.name, exId: it.exId, rest: it.rest || 90,
-      sets: Array.from({ length: it.sets }, () => ({ w: "", r: it.reps, done: false }))
-    }))
+    items: day.items.map((it, i) => {
+      const hit = (it.exId && by["id:" + it.exId]) || by["n:" + String(it.name || "").toLowerCase()] || by["i:" + i];
+      const n = it.sets;
+      const prev = (hit && hit.sets) || [];
+      const sets = Array.from({ length: n }, (_, s) => {
+        const row = prev[s];
+        if (row) return { w: row.w || "", r: row.r || it.reps, done: !!row.done };
+        const lastW = (prev[prev.length - 1] && prev[prev.length - 1].w) || "";
+        return { w: lastW, r: it.reps, done: false };
+      });
+      return { name: it.name, exId: it.exId, rest: it.rest || 90, sets };
+    })
   };
 }
 function streak() {
@@ -7824,8 +7842,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "17") {
-        store.set("nb_sw", "17");
+      if (store.get("nb_sw") !== "18") {
+        store.set("nb_sw", "18");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
