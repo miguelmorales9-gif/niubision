@@ -2021,7 +2021,7 @@ function applyCloud(d) {
   if (d.routineEdits) state.routineEdits = d.routineEdits;
   if (Array.isArray(d.clients)) {
     (state.clients || []).forEach((c) => {
-      const hit = (d.clients || []).find((x) => (c.id && x.id === c.id) || (c.name && x.name && cleanName(c.name) === cleanName(x.name)));
+      const hit = (d.clients || []).find((x) => (c.id && x.id === c.id) || (c.accessCode && x.accessCode && String(c.accessCode) === String(x.accessCode)));
       if (!hit) return;
       if (hit.health) c.health = hit.health;
       if (hit.waiver) c.waiver = hit.waiver;
@@ -2805,7 +2805,7 @@ async function lookupAccess(code) {
         if (data.library) {
           if (Array.isArray(data.library.customRoutines)) state.customRoutines = data.library.customRoutines;
           if (data.library.routineEdits) state.routineEdits = data.library.routineEdits;
-        } else if (data.state) applyCloud(data.state);
+        }
         remember("api", "api");
         return data.client;
       }
@@ -2820,7 +2820,8 @@ async function lookupAccess(code) {
     if (ghHit) {
       if (ghHit.unpaid) return null;
       remember("github", "github");
-      if (wrap.state) applyCloud(wrap.state);
+      if (wrap.state && wrap.state.customRoutines) state.customRoutines = wrap.state.customRoutines;
+      if (wrap.state && wrap.state.routineEdits) state.routineEdits = wrap.state.routineEdits;
       return ghHit;
     }
   } catch (e) {}
@@ -4184,7 +4185,7 @@ function recordPay(planLabel, method, status) {
     row.clientId = c.id;
     if (c.accessCode) row.accessCode = c.accessCode;
     c.plan = c.plan || info.name || planLabel;
-  } else if (!/rutina con ia/i.test(planLabel) && who) {
+  } else if (state.role === "coach" && !/rutina con ia/i.test(planLabel) && who) {
     let created = (state.clients || []).find((x) => cleanName(x.name) === cleanName(who));
     if (!created) {
       created = {
@@ -4853,7 +4854,7 @@ function openWaiver(after) {
     <h2>Relevo de responsabilidad</h2>
     <p class="muted">Obligatorio antes de escoger o pagar cualquier servicio. Léalo entero.</p>
     <pre class="contract">${WAIVER_TEXT}</pre>
-    <input class="field" id="wName" placeholder="Nombre completo" value="${(state.profile.name || (state.health && state.health.name) || "").replace(/"/g,"&quot;")}">
+    <input class="field" id="wName" placeholder="Nombre completo" value="${escAttr(state.profile.name || (state.health && state.health.name) || '')}">
     <p class="muted">Firme con el dedo en el recuadro.</p>
     <canvas id="sigPad" width="640" height="180"></canvas>
     <div class="work-tools">
@@ -4878,7 +4879,8 @@ function openWaiver(after) {
     state.profile.name = state.profile.name || name;
     const who = (state.clients || []).find((x) => cleanName(x.name) === name)
       || selfClient()
-      || (Array.isArray(state.clients) ? state.clients[state.clients.length - 1] : null);
+      || state._pendingLead
+      || (state.role === "coach" && Array.isArray(state.clients) ? state.clients[state.clients.length - 1] : null);
     if (who) {
       who.waiver = { name, date: state.waiver.date, signature: state.waiver.signature, text: WAIVER_TEXT };
       persistClients();
@@ -6741,14 +6743,19 @@ function openNeedCode(planLabel) {
     state.profile.plan = plan;
     state.pendingPlan = plan;
     let c = (state.clients || []).find((x) => cleanName(x.name) === name || String(x.phone || "") === phone);
-    if (!c) {
-      c = { id: "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, email, unpaid: true };
-      state.clients = Array.isArray(state.clients) ? state.clients : [];
-      state.clients.push(c);
+    if (state.role === "coach") {
+      if (!c) {
+        c = { id: "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, email, unpaid: true };
+        state.clients = Array.isArray(state.clients) ? state.clients : [];
+        state.clients.push(c);
+      } else {
+        c.sex = sex; c.age = age; c.phone = phone; c.email = email || c.email; c.plan = c.plan || plan;
+      }
+      persistClients();
     } else {
-      c.sex = sex; c.age = age; c.phone = phone; c.email = email || c.email; c.plan = c.plan || plan;
+      c = { id: (c && c.id) || "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, email, unpaid: true };
+      state._pendingLead = c;
     }
-    persistClients();
     persist();
     postLead(c).catch(() => {});
     modal.remove();
