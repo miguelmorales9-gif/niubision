@@ -1542,7 +1542,10 @@ async function hydrateVault() {
   }
   sweepRevoked();
   pruneOrphanDocs();
-  if (state.profile && state.profile.unlocked && !clientSeatOpen()) clearClientSeat();
+  if (state.profile && state.profile.unlocked && !clientSeatOpen()) {
+    const code = String(state.profile.accessCode || "").replace(/\D/g, "");
+    if (code.length !== 6 || isRevoked(code, state.profile.clientId)) clearClientSeat();
+  }
 }
 function pickReport(a, b) {
   if (!a) return b;
@@ -2829,8 +2832,10 @@ async function lookupAccess(code) {
     const got = await restGet(NB_CLOUD.id);
     if (revokedInState(got && got.state, digits)) return null;
     const list = (got && got.state && got.state.clients) || [];
-    const hit = list.find((x) => String(x.accessCode) === digits);
+    const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
     if (hit) {
+      if (hit.unpaid) return null;
+      if (isRevoked(hit.accessCode, hit.id)) return null;
       remember(NB_CLOUD.id, "rest");
       return hit;
     }
@@ -2840,8 +2845,10 @@ async function lookupAccess(code) {
     const row = await res.json().catch(() => null);
     if (revokedInState(row && row.state, digits)) return null;
     const list = (row && row.state && row.state.clients) || [];
-    const hit = list.find((x) => String(x.accessCode) === digits);
+    const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
     if (hit) {
+      if (hit.unpaid) return null;
+      if (isRevoked(hit.accessCode, hit.id)) return null;
       remember(NB_CLOUD.id, "crud");
       return hit;
     }
@@ -2851,8 +2858,10 @@ async function lookupAccess(code) {
     for (let i = 0; i < rows.length; i++) {
       if (revokedInState(rows[i].state, digits)) return null;
       const list = (rows[i].state && rows[i].state.clients) || [];
-      const hit = list.find((x) => String(x.accessCode) === digits);
+      const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
       if (hit) {
+        if (hit.unpaid) return null;
+        if (isRevoked(hit.accessCode, hit.id)) return null;
         if (rows[i]._id) {
           store.set("nb_blob_id", rows[i]._id);
           if (state.settings) {
@@ -2871,8 +2880,10 @@ async function lookupAccess(code) {
       const row = await res.json().catch(() => null);
       if (revokedInState(row && row.state, digits)) return null;
       const list = (row && row.state && row.state.clients) || [];
-      const hit = list.find((x) => String(x.accessCode) === digits);
+      const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
       if (hit) {
+        if (hit.unpaid) return null;
+        if (isRevoked(hit.accessCode, hit.id)) return null;
         store.set("nb_blob_id", blobId);
         if (state.settings) state.settings.cloudId = blobId;
         return hit;
@@ -2884,8 +2895,10 @@ async function lookupAccess(code) {
     for (let i = 0; i < rows.length; i++) {
       if (revokedInState(rows[i].state, digits)) return null;
       const list = (rows[i].state && rows[i].state.clients) || [];
-      const hit = list.find((x) => String(x.accessCode) === digits);
+      const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
       if (hit) {
+        if (hit.unpaid) return null;
+        if (isRevoked(hit.accessCode, hit.id)) return null;
         const cid = (rows[i].state.settings && rows[i].state.settings.cloudId) || hit.cloudId;
         if (cid) {
           store.set("nb_blob_id", cid);
@@ -5428,7 +5441,7 @@ function workView() {
   const closed = (state.history || []).some((h) => h.date === todayKey() && h.routine === rt.id);
   const live = !!store.get("nb_live") || !!state.sessStart;
   const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
-  const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz on":"Voz off"}</button>`;
+  const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz sí":"Voz no"}</button>`;
   if (!live) {
     return `<section class="screen session-start">
       <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)}</p>${voiceBtn}</div>
@@ -5535,7 +5548,7 @@ function bindWork() {
   if (voice) voice.onclick = (e) => {
     e.preventDefault();
     store.set("nb_voice", voiceOn() ? 0 : 1);
-    toast(voiceOn() ? "Voz on" : "Voz off");
+    toast(voiceOn() ? "Voz sí" : "Voz no");
     render();
   };
   const renewHoy = $("#renewPlanHoy");
@@ -5549,11 +5562,14 @@ function bindWork() {
   if (go) go.onclick = () => {
     store.set("nb_live", 1);
     store.set("nb_open_ex", 0);
-    state.sessStart = Date.now();
-    state.sessElapsed = 0;
-    holdScreen(true);
+    const justLook = go.textContent.indexOf("Ver") >= 0;
+    if (!justLook) {
+      state.sessStart = Date.now();
+      state.sessElapsed = 0;
+    }
+    holdScreen(!justLook);
     const first = (loadSession(rt).items[0] || {});
-    if (go.textContent.indexOf("Ver") < 0) speak("Empiece. " + displayName(first));
+    if (!justLook) speak("Empiece. " + displayName(first));
     beep(660, 140);
     render();
     setTimeout(() => {
@@ -6099,7 +6115,7 @@ function peopleView() {
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
     <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
-    ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Lead")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div></div>`).join("")}<p class="muted">Ya están en el roster si el lead llegó. Marque el pago cuando el dinero esté en PayPal o ATH.</p></div>` : ""}
+    ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div></div>`).join("")}<p class="muted">Ya están en el roster si el aviso llegó. Marque el pago cuando el dinero esté en PayPal o ATH.</p></div>` : ""}
     <div class="card">
       <h3>Aviso del cliente</h3>
       <p class="muted">Si le escribió por WhatsApp, pegue el mensaje aquí. El cliente entra a Gente aunque no lo haya añadido a mano.</p>
@@ -6452,7 +6468,7 @@ function findByAccessCode(code) {
   const t = String(code || "").replace(/\D/g, "");
   if (t.length !== 6) return null;
   if (isRevoked(t)) return null;
-  return (state.clients || []).find((c) => String(c.accessCode) === t && !isRevoked(c.accessCode, c.id)) || null;
+  return (state.clients || []).find((c) => String(c.accessCode || "").replace(/\D/g, "") === t && !isRevoked(c.accessCode, c.id)) || null;
 }
 function studioKey() {
   if (state.settings.studioKey !== NB_CLOUD.key) {
@@ -6503,7 +6519,7 @@ function appOrigin() {
 function upsertClientFromAssign(a) {
   if (!a || !a.name) return null;
   if (isRevoked(a.accessCode, a.clientId)) return null;
-  let c = (state.clients || []).find((x) => (a.accessCode && String(x.accessCode) === a.accessCode) || cleanName(x.name) === cleanName(a.name));
+  let c = (state.clients || []).find((x) => (a.clientId && x.id === a.clientId) || (a.accessCode && String(x.accessCode || "").replace(/\D/g, "") === String(a.accessCode || "").replace(/\D/g, "")));
   if (!c) {
     c = { id: a.clientId || ("c" + Date.now()), name: a.name, plan: a.plan || "Estándar", routine: a.routine || "full-inicio", accessCode: a.accessCode };
     state.clients = state.clients || [];
@@ -7683,10 +7699,6 @@ function afterPaint() {
   }
 }
 function render() {
-  if (state.profile && state.profile.unlocked && !clientSeatOpen()) clearClientSeat();
-  if (state.role === "client" && !findByAccessCode(state.profile && state.profile.accessCode)) {
-    clearClientSeat();
-  }
   if (state.role === "client" && isRevoked(state.profile && state.profile.accessCode, state.profile && state.profile.clientId)) {
     lockOutClient();
   }
