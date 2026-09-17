@@ -1292,9 +1292,75 @@ function slimClient(c) {
     photos: Array.isArray(c.photos) ? c.photos.filter((p) => String(p || "").length < 220000).slice(0, 6) : undefined
   };
 }
+function attachLegalToClient(c) {
+  if (!c || typeof c !== "object") return c;
+  const n = cleanName(c.name);
+  if (!c.waiver) {
+    const w = (state.waiver && cleanName(state.waiver.name) === n) ? state.waiver : null;
+    if (w) c.waiver = w;
+  }
+  if (!c.health) {
+    const h = (state.health && ((c.id && state.health.clientId === c.id) || cleanName(state.health.name) === n)) ? state.health : null;
+    if (h) c.health = h;
+  }
+  if (!c.contract) {
+    const k = (state.contracts || []).find((x) => (c.id && x.clientId === c.id) || (n && cleanName(x.name) === n));
+    if (k) c.contract = k;
+  }
+  return c;
+}
+function foldStudioClients(list) {
+  const out = [];
+  const byId = {};
+  const byCode = {};
+  const byPhone = {};
+  const byName = {};
+  (list || []).forEach((c) => {
+    if (!c || typeof c !== "object") return;
+    attachLegalToClient(c);
+    const phone = String(c.phone || "").replace(/\D/g, "");
+    const code = String(c.accessCode || "").replace(/\D/g, "");
+    const prev = (c.id && byId[c.id])
+      || (code.length === 6 && byCode[code])
+      || (phone.length >= 10 && byPhone[phone])
+      || (!code && c.name && byName[cleanName(c.name)] && !byName[cleanName(c.name)].accessCode ? byName[cleanName(c.name)] : null);
+    if (prev && code && prev.accessCode && String(prev.accessCode) !== String(c.accessCode)) {
+      out.push(c);
+      if (c.id) byId[c.id] = c;
+      return;
+    }
+    if (prev) {
+      const row = Object.assign({}, prev, c, {
+        id: prev.id || c.id,
+        accessCode: c.accessCode || prev.accessCode,
+        unpaid: (c.unpaid === false || prev.unpaid === false) ? false : (c.unpaid || prev.unpaid),
+        waiver: (c.waiver && (c.waiver.signature || c.waiver.date)) ? c.waiver : prev.waiver,
+        health: (c.health && c.health.date) ? c.health : prev.health,
+        contract: c.contract || prev.contract,
+        phone: c.phone || prev.phone,
+        email: c.email || prev.email
+      });
+      const i = out.indexOf(prev);
+      if (i >= 0) out[i] = row;
+      else out.push(row);
+      if (row.id) byId[row.id] = row;
+      if (row.accessCode) byCode[String(row.accessCode).replace(/\D/g, "")] = row;
+      if (String(row.phone || "").replace(/\D/g, "").length >= 10) byPhone[String(row.phone).replace(/\D/g, "")] = row;
+      if (row.name && !row.accessCode) byName[cleanName(row.name)] = row;
+      return;
+    }
+    out.push(c);
+    if (c.id) byId[c.id] = c;
+    if (code.length === 6) byCode[code] = c;
+    if (phone.length >= 10) byPhone[phone] = c;
+    if (c.name && !code) byName[cleanName(c.name)] = c;
+  });
+  return out;
+}
 function persistClients() {
   if (!Array.isArray(state.clients)) state.clients = [];
   sweepRevoked();
+  state.clients = foldStudioClients(state.clients.map(attachLegalToClient));
   const slim = state.clients.map(slimClient);
   let ok = false;
   try { ok = !!store.set("nb_clients", slim); } catch (e) { ok = false; }
@@ -1567,9 +1633,13 @@ function mergeRows(localArr, remoteArr) {
     if (!x || typeof x !== "object") return;
     if (isRevoked(x.accessCode, x.id)) return;
     const phone = String(x.phone || "").replace(/\D/g, "");
+    const nameKey = x.name ? ("n:" + cleanName(x.name)) : "";
+    const nameHit = nameKey ? byName[nameKey] : null;
+    const sameUnpaidName = nameHit && !x.accessCode && !nameHit.accessCode;
     const prev = (x.id && byId["id:" + x.id])
       || (x.accessCode && byCode["a:" + String(x.accessCode)])
       || (phone.length >= 10 && byPhone["p:" + phone])
+      || (sameUnpaidName ? nameHit : null)
       || null;
     const row = prev ? Object.assign({}, prev, x, {
       accessCode: x.accessCode || prev.accessCode,
@@ -2000,7 +2070,7 @@ function applyCloud(d) {
     applyClientAssignment(d);
     return;
   }
-  if (Array.isArray(d.clients)) state.clients = mergeRows(state.clients, d.clients);
+  if (Array.isArray(d.clients)) state.clients = foldStudioClients(mergeRows(state.clients, d.clients));
   sweepRevoked();
   if (Array.isArray(d.payments) && d.payments.length) state.payments = dedupePayments(mergeRows(state.payments || [], d.payments).filter((p) => p && !isRevoked(p.accessCode, p.clientId)));
   if (Array.isArray(d.contracts) && d.contracts.length) state.contracts = latestByPerson(mergeRows(state.contracts || [], d.contracts));
@@ -4826,9 +4896,20 @@ function contractSigned(planLabel) {
 }
 function clientHasLegal(c) {
   if (!c) return false;
-  const w = c.waiver || (state.waiver && cleanName(state.waiver.name) === cleanName(c.name) ? state.waiver : null);
-  const k = c.contract || (state.contracts || []).find((x) => (c.id && x.clientId === c.id) || cleanName(x.name) === cleanName(c.name));
-  return !!(w && (w.signature || w.date) && k);
+  attachLegalToClient(c);
+  const w = c.waiver;
+  const k = c.contract;
+  const h = c.health;
+  return !!(w && (w.signature || w.date) && k && k.date && h && h.date);
+}
+function clientLegalGaps(c) {
+  if (!c) return ["datos"];
+  attachLegalToClient(c);
+  const gaps = [];
+  if (!(c.waiver && (c.waiver.signature || c.waiver.date))) gaps.push("relevo");
+  if (!(c.contract && c.contract.date)) gaps.push("contrato");
+  if (!(c.health && c.health.date)) gaps.push("cuestionario de salud");
+  return gaps;
 }
 function continueJoin(planLabel) {
   const plan = planLabel || state.pendingPlan || ((state.profile && state.profile.plan) || "NiuBision Estándar");
@@ -4952,6 +5033,7 @@ function openHealth(planLabel) {
     state.profile.name = name;
     if (who) who.health = row;
     persist();
+    if (who) postLead(who).catch(() => {});
     modal.remove();
     if (flagged) return openClearance(planLabel);
     if (planLabel) continueJoin(planLabel);
@@ -6109,6 +6191,7 @@ function pricesView() {
 }
 
 function peopleView() {
+  state.clients = foldStudioClients((state.clients || []).map(attachLegalToClient));
   const inbox = recentInbox();
   const pays = dedupePayments(state.payments || []).slice().reverse();
   return `<section class="screen">
@@ -6133,7 +6216,7 @@ function peopleView() {
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
-        ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta relevo o contrato. El cliente los firma al elegir el plan.</p>`}
+        ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${allRoutines().map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===c.routine?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}</select>
         ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>`}
@@ -6286,8 +6369,13 @@ function ensureAccessCode(c) {
 }
 function confirmClientPaid(c, method) {
   if (!c) return null;
+  state.clients = foldStudioClients(state.clients || []);
+  c = (state.clients || []).find((x) => x.id === c.id)
+    || (state.clients || []).find((x) => cleanName(x.name) === cleanName(c.name) && !x.accessCode)
+    || c;
+  attachLegalToClient(c);
   if (!clientHasLegal(c)) {
-    toast("Falta el relevo o el contrato. El cliente los firma en la app al elegir el plan, antes del código.");
+    toast("Falta " + clientLegalGaps(c).join(", ") + ". El cliente los firma en la app al elegir el plan, antes del código.");
     return null;
   }
   const code = ensureAccessCode(c);
@@ -6325,7 +6413,8 @@ function confirmClientPaid(c, method) {
     if (method) p.method = method;
   }
   if (!Array.isArray(state.clients)) state.clients = [];
-  if (state.clients.indexOf(c) < 0) state.clients.push(c);
+  if (!state.clients.some((x) => x.id === c.id)) state.clients.push(c);
+  state.clients = foldStudioClients(state.clients);
   persistClients();
   persist();
   stashReceipt(c, p);
@@ -7899,6 +7988,9 @@ async function boot() {
       else if (p && p.ok && state.splash) render();
     }).catch(() => {});
   }
+  (state.clients || []).filter((c) => c && c.unpaid && (c.waiver || c.contract || c.health)).slice(0, 3).forEach((c) => {
+    postLead(c).catch(() => {});
+  });
   if (state.role === "coach") {
     if (store.get("nb_alerts")) listenPayAlerts();
     ensureRenewals();

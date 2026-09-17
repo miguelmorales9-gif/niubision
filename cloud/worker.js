@@ -76,6 +76,31 @@ function mergeStudio(prev, next) {
   const map = new Map();
   (a.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), c));
   (b.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), Object.assign({}, map.get(keyOf(c)) || {}, c)));
+  const folded = [];
+  const seenName = new Map();
+  Array.from(map.values()).forEach((c) => {
+    const name = String(c.name || "").toLowerCase().trim();
+    const phone = String(c.phone || "").replace(/\D/g, "");
+    const code = String(c.accessCode || "");
+    const k = phone.length >= 10 ? "p:" + phone : (code ? "a:" + code : (name ? "n:" + name : "id:" + c.id));
+    const prev = seenName.get(k);
+    if (prev && !(code && prev.accessCode && code !== String(prev.accessCode))) {
+      const i = folded.indexOf(prev);
+      const row = Object.assign({}, prev, c, {
+        id: prev.id || c.id,
+        waiver: (c.waiver && (c.waiver.signature || c.waiver.date)) ? c.waiver : prev.waiver,
+        health: (c.health && c.health.date) ? c.health : prev.health,
+        contract: c.contract || prev.contract,
+        accessCode: c.accessCode || prev.accessCode
+      });
+      if (i >= 0) folded[i] = row;
+      seenName.set(k, row);
+      return;
+    }
+    folded.push(c);
+    seenName.set(k, c);
+    if (c.id) seenName.set("id:" + c.id, c);
+  });
   const payMap = new Map();
   [].concat(a.payments || [], b.payments || []).forEach((p) => {
     if (!p || typeof p !== "object") return;
@@ -86,7 +111,7 @@ function mergeStudio(prev, next) {
     if (!prev || rank(p) >= rank(prev)) payMap.set(k, Object.assign({}, prev || {}, p));
   });
   const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : b, {
-    clients: Array.from(map.values()),
+    clients: folded.length ? folded : Array.from(map.values()),
     revoked,
     inbox: (Array.isArray(b.inbox) && !op ? b.inbox : [].concat(a.inbox || [], b.inbox || [])).filter((n) => !gone(n)).slice(-40),
     payments: (Array.isArray(b.payments) && !op ? b.payments : Array.from(payMap.values())).filter((p) => !gone(p)).slice(-80),
@@ -210,7 +235,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 19 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 20 });
 
   if (path === "/api/studio") {
     let body = {};
@@ -286,8 +311,13 @@ async function handle(req, env) {
       name: String(c.name).slice(0, 80),
       plan: String(c.plan || "Estandar"),
       unpaid: c.unpaid !== false,
+      sex: c.sex || "",
+      age: c.age || "",
       phone: String(c.phone || ""),
-      email: String(c.email || "")
+      email: String(c.email || ""),
+      health: c.health && typeof c.health === "object" ? c.health : undefined,
+      waiver: c.waiver && typeof c.waiver === "object" ? c.waiver : undefined,
+      contract: c.contract && typeof c.contract === "object" ? c.contract : undefined
     };
     const inbox = (row.state && row.state.inbox) || [];
     const dup = inbox.some((n) => n && n.clientId === client.id && (Date.now() - (n.at || 0) < 30 * 60 * 1000));
