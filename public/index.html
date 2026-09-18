@@ -1755,7 +1755,7 @@ function mergeStudio(prev, next) {
       return p;
     });
     const clients = (a.clients || []).map((c) => {
-      const hit = (clientId && c.id === clientId) || (nm && cleanName(c.name) === nm);
+      const hit = (clientId && c.id === clientId);
       if (!hit || !alive(c)) return c;
       const code = /^\d{6}$/.test(String(c.accessCode || "")) ? c.accessCode : String(100000 + Math.floor(Math.random() * 900000));
       return Object.assign({}, c, { unpaid: false, accessCode: code });
