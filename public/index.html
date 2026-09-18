@@ -4494,7 +4494,7 @@ function openPayConfirm(method, planLabel) {
   };
 }
 function openPaySheet(planLabel) {
-  if (!waiverSigned() || !contractSigned(planLabel)) return continueJoin(planLabel);
+  if (!waiverSigned() || !healthComplete() || !contractSigned(planLabel)) return continueJoin(planLabel);
   closeModals();
   const info = planPriceOf(planLabel);
   const modal = document.createElement("div");
@@ -6734,25 +6734,54 @@ function copyText(text) {
 function bindSigPad(canvas) {
   if (!canvas) return { dirty: () => false, clear() {}, unbind() {} };
   const ctx = canvas.getContext("2d");
-  ctx.strokeStyle = "#f7f1e8"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.strokeStyle = "#f7f1e8";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   let draw = false, dirty = false;
   const pos = (e) => {
     const r = canvas.getBoundingClientRect();
-    const pt = e.touches ? e.touches[0] : e;
-    return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
+    const pt = (e.touches && e.touches[0]) || e;
+    const w = r.width || 1, h = r.height || 1;
+    return { x: (pt.clientX - r.left) * (canvas.width / w), y: (pt.clientY - r.top) * (canvas.height / h) };
   };
-  const start = (e) => { e.preventDefault(); draw = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-  const move = (e) => { if (!draw) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty = true; };
+  const start = (e) => {
+    e.preventDefault();
+    draw = true;
+    dirty = true;
+    try { if (e.pointerId != null) canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.8, p.y + 0.8);
+    ctx.stroke();
+  };
+  const move = (e) => {
+    if (!draw) return;
+    e.preventDefault();
+    const p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    dirty = true;
+  };
   const end = () => { draw = false; };
   canvas.addEventListener("pointerdown", start);
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
+  canvas.addEventListener("pointerleave", end);
   window.addEventListener("pointerup", end);
   return {
     dirty: () => dirty,
     clear() { ctx.clearRect(0, 0, canvas.width, canvas.height); dirty = false; },
-    unbind() { window.removeEventListener("pointerup", end); }
+    unbind() {
+      canvas.removeEventListener("pointerdown", start);
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", end);
+      canvas.removeEventListener("pointercancel", end);
+      canvas.removeEventListener("pointerleave", end);
+      window.removeEventListener("pointerup", end);
+    }
   };
 }
 function showShare(c) {
@@ -6818,12 +6847,14 @@ function openNeedCode(planLabel) {
     const name = cleanName($("#leadName", modal).value || "");
     const sex = ($("#leadSex", modal).value || "").trim();
     const age = parseInt($("#leadAge", modal).value, 10);
-    const phone = ($("#leadPhone", modal).value || "").replace(/\D/g, "");
+    let phone = ($("#leadPhone", modal).value || "").replace(/\D/g, "");
+    if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
     const email = ($("#leadEmail", modal).value || "").trim();
     if (!name || name.split(/\s+/).filter(Boolean).length < 2) return toast("Nombre y apellido");
     if (!sex) return toast("Indique el sexo");
     if (!(age >= 14 && age <= 90)) return toast("Edad entre 14 y 90");
-    if (phone.length < 10) return toast("Teléfono de 10 dígitos");
+    if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast("Correo no válido");
     state.profile.name = name;
     state.profile.sex = sex;
     state.profile.age = age;
