@@ -1487,17 +1487,19 @@ function pruneOrphanDocs() {
   sweepRevoked();
   const idx = livingClientIndex();
   const guestFilling = (state.role === "guest" || !state.role) && !(state.profile && state.profile.unlocked);
+  const pendingId = (state._pendingLead && state._pendingLead.id) || "";
   const keepGlobal = (doc) => {
     if (!doc) return false;
     if (docBelongsToLiving(doc, idx)) return true;
     if (guestFilling) {
       const pname = cleanName((state.profile && state.profile.name) || "");
       if (pname && cleanName(doc.name) === pname) return true;
+      if (pendingId && (doc.clientId === pendingId || doc.id === pendingId)) return true;
     }
     return false;
   };
-  state.contracts = latestByPerson((state.contracts || []).filter((k) => docBelongsToLiving(k, idx)));
-  state.payments = dedupePayments((state.payments || []).filter((p) => docBelongsToLiving(p, idx)));
+  state.contracts = latestByPerson((state.contracts || []).filter((k) => keepGlobal(k)));
+  state.payments = dedupePayments((state.payments || []).filter((p) => keepGlobal(p) || docBelongsToLiving(p, idx)));
   state.appointments = (state.appointments || []).filter((a) => a && a.clientId && idx.ids[a.clientId]);
   state.videos = (state.videos || []).filter((v) => v && v.clientId && idx.ids[v.clientId]);
   state.receipts = (state.receipts || []).filter((r) => docBelongsToLiving(r, idx));
@@ -2261,15 +2263,16 @@ function scheduleLeadPush() {
   leadTimer = setTimeout(() => postLead().catch(() => {}), 600);
 }
 async function postLead(c) {
-  const who = c || (state.clients || []).filter((x) => x.unpaid).slice(-1)[0];
+  const who = c || (state.clients || []).filter((x) => x.unpaid).slice(-1)[0] || state._pendingLead;
   if (!who || !who.name) return { ok: false };
   if (isRevoked(who.accessCode, who.id)) return { ok: false, revoked: true };
-  const stamp = String(who.id || who.phone || who.name);
-  if (postLead._last === stamp && Date.now() - (postLead._at || 0) < 10 * 60 * 1000) return { ok: true, skip: true };
+  const slim = slimClient(who);
+  const stamp = [who.id || "", slim.waiver && slim.waiver.date ? "w" : "", slim.health && slim.health.date ? "h" : "", slim.contract && slim.contract.date ? "k" : ""].join("|");
+  if (postLead._last === stamp && Date.now() - (postLead._at || 0) < 45 * 1000) return { ok: true, skip: true };
   postLead._last = stamp;
   postLead._at = Date.now();
   const bases = apiBases();
-  const body = JSON.stringify({ studioKey: "NIUBI", client: slimClient(who) });
+  const body = JSON.stringify({ studioKey: "NIUBI", client: slim });
   let ok = false;
   for (let i = 0; i < bases.length; i++) {
     try {
@@ -5014,6 +5017,7 @@ function openHealth(planLabel) {
     state.health = row;
     state.profile.name = name;
     if (who) who.health = row;
+    persistClients();
     persist();
     if (who) postLead(who).catch(() => {});
     modal.remove();
@@ -6153,7 +6157,7 @@ function pricesView() {
       <p style="margin-top:10px"><strong>¿Cómo se paga?</strong></p>
       <p class="muted">PayPal (${escapeHtml(payCfg().paypal || "miguel.morales9@gmail.com")}) o ATH Móvil (${escapeHtml(payCfg().ath || "7874544038")}). NiuBision no guarda tarjetas.</p>
       <p style="margin-top:10px"><strong>¿Cuándo recibo el código?</strong></p>
-      <p class="muted">Después de pagar. Son 6 dígitos. Se pegan en la portada, en «Pegar código del coach».</p>
+      <p class="muted">Después de pagar. Son 6 dígitos. Portada → Entrar → péguelos. El enlace de WhatsApp no abre la app sola.</p>
       <p style="margin-top:10px"><strong>¿Puedo empezar sin relevo?</strong></p>
       <p class="muted">No. El relevo y el cuestionario de salud van antes del contrato.</p>
       <p style="margin-top:10px"><strong>¿El pack presencial caduca?</strong></p>
@@ -6787,11 +6791,12 @@ function openNeedCode(planLabel) {
     <ol class="join-steps">
       <li>Sus datos</li>
       <li>Firmar el relevo</li>
+      <li>Cuestionario de salud</li>
       <li>Firmar el contrato</li>
       <li>Pagar</li>
-      <li>El código llega cuando Miguel confirme el pago</li>
+      <li>El código llega cuando Miguel confirme el pago. Péguelo en Entrar.</li>
     </ol>
-    <p class="muted">El relevo y el contrato van ahora. El código no se entrega sin esas firmas.</p>
+    <p class="muted">El relevo, el cuestionario y el contrato van ahora. El código no se entrega sin esas firmas.</p>
     <input class="field" id="leadName" placeholder="Nombre y apellido" value="${escAttr((state.profile && state.profile.name) || "")}">
     <select id="leadSex" class="field">
       <option value="">Sexo</option>
@@ -6800,7 +6805,7 @@ function openNeedCode(planLabel) {
       <option value="Prefiero no decir">Prefiero no decir</option>
     </select>
     <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad">
-    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono 7874544038">
+    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono de 10 dígitos">
     <input class="field" id="leadEmail" inputmode="email" placeholder="Correo (para el recibo)">
     <button class="btn primary" id="leadSend">Continuar a firmar</button>
     <button class="btn ghost" id="leadHave">Ya firmé y tengo el código</button>
@@ -6838,7 +6843,15 @@ function openNeedCode(planLabel) {
       persistClients();
     } else {
       c = { id: (c && c.id) || "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, email, unpaid: true };
+      state.clients = Array.isArray(state.clients) ? state.clients : [];
+      const i = state.clients.findIndex((x) => x.id === c.id || cleanName(x.name) === name || (phone && String(x.phone || "") === phone));
+      if (i >= 0) {
+        c.id = state.clients[i].id || c.id;
+        state.clients[i] = Object.assign({}, state.clients[i], c);
+        c = state.clients[i];
+      } else state.clients.push(c);
       state._pendingLead = c;
+      persistClients();
     }
     persist();
     postLead(c).catch(() => {});
