@@ -4310,8 +4310,7 @@ async function watchInvoice(inv) {
       if (hit && hit.status === "recibido") {
         const c = (st.clients || []).find((x) => x.id === hit.clientId || (hit.accessCode && x.accessCode === hit.accessCode));
         if (c && c.accessCode) {
-          toast("Pago confirmado. Código " + c.accessCode);
-          applyCloud(st);
+          toast("Pago confirmado. Toque Entrar y pegue el código de 6 dígitos.");
           return;
         }
       }
@@ -4414,27 +4413,13 @@ function showPayReceipt(row) {
     <h2>Pago iniciado</h2>
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}</p>
-    ${row.accessCode ? `<p style="font-family:var(--display);font-size:36px;letter-spacing:.12em;text-align:center;margin:10px 0">${escapeHtml(row.accessCode)}</p>
-    <p class="muted">Este es su código de acceso. Guárdelo. En otro teléfono: portada → «Pegar código del coach».</p>` : `<p class="muted">Referencia ${escapeHtml(row.ref || row.invoice || row.id)}. Cuando el pago se confirme, el código de 6 dígitos llega por WhatsApp y queda en Recibos.</p>`}
+    ${row.accessCode ? `<p class="muted">Este es su código de acceso. Guárdelo. En niubision.com: Entrar → pegar el código de 6 dígitos.</p>` : `<p class="muted">Referencia ${escapeHtml(row.ref || row.invoice || row.id)}. Cuando el pago se confirme, el código de 6 dígitos llega por WhatsApp. Péguelo en Entrar.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
-    ${row.accessCode ? `<button class="btn primary" id="enterNow">Entrar a entrenar</button>` : ""}
     <button class="btn ghost" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" id="closeSheet">Entendido</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  const enter = modal.querySelector("#enterNow");
-  if (enter) enter.onclick = () => {
-    modal.remove();
-    if (!row.accessCode) return;
-    state.role = "client";
-    state.profile.unlocked = true;
-    state.profile.accessCode = row.accessCode;
-    state.splash = false;
-    state.view = "home";
-    persist();
-    render();
-  };
   const pr = modal.querySelector("#printRec");
   if (pr) pr.onclick = () => printReceipt(row);
 }
@@ -4547,18 +4532,17 @@ function applyHash() {
   const ticket = params.get("t") || params.get("ticket");
   if (ticket) {
     const decoded = decodeTicket(ticket);
-    if (decoded) { applyClientAssign(decoded); state.splash = false; return; }
+    if (decoded && decoded.accessCode) state._pendingCode = String(decoded.accessCode).replace(/\D/g, "").slice(0, 6);
+    return;
   }
   const code = params.get("c") || params.get("code");
   if (code) {
-    const a = parseClientCode(code);
-    if (a && !a.pending) { applyClientAssign(a); state.splash = false; }
-    else state._pendingCode = String(code).replace(/\D/g, "").slice(0, 6);
+    state._pendingCode = String(code).replace(/\D/g, "").slice(0, 6);
     return;
   }
   if (/^NB[12]\|/i.test(raw)) {
     const assigned = parseClientCode(raw);
-    if (assigned) { applyClientAssign(assigned); state.splash = false; }
+    if (assigned && assigned.accessCode) state._pendingCode = String(assigned.accessCode).replace(/\D/g, "").slice(0, 6);
   }
 }
 
@@ -4593,7 +4577,6 @@ function renderGate() {
         <button type="button" id="seeAbout">Acerca de</button>
         <button type="button" id="seeCoach">Entrenador</button>
         <button type="button" id="seeSocial">Facebook</button>
-        ${clientSeatOpen() ? `<button type="button" id="reenter">Seguir en este teléfono</button>` : ""}
         <button type="button" id="seePrivacy">Privacidad</button>
       </div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
@@ -4603,7 +4586,6 @@ function renderGate() {
     setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
   };
   const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
-  const re = $("#reenter"); if (re) re.onclick = () => enterClient("work");
   const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
   const sa = $("#seeAbout"); if (sa) sa.onclick = () => { state.role = "guest"; state.view = "about"; persist(); render(); };
   const sc = $("#seeCoach"); if (sc) sc.onclick = () => { state.role = "guest"; state.view = "coach"; persist(); render(); };
@@ -6772,10 +6754,7 @@ function bindSigPad(canvas) {
 function showShare(c) {
   const code = ensureAccessCode(c);
   persist();
-  const ticket = encodeTicket(c);
-  const blob = state.settings.cloudId || store.get("nb_blob_id") || "";
-  const link = appOrigin() + "#t=" + ticket + (blob ? "&n=" + encodeURIComponent(blob) : "");
-  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra este enlace en el teléfono:\n${link}\n\nO entre a niubision.com, mantenga el logo y toque «Pegar código del coach».`;
+  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra niubision.com, mantenga el logo, toque Entrar y pegue esos 6 dígitos.`;
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -7892,19 +7871,11 @@ async function boot() {
     try { Notification.requestPermission(); } catch (e) {}
   }
   applyHash();
-  if (state._pendingCode) {
-    try {
-      const hit = await lookupAccess(state._pendingCode);
-      if (hit) {
-        applyClientAssign({
-          name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
-          accessCode: state._pendingCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
-        });
-        state.splash = false;
-      }
-    } catch (e) {}
-    state._pendingCode = null;
+  if (state.role === "client") {
+    state.role = null;
+    if (state.profile) state.profile.unlocked = false;
   }
+  state._pendingCode = null;
   if (state.splash) warmupIntro();
   pinLocked();
   if (!store.get("nb_pin_init_9798")) {
