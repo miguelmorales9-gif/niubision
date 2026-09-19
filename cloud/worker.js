@@ -29,7 +29,8 @@ function mergeStudio(prev, next) {
   };
   if (op === "paid") {
     const invoice = String(b.invoice || "");
-    const clientId = String(b.clientId || "");
+    const payHit = (a.payments || []).find((p) => invoice && (p.id === invoice || p.invoice === invoice));
+    const clientId = String(b.clientId || (payHit && payHit.clientId) || "");
     const phone = String(b.phone || "").replace(/\D/g, "");
     const payments = (a.payments || []).map((p) => {
       if ((invoice && (p.id === invoice || p.invoice === invoice)) || (clientId && p.clientId === clientId && p.status !== "recibido")) {
@@ -92,9 +93,11 @@ function mergeStudio(prev, next) {
     return Object.assign({}, a, { clients, revoked, updatedAt: Date.now() });
   }
   const preferDoc = (next, prev) => {
-    if (next && typeof next === "object" && (next.date || next.signature || next.name)) return next;
-    if (prev && typeof prev === "object" && (prev.date || prev.signature || prev.name)) return prev;
-    return next || prev;
+    const sig = (d) => !!(d && typeof d === "object" && String(d.signature || "").length > 20);
+    if (sig(prev) && !sig(next)) return prev;
+    if (sig(next)) return Object.assign({}, prev && typeof prev === "object" ? prev : {}, next);
+    if (next && typeof next === "object" && (next.date || next.name) && !(prev && (prev.date || prev.signature))) return next;
+    return prev || next;
   };
   const map = new Map();
   (a.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), c));
@@ -218,7 +221,6 @@ function pinOf(req, url, body) {
 function tokOk(row, tok) {
   if (!tok || !row) return false;
   if (tok === row.token) return true;
-  if (tok === LEGACY) return true;
   return false;
 }
 
@@ -340,7 +342,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 23 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 24 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -574,14 +576,16 @@ async function handle(req, env) {
     const params = new URLSearchParams(raw);
     if (params.get("payment_status") !== "Completed") return json({ ok: true, skipped: true });
     const invoice = params.get("invoice") || params.get("custom") || "";
+    const pay = ((row.state && row.state.payments) || []).find((p) => p.id === invoice || p.invoice === invoice) || {};
     row.state = mergeStudio(row.state || {}, {
       _op: "paid",
       invoice,
+      clientId: pay.clientId || "",
+      name: pay.name || "",
       amount: params.get("mc_gross") || "",
       method: "PayPal"
     });
     await putRow(env, row);
-    const pay = ((row.state && row.state.payments) || []).find((p) => p.id === invoice || p.invoice === invoice) || {};
     const cl = ((row.state && row.state.clients) || []).find((c) => c.id === pay.clientId) || {};
     await mailReceipt({
       date: new Date().toISOString().slice(0, 10),

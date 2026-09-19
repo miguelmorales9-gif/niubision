@@ -64,7 +64,7 @@
     {"@type":"Question","name":"¿Dónde opera NiuBision?","acceptedAnswer":{"@type":"Answer","text":"En todo Puerto Rico, por coaching en línea. Las sesiones presenciales se coordinan con cita. No hay tienda física ni sede de ropa."}},
     {"@type":"Question","name":"¿Hay IVU?","acceptedAnswer":{"@type":"Answer","text":"No. El número que ve es el que paga. Precio final."}},
     {"@type":"Question","name":"¿Cómo se paga NiuBision?","acceptedAnswer":{"@type":"Answer","text":"PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038). NiuBision no guarda tarjetas."}},
-    {"@type":"Question","name":"¿Cuándo recibo el código?","acceptedAnswer":{"@type":"Answer","text":"Después de pagar. Son 6 dígitos. Se pegan en la portada, en Pegar código del coach."}},
+    {"@type":"Question","name":"¿Cuándo recibo el código?","acceptedAnswer":{"@type":"Answer","text":"Después de pagar. Son 6 dígitos. En niubision.com toque Entrar y péguelos."}},
     {"@type":"Question","name":"¿Puedo empezar sin relevo?","acceptedAnswer":{"@type":"Answer","text":"No. El relevo y el cuestionario de salud van antes del contrato."}},
     {"@type":"Question","name":"¿El pack presencial caduca?","acceptedAnswer":{"@type":"Answer","text":"Sí. Pack 8 en 8 semanas. Pack 12 en 10 semanas. Reprogramar con 12 horas."}}
   ]}
@@ -1676,19 +1676,12 @@ const CLOUD_API = "https://api.niubision.com/api";
 const CLOUD_API_CUSTOM = "https://niubision-api.miguel-morales9.workers.dev/api";
 const NB_CLOUD = {
   key: "NIUBI",
-  token: "nb-cloud-v1",
-  id: "ff808181a067127101a09d8c8a530e21",
-  kind: "rest"
+  token: "",
+  id: "",
+  kind: "api"
 };
 function ntfyTopic() {
-  let s = (state.settings && state.settings.alertKey) || store.get("nb_alert_key") || "";
-  if (!s) {
-    s = newCloudToken().slice(0, 20);
-    try { store.set("nb_alert_key", s); } catch (e) {}
-    if (!state.settings) state.settings = {};
-    state.settings.alertKey = s;
-  } else if (state.settings && !state.settings.alertKey) state.settings.alertKey = s;
-  return "nb-" + s;
+  return "niubision-miguel-estudio";
 }
 function adoptCloud(id, kind, token) {
   if (id) {
@@ -1853,7 +1846,7 @@ function listenPayAlerts() {
   } catch (e) {}
 }
 function allowPublicCloud() {
-  return true;
+  return false;
 }
 async function restGet(id) {
   if (!allowPublicCloud()) return null;
@@ -1885,11 +1878,7 @@ async function loadStudioPointer() {
     const d = await res.json();
     if (!d) return;
     if (d.blobId || d.restId) {
-      const id = String(d.restId || d.blobId);
-      if (isRestId(id) || isCrudId(id)) {
-        state.settings.cloudId = id;
-        store.set("nb_blob_id", id);
-      }
+      /* ignore public rest/jsonblob pointers */
     }
     const u = String(d.apiUrl || "").replace(/\/$/, "");
     if (u && !/crudcrud|jsonblob|restful-api/i.test(u)) {
@@ -2299,8 +2288,11 @@ async function postPayNotice(row) {
 }
 async function postPaid(c, p) {
   if (!c) return { ok: false };
+  if (state.role === "coach" && !(authGet() && authGet().token)) {
+    await authLogin("coach", STUDIO_PIN).catch(() => {});
+  }
   const bases = apiBases();
-  const token = state.settings.cloudToken || NB_CLOUD.token;
+  const token = authHeader();
   const body = JSON.stringify({
     clientId: c.id,
     name: c.name,
@@ -2309,8 +2301,7 @@ async function postPaid(c, p) {
     amount: (p && p.amount) || "",
     invoice: (p && (p.invoice || p.id)) || "",
     plan: c.plan || "",
-    accessCode: c.accessCode || "",
-    pin: STUDIO_PIN
+    accessCode: c.accessCode || ""
   });
   for (let i = 0; i < bases.length; i++) {
     try {
@@ -2334,14 +2325,16 @@ async function postPaid(c, p) {
 }
 async function postRevoke(c) {
   if (!c) return { ok: false };
-  const token = state.settings.cloudToken || NB_CLOUD.token;
+  if (state.role === "coach" && !(authGet() && authGet().token)) {
+    await authLogin("coach", STUDIO_PIN).catch(() => {});
+  }
+  const token = authHeader();
   const bases = apiBases();
   const body = JSON.stringify({
     code: c.accessCode || "",
     clientId: c.id || "",
     name: c.name || "",
-    phone: c.phone || "",
-    pin: STUDIO_PIN
+    phone: c.phone || ""
   });
   let ok = false;
   for (let i = 0; i < bases.length; i++) {
@@ -2354,7 +2347,6 @@ async function postRevoke(c) {
       if (res.ok) ok = true;
     } catch (e) {}
   }
-  if (await mirrorPublic("revoke", { revoked: [{ code: c.accessCode || "", clientId: c.id || "", name: c.name || "", phone: c.phone || "", at: Date.now() }] })) ok = true;
   return { ok };
 }
 function maybeCoachPull() {
@@ -2375,20 +2367,24 @@ function maybeCoachPull() {
 }
 function maybeClientPull() {
   if (state.role !== "client") return;
+  if (state.sessStart || state.timer) return;
   const now = Date.now();
   if (maybeClientPull._at && now - maybeClientPull._at < 18000) return;
   maybeClientPull._at = now;
   const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
   if (code.length !== 6) return;
   lookupAccess(code).then((hit) => {
-    if (!hit || state.role !== "client") return;
-    if (hit.unpaid || isRevoked(hit.accessCode, hit.id)) {
+    if (state.role !== "client") return;
+    if (state.sessStart || state.timer) return;
+    if (!hit || hit.unpaid || isRevoked(hit.accessCode, hit.id)) {
       lockOutClient();
       render();
       return;
     }
+    const before = (state.profile.routine || "") + "|" + (state.profile.plan || "");
     applyClientAssignment({ clients: [hit] });
-    if (state.role === "client") render();
+    const after = (state.profile.routine || "") + "|" + (state.profile.plan || "");
+    if (after !== before) render();
   }).catch(() => {});
 }
 function lastWorkHtml(c) {
@@ -2637,34 +2633,30 @@ async function lookupAccess(code) {
   const digits = String(code || "").replace(/\D/g, "");
   if (digits.length !== 6) return null;
   if (isRevoked(digits)) return null;
+  if (isOnline()) {
+    try {
+      const bases = apiBases();
+      for (let i = 0; i < bases.length; i++) {
+        const res = await cloudGet(bases[i] + "/redeem?code=" + encodeURIComponent(digits), { headers: { Accept: "application/json" } });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 404 || /anulado/i.test(String(data.error || ""))) {
+          buryCode(digits, "");
+          return null;
+        }
+        if (res.ok && data.client) {
+          if (data.client.unpaid) return null;
+          if (isRevoked(data.client.accessCode, data.client.id)) return null;
+          if (data.library) {
+            if (Array.isArray(data.library.customRoutines)) state.customRoutines = data.library.customRoutines;
+            if (data.library.routineEdits) state.routineEdits = data.library.routineEdits;
+          }
+          return data.client;
+        }
+      }
+    } catch (e) {}
+  }
   const local = findByAccessCode(digits);
   if (local && !local.unpaid && !isRevoked(local.accessCode, local.id)) return local;
-  const remember = (id, kind) => {
-    if (!id) return;
-    store.set("nb_blob_id", id);
-    if (state.settings) {
-      state.settings.cloudId = id;
-      if (kind) state.settings.cloudKind = kind;
-      state.settings.studioKey = NB_CLOUD.key;
-    }
-  };
-  try {
-    const bases = apiBases();
-    for (let i = 0; i < bases.length; i++) {
-      const res = await cloudGet(bases[i] + "/redeem?code=" + encodeURIComponent(digits), { headers: { Accept: "application/json" } });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.client) {
-        if (data.client.unpaid) return null;
-        if (isRevoked(data.client.accessCode, data.client.id)) return null;
-        if (data.library) {
-          if (Array.isArray(data.library.customRoutines)) state.customRoutines = data.library.customRoutines;
-          if (data.library.routineEdits) state.routineEdits = data.library.routineEdits;
-        }
-        remember("api", "api");
-        return data.client;
-      }
-    }
-  } catch (e) {}
   return null;
 }
 function allRoutines() {
@@ -4030,23 +4022,8 @@ function payDestHint(method) {
 }
 async function watchInvoice(inv) {
   const want = String(inv || "");
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setTimeout(r, 3500));
-    try {
-      const got = await restGet(NB_CLOUD.id);
-      const st = got && got.state;
-      if (!st) continue;
-      const pays = st.payments || [];
-      const hit = want ? pays.find((p) => p.id === want || p.invoice === want) : (pays.filter((p) => p.status === "recibido").slice(-1)[0]);
-      if (hit && hit.status === "recibido") {
-        const c = (st.clients || []).find((x) => x.id === hit.clientId || (hit.accessCode && x.accessCode === hit.accessCode));
-        if (c && c.accessCode) {
-          toast("Pago confirmado. Toque Entrar y pegue el código de 6 dígitos.");
-          return;
-        }
-      }
-    } catch (e) {}
-  }
+  if (!want) return;
+  toast("Pago enviado. El código llega cuando Miguel confirme. Toque Entrar y péguelo.");
 }
 function ensureRenewals() {
   let added = false;
@@ -4128,11 +4105,7 @@ function notifyPay(planLabel, method) {
   const who = state.profile.name || (state.health && state.health.name) || "Cliente";
   const row = (state.payments || []).slice(-1)[0];
   postPayNotice(row || { name: who, plan: planLabel, amount: info.amount, method, clientId: (selfClient() && selfClient().id) || "" }).catch(() => {});
-  const line = waReady("pay", { name: who, plan: planLabel, method, amount: info.amount });
-  const bits = [line];
-  if (state.profile.phone) bits.push("Tel: " + state.profile.phone);
-  bits.push("Sin tarjetas ni PIN en la app.");
-  try { window.open(waLink(bits.join("\n")), "_blank"); } catch (e) {}
+  pingCoach("Pago NiuBision", who + " · " + (info.amount || "") + " USD · " + method);
 }
 function showPayReceipt(row) {
   closeModals();
@@ -4146,6 +4119,7 @@ function showPayReceipt(row) {
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}</p>
     ${row.accessCode ? `<p class="muted">Este es su código de acceso. Guárdelo. En niubision.com: Entrar → pegar el código de 6 dígitos.</p>` : `<p class="muted">Referencia ${escapeHtml(row.ref || row.invoice || row.id)}. Cuando el pago se confirme, el código de 6 dígitos llega por WhatsApp. Péguelo en Entrar.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
+    <button class="btn primary" id="waPay">Avisar a Miguel por WhatsApp</button>
     <button class="btn ghost" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" id="closeSheet">Entendido</button>
   </div>`;
@@ -4153,6 +4127,11 @@ function showPayReceipt(row) {
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   const pr = modal.querySelector("#printRec");
   if (pr) pr.onclick = () => printReceipt(row);
+  const wa = modal.querySelector("#waPay");
+  if (wa) wa.onclick = () => {
+    const line = waReady("pay", { name: row.name, plan: row.plan, method: row.method, amount: row.amount });
+    window.open(waLink(line + (state.profile.phone ? "\nTel: " + state.profile.phone : "")), "_blank");
+  };
 }
 async function runPay(method, planLabel) {
   const info = planPriceOf(planLabel);
@@ -6169,31 +6148,12 @@ function stashReceipt(c, p) {
   state.receipts = state.receipts.filter((x) => x.invoice !== rec.invoice).concat([rec]);
 }
 function deliverReceipt(c, p) {
-  emailReceipt(c, p);
-}
-function emailReceipt(c, p) {
-  if (!c || !p) return;
-  const to = String(c.email || state.profile.email || "").trim();
-  const text = receiptText(p) + (c.accessCode ? "\nCódigo: " + c.accessCode : "") + "\n\nAbra niubision.com → Pegar código del coach.";
-  if (to && /@/.test(to)) {
-    const sub = encodeURIComponent("Recibo NiuBision");
-    const body = encodeURIComponent(text);
-    try { window.open("mailto:" + encodeURIComponent(to) + "?subject=" + sub + "&body=" + body, "_blank"); } catch (e) {}
-    try {
-      fetch("https://formsubmit.co/ajax/" + encodeURIComponent(to), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ _subject: "Recibo NiuBision", message: text, _template: "box" })
-      }).catch(() => {});
-    } catch (e) {}
-  }
-  const phone = String(c.phone || state.profile.phone || "").replace(/\D/g, "");
-  let num = phone;
-  if (num.length === 10) num = "1" + num;
-  const href = num.length >= 11
-    ? "https://wa.me/" + num + "?text=" + encodeURIComponent("NiuBision — recibo\n" + text)
-    : waLink("NiuBision — recibo\n" + text);
-  try { window.open(href, "_blank"); } catch (e) {}
+  if (!p) return;
+  emailReceipt(Object.assign({}, p, {
+    name: (c && c.name) || p.name,
+    accessCode: (c && c.accessCode) || p.accessCode,
+    email: (c && c.email) || p.email
+  }));
 }
 function backupPayload() {
   return {
@@ -6569,16 +6529,21 @@ function openNeedCode(planLabel) {
       <li>El código llega cuando Miguel confirme el pago. Péguelo en Entrar.</li>
     </ol>
     <p class="muted">El relevo, el cuestionario y el contrato van ahora. El código no se entrega sin esas firmas.</p>
-    <input class="field" id="leadName" placeholder="Nombre y apellido" value="${escAttr((state.profile && state.profile.name) || "")}">
+    <label class="muted" for="leadName">Nombre y apellido</label>
+    <input class="field" id="leadName" placeholder="Nombre y apellido" autocomplete="name" value="${escAttr((state.profile && state.profile.name) || "")}">
+    <label class="muted" for="leadSex">Sexo</label>
     <select id="leadSex" class="field">
       <option value="">Sexo</option>
       <option value="Hombre">Hombre</option>
       <option value="Mujer">Mujer</option>
       <option value="Prefiero no decir">Prefiero no decir</option>
     </select>
-    <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad">
-    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono de 10 dígitos">
-    <input class="field" id="leadEmail" inputmode="email" placeholder="Correo (para el recibo)">
+    <label class="muted" for="leadAge">Edad</label>
+    <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad" autocomplete="bday-year">
+    <label class="muted" for="leadPhone">Teléfono</label>
+    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono de 10 dígitos" autocomplete="tel">
+    <label class="muted" for="leadEmail">Correo (para el recibo)</label>
+    <input class="field" id="leadEmail" inputmode="email" placeholder="Correo" autocomplete="email">
     <button class="btn primary" id="leadSend">Continuar a firmar</button>
     <button class="btn ghost" id="leadHave">Ya firmé y tengo el código</button>
     <button class="btn ghost" id="closeSheet">Ahora no</button>
@@ -7184,7 +7149,7 @@ function bindChrome() {
   });
   $$("[data-wa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.wa);
-    if (c) window.open(waLink(`NiuBision\nHola ${c.name}.\n${c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n"}Plan: ${c.plan}\n\nAbra niubision.com, mantenga el logo y toque «Pegar código del coach».`), "_blank");
+    if (c) window.open(waLink(`NiuBision\nHola ${c.name}.\n${c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n"}Plan: ${c.plan}\n\nAbra niubision.com, mantenga el logo, toque Entrar y pegue esos 6 dígitos.`), "_blank");
   });
   $$("[data-delc]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.delc);
@@ -7693,7 +7658,12 @@ async function boot() {
   if (!state.settings.cloudUrl) {
     state.settings.cloudUrl = defaultCloudUrl();
   }
-  adoptCloud(state.settings.cloudId || NB_CLOUD.id, state.settings.cloudKind || "api", state.settings.cloudToken || NB_CLOUD.token);
+  if (state.settings.cloudToken === "nb-cloud-v1" || /jsonblob|restful-api|crudcrud/i.test(String(state.settings.cloudId || ""))) {
+    state.settings.cloudToken = "";
+    state.settings.cloudId = "";
+    state.settings.cloudKind = "api";
+  }
+  adoptCloud(state.settings.cloudId || "", "api", state.settings.cloudToken || "");
   if (!state.settings.cloudUrl || /crudcrud|jsonblob|restful-api/i.test(String(state.settings.cloudUrl))) {
     state.settings.cloudUrl = defaultCloudUrl();
   }
