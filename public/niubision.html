@@ -2320,6 +2320,41 @@ async function postPayNotice(row) {
   pingCoach("Pago NiuBision", (row.name || "Cliente") + " · " + (row.amount || "") + " USD · " + (row.method || ""));
   return { ok };
 }
+async function postPaid(c, p) {
+  if (!c) return { ok: false };
+  const bases = apiBases();
+  const token = state.settings.cloudToken || NB_CLOUD.token;
+  const body = JSON.stringify({
+    clientId: c.id,
+    name: c.name,
+    phone: c.phone || "",
+    method: (p && p.method) || "",
+    amount: (p && p.amount) || "",
+    invoice: (p && (p.invoice || p.id)) || "",
+    plan: c.plan || "",
+    accessCode: c.accessCode || "",
+    pin: STUDIO_PIN
+  });
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/paid", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: "Bearer " + token
+        },
+        body
+      });
+      if (res.ok) {
+        const j = await res.json().catch(() => ({}));
+        if (j && j.accessCode) c.accessCode = j.accessCode;
+        return { ok: true, accessCode: (j && j.accessCode) || c.accessCode };
+      }
+    } catch (e) {}
+  }
+  return { ok: false };
+}
 async function postRevoke(c) {
   if (!c) return { ok: false };
   const token = state.settings.cloudToken || NB_CLOUD.token;
@@ -2328,7 +2363,8 @@ async function postRevoke(c) {
     code: c.accessCode || "",
     clientId: c.id || "",
     name: c.name || "",
-    phone: c.phone || ""
+    phone: c.phone || "",
+    pin: STUDIO_PIN
   });
   let ok = false;
   for (let i = 0; i < bases.length; i++) {
@@ -6409,6 +6445,7 @@ function confirmClientPaid(c, method) {
   p.email = c.email || p.email || "";
   p.accessCode = code;
   emailReceipt(p);
+  postPaid(c, p).catch(() => {});
   cloudPush().catch(() => {});
   deliverReceipt(c, p);
   return { client: c, payment: p, code };

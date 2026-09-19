@@ -30,26 +30,44 @@ function mergeStudio(prev, next) {
   if (op === "paid") {
     const invoice = String(b.invoice || "");
     const clientId = String(b.clientId || "");
+    const phone = String(b.phone || "").replace(/\D/g, "");
     const payments = (a.payments || []).map((p) => {
       if ((invoice && (p.id === invoice || p.invoice === invoice)) || (clientId && p.clientId === clientId && p.status !== "recibido")) {
         return Object.assign({}, p, { status: "recibido", method: b.method || p.method, amount: b.amount || p.amount });
       }
       return p;
     });
-    const used = new Set((a.clients || []).map((c) => String(c.accessCode || "")));
+    const used = new Set((a.clients || []).map((x) => String(x.accessCode || "")).filter(Boolean));
     const gen = () => String(100000 + Math.floor(Math.random() * 900000));
     const clients = (a.clients || []).map((c) => {
       const hit = (clientId && c.id === clientId)
+        || (phone.length >= 10 && String(c.phone || "").replace(/\D/g, "") === phone)
         || (invoice && (c.id === invoice || c.accessCode === invoice));
       if (!hit) return c;
       let code = String(c.accessCode || "");
-      if (!/^\d{6}$/.test(code) || used.has(code)) {
-        do { code = gen(); } while (used.has(code));
+      const taken = new Set(used);
+      taken.delete(code);
+      if (!/^\d{6}$/.test(code) || taken.has(code)) {
+        do { code = gen(); } while (taken.has(code) || used.has(code));
         used.add(code);
       }
       return Object.assign({}, c, { unpaid: false, accessCode: code });
     });
-    return Object.assign({}, a, { clients, payments, revoked, updatedAt: Date.now() });
+    let paymentsOut = payments;
+    if (clientId && !paymentsOut.some((p) => p.clientId === clientId && p.status === "recibido")) {
+      paymentsOut = paymentsOut.concat([{
+        id: invoice || ("p" + Date.now()),
+        date: new Date().toISOString().slice(0, 10),
+        plan: b.plan || "",
+        amount: b.amount || "",
+        method: b.method || "ATH Móvil",
+        status: "recibido",
+        name: b.name || "",
+        clientId,
+        accessCode: (clients.find((c) => c.id === clientId) || {}).accessCode || ""
+      }]);
+    }
+    return Object.assign({}, a, { clients, payments: paymentsOut, revoked, updatedAt: Date.now() });
   }
   if (op === "revoke") {
     return Object.assign({}, a, {
@@ -86,6 +104,7 @@ function mergeStudio(prev, next) {
     row.waiver = preferDoc(c.waiver, prev.waiver);
     row.health = preferDoc(c.health, prev.health);
     row.contract = preferDoc(c.contract, prev.contract);
+    row.photos = (Array.isArray(c.photos) && c.photos.length) ? c.photos : (prev.photos || c.photos);
     if (prev.unpaid === false) row.unpaid = false;
     if (prev.accessCode && !c.accessCode) row.accessCode = prev.accessCode;
     map.set(keyOf(c), row);
@@ -124,13 +143,29 @@ function mergeStudio(prev, next) {
     const rank = (x) => (x && x.status === "recibido" ? 2 : 1);
     if (!prev || rank(p) >= rank(prev)) payMap.set(k, Object.assign({}, prev || {}, p));
   });
-  const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : b, {
+  const byDoc = (list) => {
+    const m = new Map();
+    (list || []).forEach((x) => {
+      if (!x || typeof x !== "object") return;
+      const k = String(x.id || "") || ("n:" + String(x.name || "").toLowerCase() + "|" + String(x.date || ""));
+      const prev = m.get(k);
+      if (!prev) { m.set(k, x); return; }
+      const row = Object.assign({}, prev, x);
+      if (prev.signature && !x.signature) row.signature = prev.signature;
+      if (prev.text && !x.text) row.text = prev.text;
+      m.set(k, row);
+    });
+    return Array.from(m.values());
+  };
+  const rest = Object.assign({}, b);
+  ["clients", "payments", "inbox", "contracts", "receipts", "revoked", "_op"].forEach((k) => { delete rest[k]; });
+  const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : rest, {
     clients: folded.length ? folded : Array.from(map.values()),
     revoked,
-    inbox: (Array.isArray(b.inbox) && !op ? b.inbox : [].concat(a.inbox || [], b.inbox || [])).filter((n) => !gone(n)).slice(-40),
-    payments: (Array.isArray(b.payments) && !op ? b.payments : Array.from(payMap.values())).filter((p) => !gone(p)).slice(-80),
-    contracts: (Array.isArray(b.contracts) && !op ? b.contracts : (b.contracts || a.contracts || [])).filter((k) => !gone(k)),
-    receipts: (Array.isArray(b.receipts) && !op ? b.receipts : (b.receipts || a.receipts || [])).filter((r) => !gone(r)),
+    inbox: [].concat(a.inbox || [], b.inbox || []).filter((n) => !gone(n)).slice(-40),
+    payments: Array.from(payMap.values()).filter((p) => !gone(p)).slice(-80),
+    contracts: byDoc([].concat(a.contracts || [], b.contracts || [])).filter((k) => !gone(k)),
+    receipts: byDoc([].concat(a.receipts || [], b.receipts || [])).filter((r) => !gone(r)),
     updatedAt: Date.now()
   });
   delete out._op;
@@ -249,7 +284,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 21 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 22 });
 
   if (path === "/api/studio") {
     let body = {};
@@ -338,6 +373,7 @@ async function handle(req, env) {
     row.state = mergeStudio(row.state || {}, {
       _op: "lead",
       clients: [client],
+      contracts: client.contract ? [Object.assign({ clientId: client.id }, client.contract)] : [],
       inbox: dup ? [] : [{ id: "in" + Date.now(), type: "lead", name: client.name, plan: client.plan, at: Date.now(), clientId: client.id }]
     });
     await putRow(env, row);
@@ -427,10 +463,37 @@ async function handle(req, env) {
     return json({ ok: true });
   }
 
+  if (path === "/api/paid" && method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const row = await rowOf(env, "NIUBI");
+    if (!tokOk(row, bearer(req, url)) && pinOf(req, url, body) !== COACH_PIN) {
+      return json({ error: "Estudio no encontrado" }, 404);
+    }
+    row.state = mergeStudio(row.state || {}, {
+      _op: "paid",
+      clientId: String(body.clientId || ""),
+      invoice: String(body.invoice || ""),
+      method: body.method || "",
+      amount: body.amount || "",
+      name: body.name || "",
+      phone: body.phone || "",
+      plan: body.plan || ""
+    });
+    const phone = String(body.phone || "").replace(/\D/g, "");
+    const hit = ((row.state && row.state.clients) || []).find((c) =>
+      (body.clientId && c.id === String(body.clientId)) ||
+      (phone.length >= 10 && String(c.phone || "").replace(/\D/g, "") === phone)
+    );
+    await putRow(env, row);
+    return json({ ok: true, accessCode: hit && hit.accessCode, clientId: hit && hit.id });
+  }
+
   if (path === "/api/revoke" && method === "POST") {
     const row = await rowOf(env, "NIUBI");
-    if (!tokOk(row, bearer(req, url))) return json({ error: "Estudio no encontrado" }, 404);
     const body = await req.json().catch(() => ({}));
+    if (!tokOk(row, bearer(req, url)) && pinOf(req, url, body) !== COACH_PIN) {
+      return json({ error: "Estudio no encontrado" }, 404);
+    }
     row.state = mergeStudio(row.state || {}, {
       _op: "revoke",
       revoked: [{ code: String(body.code || "").replace(/\D/g, ""), clientId: String(body.clientId || ""), at: Date.now() }]
