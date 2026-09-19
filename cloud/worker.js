@@ -222,6 +222,59 @@ function tokOk(row, tok) {
   return false;
 }
 
+function pruneSessions(row) {
+  const now = Date.now();
+  const s = row.sessions || {};
+  Object.keys(s).forEach((k) => {
+    if (!s[k] || s[k].exp < now) delete s[k];
+  });
+  row.sessions = s;
+  const f = row.fails || {};
+  Object.keys(f).forEach((k) => {
+    if (f[k] && f[k].until && f[k].until < now && !f[k].n) delete f[k];
+  });
+  row.fails = f;
+}
+
+function rateBlocked(row, key) {
+  const f = (row.fails || {})[key];
+  return !!(f && f.until && Date.now() < f.until);
+}
+
+function rateHit(row, key) {
+  row.fails = row.fails || {};
+  const f = row.fails[key] || { n: 0, until: 0 };
+  f.n += 1;
+  if (f.n >= 8) {
+    f.until = Date.now() + 15 * 60 * 1000;
+    f.n = 0;
+  }
+  row.fails[key] = f;
+}
+
+function rateClear(row, key) {
+  if (row.fails) delete row.fails[key];
+}
+
+function dropSessions(row, pred) {
+  pruneSessions(row);
+  Object.keys(row.sessions || {}).forEach((k) => {
+    if (pred(row.sessions[k])) delete row.sessions[k];
+  });
+}
+
+async function identity(req, env, url) {
+  const tok = bearer(req, url);
+  const row = await rowOf(env, "NIUBI");
+  pruneSessions(row);
+  if (tokOk(row, tok)) return { row, role: "coach", token: tok };
+  const s = (row.sessions || {})[tok];
+  if (s && s.exp > Date.now()) {
+    return { row, role: s.role, clientId: s.clientId || "", code: s.code || "", token: tok };
+  }
+  return { row, role: null, token: tok };
+}
+
 async function mailReceipt(row) {
   const addrs = [COACH_MAIL];
   const extra = String(row.email || row.clientEmail || "").trim();
@@ -287,7 +340,84 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 22 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 23 });
+
+  if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const row = await rowOf(env, "NIUBI");
+    pruneSessions(row);
+    const role = String(body.role || "").toLowerCase() === "coach" ? "coach" : "client";
+    const key = role === "coach" ? "coach" : ("c:" + String(body.code || "").replace(/\D/g, ""));
+    if (rateBlocked(row, key)) {
+      return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
+    }
+    if (role === "coach") {
+      if (String(body.pin || "") !== COACH_PIN) {
+        rateHit(row, "coach");
+        await putRow(env, row);
+        return json({ error: "Clave incorrecta" }, 403);
+      }
+      rateClear(row, "coach");
+      const token = newToken();
+      row.sessions[token] = { role: "coach", exp: Date.now() + 12 * 3600 * 1000 };
+      await putRow(env, row);
+      return json({ ok: true, role: "coach", token, exp: row.sessions[token].exp, studioToken: row.token });
+    }
+    const digits = String(body.code || "").replace(/\D/g, "");
+    if (digits.length !== 6) return json({ error: "Código de 6 dígitos" }, 400);
+    const dead = new Set(((row.state && row.state.revoked) || []).map((r) => String(r.code || "")));
+    const deadIds = new Set(((row.state && row.state.revoked) || []).map((r) => String(r.clientId || "")).filter(Boolean));
+    const hit = ((row.state && row.state.clients) || []).find((c) => String(c.accessCode || "") === digits);
+    if (!hit || dead.has(digits) || (hit.id && deadIds.has(String(hit.id)))) {
+      rateHit(row, key);
+      await putRow(env, row);
+      return json({ error: "Código no válido o anulado" }, 404);
+    }
+    if (hit.unpaid) {
+      return json({ error: "Pago pendiente" }, 403);
+    }
+    rateClear(row, key);
+    dropSessions(row, (s) => s && s.role === "client" && s.clientId === hit.id);
+    const token = newToken();
+    row.sessions[token] = {
+      role: "client",
+      clientId: hit.id,
+      code: digits,
+      exp: Date.now() + 8 * 3600 * 1000
+    };
+    await putRow(env, row);
+    return json({
+      ok: true,
+      role: "client",
+      token,
+      exp: row.sessions[token].exp,
+      clientId: hit.id,
+      client: {
+        id: hit.id,
+        name: hit.name,
+        plan: hit.plan,
+        routine: hit.routine,
+        accessCode: hit.accessCode,
+        unpaid: false,
+        sex: hit.sex,
+        age: hit.age,
+        phone: hit.phone
+      }
+    });
+  }
+
+  if ((path === "/api/auth/me" || path === "/api/me") && method === "GET") {
+    const idn = await identity(req, env, url);
+    if (!idn.role) return json({ error: "Sesión vencida" }, 401);
+    return json({ ok: true, role: idn.role, clientId: idn.clientId || "", exp: idn.row.sessions && idn.row.sessions[idn.token] && idn.row.sessions[idn.token].exp });
+  }
+
+  if ((path === "/api/auth/logout" || path === "/api/logout") && method === "POST") {
+    const idn = await identity(req, env, url);
+    if (idn.token && idn.row.sessions) delete idn.row.sessions[idn.token];
+    await putRow(env, idn.row);
+    return json({ ok: true });
+  }
 
   if (path === "/api/studio") {
     let body = {};
@@ -314,18 +444,18 @@ async function handle(req, env) {
   }
 
   if (path === "/api/state" && method === "GET") {
-    const row = await rowOf(env, "NIUBI");
-    if (!tokOk(row, bearer(req, url))) return json({ error: "Estudio no encontrado" }, 404);
-    return json({ ok: true, state: row.state || {} });
+    const idn = await identity(req, env, url);
+    if (idn.role !== "coach") return json({ error: "Estudio no encontrado" }, 404);
+    return json({ ok: true, state: idn.row.state || {} });
   }
 
   if (path === "/api/state" && method === "PUT") {
-    const row = await rowOf(env, "NIUBI");
-    if (!tokOk(row, bearer(req, url))) return json({ error: "Estudio no encontrado" }, 404);
+    const idn = await identity(req, env, url);
+    if (idn.role !== "coach") return json({ error: "Estudio no encontrado" }, 404);
     const body = await req.json().catch(() => ({}));
-    row.state = mergeStudio(row.state || {}, body);
-    await putRow(env, row);
-    return json({ ok: true, state: row.state });
+    idn.row.state = mergeStudio(idn.row.state || {}, body);
+    await putRow(env, idn.row);
+    return json({ ok: true, state: idn.row.state });
   }
 
   if (path === "/api/redeem") {
@@ -468,10 +598,11 @@ async function handle(req, env) {
 
   if (path === "/api/paid" && method === "POST") {
     const body = await req.json().catch(() => ({}));
-    const row = await rowOf(env, "NIUBI");
-    if (!tokOk(row, bearer(req, url)) && pinOf(req, url, body) !== COACH_PIN) {
+    const idn = await identity(req, env, url);
+    if (idn.role !== "coach" && pinOf(req, url, body) !== COACH_PIN) {
       return json({ error: "Estudio no encontrado" }, 404);
     }
+    const row = idn.row;
     row.state = mergeStudio(row.state || {}, {
       _op: "paid",
       clientId: String(body.clientId || ""),
@@ -492,34 +623,42 @@ async function handle(req, env) {
   }
 
   if (path === "/api/revoke" && method === "POST") {
-    const row = await rowOf(env, "NIUBI");
     const body = await req.json().catch(() => ({}));
-    if (!tokOk(row, bearer(req, url)) && pinOf(req, url, body) !== COACH_PIN) {
+    const idn = await identity(req, env, url);
+    if (idn.role !== "coach" && pinOf(req, url, body) !== COACH_PIN) {
       return json({ error: "Estudio no encontrado" }, 404);
     }
+    const row = idn.row;
+    const cid = String(body.clientId || "");
+    const code = String(body.code || "").replace(/\D/g, "");
     row.state = mergeStudio(row.state || {}, {
       _op: "revoke",
-      revoked: [{ code: String(body.code || "").replace(/\D/g, ""), clientId: String(body.clientId || ""), at: Date.now() }]
+      revoked: [{ code, clientId: cid, at: Date.now() }]
     });
+    dropSessions(row, (s) => s && ((cid && s.clientId === cid) || (code && s.code === code)));
     await putRow(env, row);
     return json({ ok: true });
   }
 
   if (path === "/api/report" && (method === "POST" || method === "PUT")) {
     const body = await req.json().catch(() => ({}));
-    const row = await rowOf(env, "NIUBI");
-    const code = String(body.accessCode || "").replace(/\D/g, "").slice(0, 6);
-    const allowed = tokOk(row, bearer(req, url)) || (code && ((row.state && row.state.clients) || []).some((c) => String(c.accessCode || "") === code));
+    const idn = await identity(req, env, url);
+    const code = String(body.accessCode || idn.code || "").replace(/\D/g, "").slice(0, 6);
+    const clientId = String(body.clientId || idn.clientId || "");
+    const byCode = code && ((idn.row.state && idn.row.state.clients) || []).some((c) => String(c.accessCode || "") === code);
+    const allowed = idn.role === "coach"
+      || (idn.role === "client" && ((clientId && idn.clientId === clientId) || (code && idn.code === code)))
+      || byCode;
     if (!allowed) return json({ error: "Estudio no encontrado" }, 404);
-    row.state = mergeStudio(row.state || {}, {
+    idn.row.state = mergeStudio(idn.row.state || {}, {
       _op: "report",
       clients: [{
-        id: body.clientId,
+        id: clientId,
         accessCode: code,
         report: Object.assign({}, body.report || {}, { updatedAt: Date.now() })
       }]
     });
-    await putRow(env, row);
+    await putRow(env, idn.row);
     return json({ ok: true });
   }
 

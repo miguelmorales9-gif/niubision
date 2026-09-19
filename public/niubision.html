@@ -1546,6 +1546,7 @@ function lockOutClient(msg) {
   clearClientSeat();
   persistClients();
   persist();
+  authClear();
   toast(msg || "Acceso cerrado. Pague de nuevo para recibir un código.");
 }
 function lockIfRevokedSeat() {
@@ -2236,7 +2237,7 @@ async function cloudPushClient() {
   if (!report.accessCode && !report.clientId) return { ok: false };
   if (isRevoked(report.accessCode, report.clientId)) return { ok: false, revoked: true };
   if (!isOnline()) return { ok: false, offline: true };
-  const token = state.settings.cloudToken || NB_CLOUD.token;
+  const token = authHeader();
   const bases = apiBases();
   for (let i = 0; i < bases.length; i++) {
     try {
@@ -2552,10 +2553,10 @@ async function registerBlob() {
   return { token };
 }
 async function cloudPush() {
-  if (!state.settings.cloudToken) return { ok: false };
+  if (!state.settings.cloudToken && !(authGet() && authGet().token)) return { ok: false };
   const payload = cloudPayload();
   const bases = apiBases();
-  const token = state.settings.cloudToken;
+  const token = authHeader();
   if (bases[0] && token) queueCloudPut(bases[0] + "/state", token, payload);
   if (!isOnline()) return { ok: false, offline: true };
   for (let i = 0; i < bases.length; i++) {
@@ -3987,6 +3988,59 @@ function hasPin() {
 const STUDIO_PIN = "9798";
 const PAYPAL_DEST = "miguel.morales9@gmail.com";
 const ATH_DEST = "7874544038";
+function authGet() {
+  try { return JSON.parse(sessionStorage.getItem("nb_auth_sess") || "null"); } catch (e) { return null; }
+}
+function authSet(v) {
+  try { sessionStorage.setItem("nb_auth_sess", JSON.stringify(v || {})); } catch (e) {}
+}
+function authClear() {
+  try { sessionStorage.removeItem("nb_auth_sess"); } catch (e) {}
+}
+function authHeader() {
+  const a = authGet();
+  if (a && a.token) return a.token;
+  return (state.settings && state.settings.cloudToken) || NB_CLOUD.token;
+}
+async function authLogin(kind, secret) {
+  if (!isOnline()) return null;
+  const bases = apiBases();
+  const body = kind === "coach"
+    ? JSON.stringify({ role: "coach", pin: String(secret || "") })
+    : JSON.stringify({ role: "client", code: String(secret || "").replace(/\D/g, "") });
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j && j.token) {
+        authSet({ token: j.token, role: j.role, exp: j.exp, clientId: j.clientId || "" });
+        if (j.studioToken) state.settings.cloudToken = j.studioToken;
+        return j;
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+async function authLogout() {
+  const a = authGet();
+  const token = a && a.token;
+  authClear();
+  if (!token || !isOnline()) return;
+  const bases = apiBases();
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      await cloudGet(bases[i] + "/auth/logout", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, Accept: "application/json" }
+      });
+      return;
+    } catch (e) {}
+  }
+}
 async function ensureStudioPin() {
   if (hasPin()) return;
   await setPin(STUDIO_PIN);
@@ -4784,6 +4838,7 @@ function openCoachGate() {
     }
     modal.remove();
     state.role = "coach"; state.view = "home"; persist();
+    authLogin("coach", a).catch(() => {});
     ensureCloud().finally(() => render());
   };
 }
@@ -6750,6 +6805,7 @@ function applyClientAssign(a) {
   state.profile.unlocked = true;
   state.view = "work";
   persist();
+  if (a.accessCode) authLogin("client", a.accessCode).catch(() => {});
   return true;
 }
 function copyText(text) {
@@ -7310,8 +7366,10 @@ function bindChrome() {
   bindMotion();
   const sw = $("#switchRole");
   if (sw) sw.onclick = () => {
+    authLogout().catch(() => {});
     state.role = null;
     state.splash = true;
+    if (state.profile) state.profile.unlocked = false;
     persist();
     render();
   };
