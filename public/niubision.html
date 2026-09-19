@@ -2378,9 +2378,17 @@ function maybeClientPull() {
   const now = Date.now();
   if (maybeClientPull._at && now - maybeClientPull._at < 18000) return;
   maybeClientPull._at = now;
-  if (!state.settings.cloudToken) state.settings.cloudToken = NB_CLOUD.token;
-  cloudPull().then((r) => {
-    if (r && r.ok && state.role === "client") render();
+  const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+  if (code.length !== 6) return;
+  lookupAccess(code).then((hit) => {
+    if (!hit || state.role !== "client") return;
+    if (hit.unpaid || isRevoked(hit.accessCode, hit.id)) {
+      lockOutClient();
+      render();
+      return;
+    }
+    applyClientAssignment({ clients: [hit] });
+    if (state.role === "client") render();
   }).catch(() => {});
 }
 function lastWorkHtml(c) {
@@ -2529,6 +2537,7 @@ async function registerBlob() {
   return { token };
 }
 async function cloudPush() {
+  if (state.role !== "coach") return { ok: false };
   if (!state.settings.cloudToken && !(authGet() && authGet().token)) return { ok: false };
   const payload = cloudPayload();
   const bases = apiBases();
@@ -2551,81 +2560,11 @@ async function cloudPush() {
       }
     } catch (e) {}
   }
-  try {
-    const got = await restGet(NB_CLOUD.id);
-    if (got && got.state && Array.isArray(got.state.clients)) {
-      mergeRemoteReports(payload, got.state.clients);
-    }
-    const body = { studioKey: studioKey(), token: state.settings.cloudToken || NB_CLOUD.token, state: payload, updatedAt: Date.now(), id: "github" };
-    const restOk = await restPut(NB_CLOUD.id, body);
-    let ghOk = false;
-    try { ghOk = await githubSave(body); } catch (e) {}
-    if (restOk || ghOk) {
-      adoptCloud(ghOk ? "github" : NB_CLOUD.id, ghOk ? "github" : "rest", body.token);
-      return { ok: true };
-    }
-  } catch (e) {}
-  const crudId = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
-  if (crudId || state.settings.cloudKind === "crud") {
-    try {
-      let id = crudId;
-      if (!id) {
-        const rows = await crudList();
-        const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(studioKey()).toUpperCase());
-        if (hit && hit._id) id = hit._id;
-      }
-      if (id) {
-        const got = await cloudGet(crudUrl(id), { headers: { Accept: "application/json" } });
-        const row = await got.json().catch(() => null);
-        if (got.ok && row && row.state && Array.isArray(row.state.clients)) {
-          mergeRemoteReports(payload, row.state.clients);
-        }
-        const body = crudBody({ token: state.settings.cloudToken, state: payload });
-        const res = await cloudGet(crudUrl(id), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify(body)
-        });
-        if (res.ok) {
-          state.settings.cloudId = id;
-          state.settings.cloudKind = "crud";
-          store.set("nb_settings", state.settings);
-          return { ok: true };
-        }
-      }
-    } catch (e) {}
-  }
-  const blobId = (!isCrudId(state.settings.cloudId) && (state.settings.cloudId || store.get("nb_blob_id"))) || "";
-  if (blobId) {
-    try {
-      const got = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
-      const row = await got.json().catch(() => null);
-      if (got.ok && row && row.state && Array.isArray(row.state.clients)) {
-        mergeRemoteReports(payload, row.state.clients);
-      }
-      const res = await cloudGet(JB_CLOUD + "/" + blobId, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ studioKey: studioKey(), token: state.settings.cloudToken, state: payload })
-      });
-      if (res.ok) return { ok: true };
-    } catch (e) {}
-  }
-  try {
-    const url = cloudUrl();
-    if (!url || /jsonblob|crudcrud|niubision\.com|github\.io/i.test(url)) return { ok: false };
-    const res = await cloudGet(url + "/state", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + state.settings.cloudToken },
-      body: JSON.stringify(payload)
-    });
-    return { ok: res.ok };
-  } catch (e) {
-    return { ok: false };
-  }
+  return { ok: false };
 }
 async function cloudPull() {
-  if (!state.settings.cloudToken && !state.settings.cloudId) return { ok: false };
+  if (state.role === "client") return { ok: false };
+  if (!state.settings.cloudToken && !(authGet() && authGet().token) && !state.settings.cloudId) return { ok: false };
   const save = (rowState) => {
     applyCloud(rowState);
     persistClients();
@@ -2648,7 +2587,7 @@ async function cloudPull() {
     store.set("nb_settings", state.settings);
   };
   const bases = apiBases();
-  const token = state.settings.cloudToken;
+  const token = authHeader();
   if (token) {
     for (let i = 0; i < bases.length; i++) {
       try {
@@ -2666,189 +2605,13 @@ async function cloudPull() {
       } catch (e) {}
     }
   }
-  try {
-    const rows = await githubLoad();
-    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(studioKey()).toUpperCase()) || rows[0];
-    if (hit && hit.state && Array.isArray(hit.state.clients) && hit.state.clients.length) {
-      save(hit.state);
-      adoptCloud("github", "github", hit.token || state.settings.cloudToken);
-      try {
-        await restPut(NB_CLOUD.id, { studioKey: studioKey(), token: hit.token || NB_CLOUD.token, state: hit.state, updatedAt: hit.updatedAt || Date.now(), id: "github" });
-      } catch (e2) {}
-      return { ok: true, data: { state: hit.state } };
-    }
-  } catch (e) {}
-  try {
-    const got = await restGet((isRestId(state.settings.cloudId) && state.settings.cloudId) || NB_CLOUD.id);
-    if (got && got.state) {
-      save(got.state);
-      adoptCloud(NB_CLOUD.id, "rest", got.token || state.settings.cloudToken);
-      return { ok: true, data: { state: got.state } };
-    }
-  } catch (e) {}
-  try {
-    let id = isCrudId(state.settings.cloudId) ? state.settings.cloudId : "";
-    if (!id) {
-      const rows = await crudList();
-      const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === String(studioKey()).toUpperCase());
-      if (hit && hit._id) {
-        id = hit._id;
-        state.settings.cloudId = id;
-        state.settings.cloudKind = "crud";
-      }
-    }
-    if (id) {
-      const res = await cloudGet(crudUrl(id), { headers: { Accept: "application/json" } });
-      const row = await res.json().catch(() => null);
-      if (res.ok && row && row.state) {
-        save(row.state);
-        return { ok: true, data: { state: row.state } };
-      }
-    }
-  } catch (e) {}
-  const blobId = (!isCrudId(state.settings.cloudId) && (state.settings.cloudId || store.get("nb_blob_id"))) || "";
-  if (blobId) {
-    try {
-      const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
-      const row = await res.json().catch(() => null);
-      if (res.ok && row && row.state) {
-        save(row.state);
-        return { ok: true, data: { state: row.state } };
-      }
-    } catch (e) {}
-  }
-  try {
-    const url = cloudUrl();
-    if (!url || /jsonblob|crudcrud|niubision\.com/i.test(url)) return { ok: false };
-    const res = await cloudGet(url + "/state", {
-      headers: { Authorization: "Bearer " + state.settings.cloudToken, Accept: "application/json" }
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.state) {
-      save(data.state);
-      return { ok: true, data };
-    }
-  } catch (e) {}
-  try {
-    const rows = await githubLoad();
-    const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === studioKey());
-    if (hit && hit.state) {
-      applyCloud(hit.state);
-      persist();
-      return { ok: true, data: { state: hit.state } };
-    }
-  } catch (e) {}
   return { ok: false };
-}
-async function githubFile(url) {
-  const res = await cloudGet(url, {
-    headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" }
-  });
-  if (!res.ok) return { meta: null, data: null };
-  const meta = await res.json().catch(() => null);
-  if (!meta) return { meta: null, data: null };
-  if (meta.sha) githubFile.sha = meta.sha;
-  let data = null;
-  if (meta.content) {
-    try {
-      const bin = atob(String(meta.content).replace(/\n/g, ""));
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      data = JSON.parse(new TextDecoder().decode(bytes));
-    } catch (e) {}
-  } else if (meta.state || meta.studioKey) data = meta;
-  return { meta, data };
-}
-async function githubLoad() {
-  const urls = [
-    GH_STUDIO,
-    "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studios.json"
-  ];
-  const out = [];
-  for (let i = 0; i < urls.length; i++) {
-    try {
-      const { data } = await githubFile(urls[i]);
-      if (Array.isArray(data)) out.push.apply(out, data);
-      else if (data && typeof data === "object") out.push(data);
-    } catch (e) {}
-  }
-  return out;
-}
-function utf8ToB64(str) {
-  const bytes = new TextEncoder().encode(str);
-  let s = "";
-  bytes.forEach((b) => { s += String.fromCharCode(b); });
-  return btoa(s);
-}
-async function githubSave(wrap) {
-  if (!wrap) return false;
-  let sha = githubFile.sha || "";
-  if (!sha) {
-    try {
-      const got = await githubFile(GH_STUDIO);
-      sha = (got.meta && got.meta.sha) || "";
-    } catch (e) {}
-  }
-  const body = {
-    message: "studio cloud",
-    content: utf8ToB64(JSON.stringify(wrap)),
-    branch: "main"
-  };
-  if (sha) body.sha = sha;
-  const headers = {
-    Accept: "application/vnd.github+json",
-    "Content-Type": "application/json",
-    "X-GitHub-Api-Version": "2022-11-28"
-  };
-  const tok = (state.settings && state.settings.ghToken) || store.get("nb_gh") || "";
-  if (tok) headers.Authorization = "Bearer " + tok;
-  try {
-    const res = await fetch(GH_STUDIO, { method: "PUT", headers, body: JSON.stringify(body), mode: "cors", credentials: "omit" });
-    if (!res.ok) return false;
-    const saved = await res.json().catch(() => null);
-    if (saved && saved.content && saved.content.sha) githubFile.sha = saved.content.sha;
-    return true;
-  } catch (e) { return false; }
-}
-async function registerGithub() {
-  const token = state.settings.cloudToken || NB_CLOUD.token;
-  const wrap = { studioKey: studioKey(), token, state: cloudPayload(), updatedAt: Date.now(), id: "github" };
-  const rows = await githubLoad();
-  const hit = rows.find((r) => String(r.studioKey || "").toUpperCase() === studioKey()) || rows[0];
-  if (hit && hit.state) {
-    if (Array.isArray(hit.state.clients)) mergeRemoteReports(wrap.state, hit.state.clients);
-    applyCloud(hit.state);
-  }
-  try { await restPut(NB_CLOUD.id, wrap); } catch (e) {}
-  try { await githubSave(wrap); } catch (e) {}
-  adoptCloud("github", "github", token);
-  persist();
-  return { token, id: "github" };
 }
 async function cloudRegisterStudio() {
   if (!isOnline()) throw new Error("Sin conexión. El trabajo queda en este teléfono.");
-  let last = "No se pudo conectar la nube";
-  try {
-    const out = await registerNative();
-    if (out && out.token) return out;
-  } catch (e) { last = cloudErr(e); }
-  try {
-    const out = await registerGithub();
-    if (out && out.token) return out;
-  } catch (e) { last = cloudErr(e); }
-  try {
-    const out = await registerRest();
-    if (out && out.token) return out;
-  } catch (e) { last = cloudErr(e); }
-  try {
-    const out = await registerBlob();
-    if (out && out.token) return out;
-  } catch (e) { last = cloudErr(e); }
-  try {
-    const out = await registerCrud();
-    if (out && out.token) return out;
-  } catch (e) { last = cloudErr(e); }
-  throw new Error(last);
+  const out = await registerNative();
+  if (out && out.token) return out;
+  throw new Error("No se pudo conectar la nube");
 }
 async function ensureCloud() {
   if (!isOnline()) return { ok: false, offline: true };
@@ -4878,6 +4641,11 @@ function continueJoin(planLabel) {
     openCodeEntry();
     return;
   }
+  const who = selfClient() || state._pendingLead || (state.clients || []).find((x) => cleanName(x.name) === cleanName((state.profile && state.profile.name) || ""));
+  if (who) {
+    attachLegalToClient(who);
+    postLead(who).catch(() => {});
+  }
   openPaySheet(plan);
 }
 
@@ -5482,7 +5250,7 @@ function workView() {
       ${packChip(selfClient())}
       ${floorLine()}
       ${renewBannerHtml()}
-      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<button class="btn primary go" id="goLive">Empezar</button>`}
+      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Toque Empezar. El reloj no corre hasta que pulse Empezar otra vez dentro.</p><button class="btn primary go" id="goLive">Empezar</button>`}
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
@@ -5596,10 +5364,10 @@ function bindWork() {
     store.set("nb_open_ex", 0);
     const justLook = go.textContent.indexOf("Ver") >= 0;
     if (!justLook) {
-      state.sessStart = Date.now();
+      state.sessStart = null;
       state.sessElapsed = 0;
     }
-    holdScreen(!justLook);
+    holdScreen(false);
     const first = (loadSession(rt).items[0] || {});
     if (!justLook) speak("Empiece. " + displayName(first));
     beep(660, 140);
@@ -5787,7 +5555,7 @@ function bindWork() {
     beep(660, 140);
     runSess();
   };
-  if (state.sessStart || (store.get("nb_live") && state.sessElapsed)) runSess();
+  if (state.sessStart) runSess();
   else {
     stopSessTick();
     paintSess();
@@ -5817,12 +5585,19 @@ function bindWork() {
     if (i >= 0) state.history[i] = rec;
     else state.history.push(rec);
     persist();
+    const who = selfClient();
+    if (who) {
+      who.lastSession = rec;
+      who.lastSeen = rec.date;
+      attachReport(who, { lastSession: rec, updatedAt: Date.now(), history: (state.history || []).slice(-12) });
+    }
     stopSessTick();
     state.sessStart = null;
     state.sessElapsed = 0;
     store.set("nb_live", 0);
     holdScreen(false);
     beep(520, 250);
+    if (state.role === "client") cloudPushClient().catch(() => {});
     flashClose(doneSets, total, lb);
   };
 }
@@ -6156,7 +5931,7 @@ function peopleView() {
       <button class="btn primary" id="ingestLead" type="button">Añadir desde el aviso</button>
     </div>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
-    ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
+    ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : ((state.clients || []).some((c) => !c.accessCode && ((p.clientId && c.id === p.clientId) || (p.name && cleanName(c.name) === cleanName(p.name)))) ? `<span class="muted">confirme en la ficha</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`)}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
     ${!Array.isArray(state.clients) || !state.clients.length ? "<p class='muted'>Aún no hay clientes. Añada el primero abajo.</p>" : (state.clients || []).map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
@@ -6568,6 +6343,7 @@ function upsertClientFromAssign(a) {
   if (a.plan) c.plan = a.plan;
   if (a.routine) c.routine = a.routine;
   if (a.accessCode) c.accessCode = a.accessCode;
+  if (a.accessCode) c.unpaid = false;
   if (a.sex) c.sex = a.sex;
   if (a.age) c.age = a.age;
   if (a.phone) c.phone = a.phone;
@@ -6655,6 +6431,7 @@ function applyClientAssign(a) {
   if (a.name) state.profile.name = a.name;
   if (a.plan) state.profile.plan = a.plan;
   if (a.routine) state.profile.routine = a.routine;
+  else if (!state.profile.routine) state.profile.routine = "full-inicio";
   if (a.accessCode) state.profile.accessCode = a.accessCode;
   if (a.sex) state.profile.sex = a.sex;
   if (a.age) state.profile.age = a.age;
