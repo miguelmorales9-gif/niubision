@@ -73,9 +73,23 @@ function mergeStudio(prev, next) {
     });
     return Object.assign({}, a, { clients, revoked, updatedAt: Date.now() });
   }
+  const preferDoc = (next, prev) => {
+    if (next && typeof next === "object" && (next.date || next.signature || next.name)) return next;
+    if (prev && typeof prev === "object" && (prev.date || prev.signature || prev.name)) return prev;
+    return next || prev;
+  };
   const map = new Map();
   (a.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), c));
-  (b.clients || []).filter(alive).forEach((c) => map.set(keyOf(c), Object.assign({}, map.get(keyOf(c)) || {}, c)));
+  (b.clients || []).filter(alive).forEach((c) => {
+    const prev = map.get(keyOf(c)) || {};
+    const row = Object.assign({}, prev, c);
+    row.waiver = preferDoc(c.waiver, prev.waiver);
+    row.health = preferDoc(c.health, prev.health);
+    row.contract = preferDoc(c.contract, prev.contract);
+    if (prev.unpaid === false) row.unpaid = false;
+    if (prev.accessCode && !c.accessCode) row.accessCode = prev.accessCode;
+    map.set(keyOf(c), row);
+  });
   const folded = [];
   const seenName = new Map();
   Array.from(map.values()).forEach((c) => {
@@ -235,7 +249,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 20 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 21 });
 
   if (path === "/api/studio") {
     let body = {};
@@ -314,11 +328,11 @@ async function handle(req, env) {
       sex: c.sex || "",
       age: c.age || "",
       phone: String(c.phone || ""),
-      email: String(c.email || ""),
-      health: c.health && typeof c.health === "object" ? c.health : undefined,
-      waiver: c.waiver && typeof c.waiver === "object" ? c.waiver : undefined,
-      contract: c.contract && typeof c.contract === "object" ? c.contract : undefined
+      email: String(c.email || "")
     };
+    if (c.health && typeof c.health === "object" && (c.health.date || c.health.name)) client.health = c.health;
+    if (c.waiver && typeof c.waiver === "object" && (c.waiver.date || c.waiver.signature)) client.waiver = c.waiver;
+    if (c.contract && typeof c.contract === "object" && (c.contract.date || c.contract.signature)) client.contract = c.contract;
     const inbox = (row.state && row.state.inbox) || [];
     const dup = inbox.some((n) => n && n.clientId === client.id && (Date.now() - (n.at || 0) < 30 * 60 * 1000));
     row.state = mergeStudio(row.state || {}, {

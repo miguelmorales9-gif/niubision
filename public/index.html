@@ -1949,11 +1949,6 @@ function apiBases() {
   add(CLOUD_API_CUSTOM);
   add(state.settings && state.settings.cloudUrl);
   add(store.get("nb_api", ""));
-  add(CLOUD_API);
-  try {
-    if (!isPagesHost() && /^https?:/i.test(location.href)) add(new URL("/api", location.href).origin + "/api");
-  } catch (e) {}
-  if (!isPagesHost()) add("/api");
   return out;
 }
 function queueCloudPut(url, token, payload) {
@@ -2267,10 +2262,14 @@ async function postLead(c) {
   if (!who || !who.name) return { ok: false };
   if (isRevoked(who.accessCode, who.id)) return { ok: false, revoked: true };
   const slim = slimClient(who);
+  const legalNow = !!(slim.waiver && slim.health && slim.contract);
   const stamp = [who.id || "", slim.waiver && slim.waiver.date ? "w" : "", slim.health && slim.health.date ? "h" : "", slim.contract && slim.contract.date ? "k" : ""].join("|");
+  postLead._legal = postLead._legal || {};
+  if (postLead._legal[who.id] && !legalNow && !(slim.waiver || slim.health || slim.contract)) return { ok: true, skip: true };
   if (postLead._last === stamp && Date.now() - (postLead._at || 0) < 45 * 1000) return { ok: true, skip: true };
   postLead._last = stamp;
   postLead._at = Date.now();
+  if (slim.waiver || slim.health || slim.contract) postLead._legal[who.id] = 1;
   const bases = apiBases();
   const body = JSON.stringify({ studioKey: "NIUBI", client: slim });
   let ok = false;
@@ -2285,8 +2284,11 @@ async function postLead(c) {
     } catch (e) {}
   }
   const inbox = [{ id: "in" + Date.now(), type: "lead", name: who.name, plan: who.plan, at: Date.now(), clientId: who.id }];
-  if (await mirrorPublic("lead", { clients: [slimClient(who)], inbox })) ok = true;
-  pingCoach("Lead NiuBision", (who.name || "Cliente") + " · " + (who.plan || ""));
+  if (await mirrorPublic("lead", { clients: [slim], inbox })) ok = true;
+  if (legalNow && postLead._pinged !== who.id) {
+    postLead._pinged = who.id;
+    pingCoach("Lead listo NiuBision", (who.name || "Cliente") + " firmó. Confirme el pago para dar el código.");
+  }
   return { ok };
 }
 async function postPayNotice(row) {
@@ -7984,7 +7986,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=20", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
