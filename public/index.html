@@ -1225,7 +1225,7 @@ function persist() {
   if (persist._busy) { persist._again = true; return; }
   persist._busy = true;
   try {
-    store.set("nb_role", state.role);
+    store.set("nb_role", state.role === "guest" ? null : state.role);
     persistClients();
     store.set("nb_profile", state.profile);
     store.set("nb_settings", state.settings);
@@ -1805,53 +1805,29 @@ function scrubCloudState(st) {
   if (st.waiver && !alive(st.waiver)) st.waiver = null;
   return st;
 }
-async function mirrorPublic(op, patch) {
-  const body = Object.assign({ _op: op }, patch || {});
-  let ok = false;
-  try {
-    const got = await restGet(NB_CLOUD.id);
-    const wrap = {
-      studioKey: studioKey(),
-      token: (state.settings && state.settings.cloudToken) || NB_CLOUD.token,
-      state: mergeStudio(got && got.state, body),
-      updatedAt: Date.now()
-    };
-    if (await restPut(NB_CLOUD.id, wrap)) {
-      adoptCloud(NB_CLOUD.id, "rest", wrap.token);
-      ok = true;
-    }
-  } catch (e) {}
-  const blobId = (!isCrudId(state.settings && state.settings.cloudId) && ((state.settings && state.settings.cloudId) || store.get("nb_blob_id") || NB_CLOUD.id)) || "";
-  if (blobId && String(blobId).indexOf("api") < 0) {
-    try {
-      const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
-      const row = await res.json().catch(() => null);
-      const stateRow = mergeStudio(row && row.state, body);
-      const put = await cloudGet(JB_CLOUD + "/" + blobId, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ studioKey: studioKey(), token: NB_CLOUD.token, state: stateRow })
-      });
-      if (put.ok) ok = true;
-    } catch (e) {}
-  }
-  return ok;
+async function mirrorPublic() {
+  return false;
 }
 function pingCoach(title, text) {
   const line = String(title || "NiuBision") + " — " + String(text || "");
+  const now = Date.now();
+  if (!pingCoach._at || now - pingCoach._at > 20000) {
+    pingCoach._at = now;
+    try {
+      fetch("https://ntfy.sh/" + ntfyTopic(), {
+        method: "POST",
+        headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" },
+        body: String(text || "")
+      }).catch(() => {});
+    } catch (e) {}
+  }
   try {
-    fetch("https://ntfy.sh/" + ntfyTopic(), {
-      method: "POST",
-      headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" },
-      body: String(text || "")
-    }).catch(() => {});
-  } catch (e) {}
-  try {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return line;
     if (navigator.serviceWorker) {
       navigator.serviceWorker.ready.then((reg) => {
         if (reg.showNotification) reg.showNotification(String(title || "NiuBision"), { body: String(text || ""), icon: "/icon-192.png", badge: "/icon-96.png" });
       }).catch(() => {});
-    } else if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+    } else {
       new Notification(String(title || "NiuBision"), { body: String(text || ""), icon: "/icon-192.png" });
     }
   } catch (e) {}
@@ -2899,7 +2875,7 @@ async function lookupAccess(code) {
   if (digits.length !== 6) return null;
   if (isRevoked(digits)) return null;
   const local = findByAccessCode(digits);
-  if (local) return local;
+  if (local && !local.unpaid && !isRevoked(local.accessCode, local.id)) return local;
   const remember = (id, kind) => {
     if (!id) return;
     store.set("nb_blob_id", id);
@@ -2925,109 +2901,6 @@ async function lookupAccess(code) {
         return data.client;
       }
     }
-  } catch (e) {}
-  try {
-    const rows = await githubLoad();
-    const wrap = rows.find((r) => String(r.studioKey || "").toUpperCase() === "NIUBI") || rows[0];
-    const list = (wrap && wrap.state && wrap.state.clients) || [];
-    if (revokedInState(wrap && wrap.state, digits)) return null;
-    const ghHit = list.find((x) => String(x.accessCode) === digits);
-    if (ghHit) {
-      if (ghHit.unpaid) return null;
-      remember("github", "github");
-      if (wrap.state && wrap.state.customRoutines) state.customRoutines = wrap.state.customRoutines;
-      if (wrap.state && wrap.state.routineEdits) state.routineEdits = wrap.state.routineEdits;
-      return ghHit;
-    }
-  } catch (e) {}
-  try {
-    const got = await restGet(NB_CLOUD.id);
-    if (revokedInState(got && got.state, digits)) return null;
-    const list = (got && got.state && got.state.clients) || [];
-    const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
-    if (hit) {
-      if (hit.unpaid) return null;
-      if (isRevoked(hit.accessCode, hit.id)) return null;
-      remember(NB_CLOUD.id, "rest");
-      return hit;
-    }
-  } catch (e) {}
-  try {
-    const res = await cloudGet(crudUrl(NB_CLOUD.id), { headers: { Accept: "application/json" } });
-    const row = await res.json().catch(() => null);
-    if (revokedInState(row && row.state, digits)) return null;
-    const list = (row && row.state && row.state.clients) || [];
-    const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
-    if (hit) {
-      if (hit.unpaid) return null;
-      if (isRevoked(hit.accessCode, hit.id)) return null;
-      remember(NB_CLOUD.id, "crud");
-      return hit;
-    }
-  } catch (e) {}
-  try {
-    const rows = await crudList();
-    for (let i = 0; i < rows.length; i++) {
-      if (revokedInState(rows[i].state, digits)) return null;
-      const list = (rows[i].state && rows[i].state.clients) || [];
-      const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
-      if (hit) {
-        if (hit.unpaid) return null;
-        if (isRevoked(hit.accessCode, hit.id)) return null;
-        if (rows[i]._id) {
-          store.set("nb_blob_id", rows[i]._id);
-          if (state.settings) {
-            state.settings.cloudId = rows[i]._id;
-            state.settings.cloudKind = "crud";
-          }
-        }
-        return hit;
-      }
-    }
-  } catch (e) {}
-  const blobId = (state.settings && state.settings.cloudId) || store.get("nb_blob_id");
-  if (blobId && !isCrudId(blobId)) {
-    try {
-      const res = await cloudGet(JB_CLOUD + "/" + blobId, { headers: { Accept: "application/json" } });
-      const row = await res.json().catch(() => null);
-      if (revokedInState(row && row.state, digits)) return null;
-      const list = (row && row.state && row.state.clients) || [];
-      const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
-      if (hit) {
-        if (hit.unpaid) return null;
-        if (isRevoked(hit.accessCode, hit.id)) return null;
-        store.set("nb_blob_id", blobId);
-        if (state.settings) state.settings.cloudId = blobId;
-        return hit;
-      }
-    } catch (e) {}
-  }
-  try {
-    const rows = await githubLoad();
-    for (let i = 0; i < rows.length; i++) {
-      if (revokedInState(rows[i].state, digits)) return null;
-      const list = (rows[i].state && rows[i].state.clients) || [];
-      const hit = list.find((x) => String(x.accessCode || "").replace(/\D/g, "") === digits);
-      if (hit) {
-        if (hit.unpaid) return null;
-        if (isRevoked(hit.accessCode, hit.id)) return null;
-        const cid = (rows[i].state.settings && rows[i].state.settings.cloudId) || hit.cloudId;
-        if (cid) {
-          store.set("nb_blob_id", cid);
-          if (state.settings) state.settings.cloudId = cid;
-        }
-        return hit;
-      }
-    }
-  } catch (e) {}
-  try {
-    const res = await cloudGet("/studios.json?v=" + Date.now(), { headers: { Accept: "application/json" } });
-    const data = await res.json().catch(() => null);
-    if (data && data.cloudId) remember(data.cloudId, data.kind || "crud");
-    if (revokedInState(data && data.state, digits) || (data && data.revoked && revokedInState(data, digits))) return null;
-    const list = Array.isArray(data) ? data : ((data && data.clients) || []);
-    const hit = list.find((x) => String(x.accessCode) === digits);
-    if (hit) return hit;
   } catch (e) {}
   return null;
 }
@@ -4997,15 +4870,12 @@ function continueJoin(planLabel) {
   if (healthFlagged() && !(state.health && state.health.clearance)) return openClearance(plan);
   if (!contractSigned(plan)) return openContract(plan);
   if (state._pendingAssign) {
-    const a = state._pendingAssign;
     state._pendingAssign = null;
-    applyClientAssign(a);
-    state.splash = false;
-    store.set("nb_seen_cover", true);
-    state.view = "work";
+    toast("Firmas listas. Toque Entrar y pegue el código de 6 dígitos.");
+    state.role = null;
     persist();
     render();
-    toast("Bienvenido. Hoy se entrena.");
+    openCodeEntry();
     return;
   }
   openPaySheet(plan);
@@ -5227,6 +5097,7 @@ function header() {
   return `${offline}${install}<header class="app-header">
     <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
+    ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
 }
 function nav() {
@@ -6994,13 +6865,13 @@ function openCodeEntry() {
     <p class="tagline">Cliente</p>
     <h2>Tengo un código</h2>
     <p class="muted">Son 6 dígitos. Se lo envían por WhatsApp cuando el servicio está pagado.</p>
-    <input class="field" id="codeIn" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+    <input class="field" id="codeIn" inputmode="numeric" maxlength="24" placeholder="000000" autocomplete="one-time-code">
     <button class="btn primary" id="useCode">Entrar con este código</button>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  $("#useCode").onclick = async () => {
+  const goCode = async () => {
     const raw = ($("#codeIn").value || "").trim();
     let a = parseClientCode(raw);
     if (a && a.pending) {
@@ -7011,15 +6882,21 @@ function openCodeEntry() {
           name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
           accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
         };
+        if (hit.waiver) state.waiver = hit.waiver;
+        if (hit.health) state.health = hit.health;
+        if (hit.contract) {
+          state.contracts = latestByPerson((state.contracts || []).filter((k) => !(hit.id && k.clientId === hit.id)).concat([hit.contract]));
+        }
       }
     }
     if (!a || a.pending) return toast("Código no válido o aún no está pagado");
+    if (isRevoked(a.accessCode, a.clientId)) return toast("Ese código ya no vale. Pague de nuevo.");
     modal.remove();
-    if (!waiverSigned() || !contractSigned(a.plan)) {
+    if (!waiverSigned() || !contractSigned(a.plan) || !healthComplete()) {
       if (a.name) state.profile.name = a.name;
       if (a.plan) state.profile.plan = a.plan;
       state._pendingAssign = a;
-      toast("Firme el relevo y el contrato. Después entra con este código.");
+      toast("Firme el relevo, el cuestionario y el contrato. Después pegue el código otra vez.");
       continueJoin(a.plan);
       return;
     }
@@ -7031,6 +6908,9 @@ function openCodeEntry() {
     render();
     toast("Bienvenido. Hoy se entrena.");
   };
+  $("#useCode").onclick = goCode;
+  $("#codeIn").addEventListener("keydown", (e) => { if (e.key === "Enter") goCode(); });
+  setTimeout(() => { try { $("#codeIn").focus(); } catch (e) {} }, 80);
 }
 
 function dossierHtml(filterName) {
@@ -7373,6 +7253,8 @@ function bindChrome() {
     persist();
     render();
   };
+  const gc = $("#guestCode");
+  if (gc) gc.onclick = () => openCodeEntry();
   $$(".nav [data-view]").forEach((b) => b.onclick = () => { state.view = b.dataset.view; render(); });
   $$("button[data-view]").forEach((b) => { if (!b.closest(".nav")) b.onclick = () => { state.view = b.dataset.view; render(); }; });
   const q = $("#q");
@@ -8016,6 +7898,7 @@ async function boot() {
     state.role = null;
     if (state.profile) state.profile.unlocked = false;
   }
+  if (state.role === "guest") state.role = null;
   state._pendingCode = null;
   if (state.splash) warmupIntro();
   pinLocked();
