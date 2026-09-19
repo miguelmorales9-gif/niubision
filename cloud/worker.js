@@ -159,12 +159,15 @@ function mergeStudio(prev, next) {
   };
   const rest = Object.assign({}, b);
   ["clients", "payments", "inbox", "contracts", "receipts", "revoked", "_op"].forEach((k) => { delete rest[k]; });
+  const fromClients = (folded.length ? folded : Array.from(map.values()))
+    .map((c) => c && c.contract ? Object.assign({ clientId: c.id }, c.contract) : null)
+    .filter(Boolean);
   const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : rest, {
     clients: folded.length ? folded : Array.from(map.values()),
     revoked,
     inbox: [].concat(a.inbox || [], b.inbox || []).filter((n) => !gone(n)).slice(-40),
     payments: Array.from(payMap.values()).filter((p) => !gone(p)).slice(-80),
-    contracts: byDoc([].concat(a.contracts || [], b.contracts || [])).filter((k) => !gone(k)),
+    contracts: byDoc([].concat(a.contracts || [], b.contracts || [], fromClients)).filter((k) => !gone(k)),
     receipts: byDoc([].concat(a.receipts || [], b.receipts || [])).filter((r) => !gone(r)),
     updatedAt: Date.now()
   });
