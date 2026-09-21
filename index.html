@@ -565,6 +565,12 @@ img { background: transparent; }
   .tagline { color: var(--gold); background: none; -webkit-background-clip: unset; background-clip: unset; }
 }
 
+
+.work-pick .filters { flex-wrap: wrap; overflow: visible; padding-bottom: 4px; gap: 6px; }
+.work-pick select { width: 100%; min-height: 48px; font-size: 15px; margin-top: 8px; }
+.work-pick .pick-now { color: var(--gold); font-size: 13px; margin: 10px 0 2px; }
+.work-pick .pick-count { margin: 6px 0 0; }
+.sheet-filters { position: sticky; top: 0; background: var(--bg); padding: 8px 0 10px; z-index: 2; }
 .work-pick { margin: 4px 0 12px; }
 .work-pick select { margin-bottom: 0; }
 .day-jump { display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; }
@@ -11661,30 +11667,38 @@ function kindOf(r) {
   if (r && r.kind) return r.kind;
   const n = String((r && r.name) || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const id = String((r && r.id) || "");
-  if (/glute|cadera|cadena posterior/.test(n) || /^glute/.test(id)) return "gluteos";
-  if (/casa|suave|bajo impacto/.test(n)) return "casa";
-  if (id === "cinco5" || id === "lineal-3" || id === "potencia" || id === "full-fuerza" || /5×5|lineal|potencia/.test(n)) return "fuerza";
-  if (/^ul-/.test(id) || id === "fuerza-4" || id === "torso-pierna" || /superior|inferior|torso \//.test(n)) return "sup-inf";
-  if (/ppl|gym-|parte-|antagon|volumen|cierre|pecho-espalda|empuje/.test(id) || /empuje|tiro|un grupo|10×10|cierre de 7|pecho-hombro|pecho-espalda/.test(n)) return "split";
+  if (/glute|cadera|cadena posterior|figura-4/.test(n + id) || /^glute/.test(id) || id === "inicio-inf" || id === "casa-cadera") return "gluteos";
+  if (/casa|suave|bajo impacto/.test(n) && !/cadera/.test(n)) return "casa";
+  if (id === "cinco5" || id === "lineal-3" || id === "potencia" || id === "full-fuerza" || id === "tres-grandes" || id === "atletico-4" || id === "potencia-hiper-5" || id === "tiron-press" || /5×5|lineal|potencia|tres grandes|atletico/.test(n)) return "fuerza";
+  if (/^ul-/.test(id) || id === "fuerza-4" || id === "torso-pierna" || id === "pesado-ligero" || /superior|inferior|torso \//.test(n)) return "sup-inf";
+  if (/ppl|gym-|parte-|antagon|volumen|cierre|pecho-espalda|empuje|ondulante|hombro-4|goteo|ant-post/.test(id) || /empuje|tiro|un grupo|10×10|cierre de 7|pecho-hombro|pecho-espalda|pecho-triceps|hombro \//.test(n)) return "split";
   return "cuerpo";
 }
 function kindLabel(k) {
-  return ({ cuerpo: "Cuerpo completo", fuerza: "Fuerza", "sup-inf": "Superior / inferior", split: "Split de sala", gluteos: "Glúteos", casa: "Casa y reentrada" })[k] || k;
+  return ({ cuerpo: "Cuerpo completo", fuerza: "Fuerza", "sup-inf": "Superior / inferior", split: "Un grupo / split", gluteos: "Glúteos", casa: "Casa" })[k] || k;
 }
 function rankOf(r) {
   if (r && r.rank) return r.rank;
   return ({ cuerpo: 1, fuerza: 2, "sup-inf": 3, split: 4, gluteos: 5, casa: 6 })[kindOf(r)] || 9;
 }
-function routinesByBand(band) {
+function shortName(r) {
+  return String((r && r.name) || "").replace(/\s*·\s*\d+\s*días.*$/i, "").replace(/\s*·\s*12–15\s*$/i, "").trim();
+}
+function routinesOfBand(band) {
   const want = band || "principiante";
-  let list = allRoutines().filter((r) => bandOf(r) === want);
+  return allRoutines().filter((r) => bandOf(r) === want);
+}
+function routinesByBand(band) {
+  let list = routinesOfBand(band);
   const k = state.rtKind;
   if (k && k !== "todas") list = list.filter((r) => kindOf(r) === k);
-  return list.slice().sort((a, b) => rankOf(a) - rankOf(b) || String(a.name).localeCompare(String(b.name), "es"));
+  const d = Number(state.rtDays);
+  if (d) list = list.filter((r) => Number(r.days) === d);
+  return list.slice().sort((a, b) => (a.days || 0) - (b.days || 0) || rankOf(a) - rankOf(b) || String(shortName(a)).localeCompare(String(shortName(b)), "es"));
 }
 function preferredRoutine(band) {
   const prefer = { principiante: "full-inicio", intermedio: "full-fuerza", avanzado: "full-hiper" };
-  const pool = routinesByBand(band);
+  const pool = routinesOfBand(band);
   return pool.find((r) => r.id === prefer[band]) || pool[0] || null;
 }
 function currentBand() {
@@ -14217,30 +14231,80 @@ function exCue(ex) {
   const steps = spanishSteps(ex);
   return steps[0] || "";
 }
+function pickerOptions(list, currentId) {
+  const order = ["cuerpo", "fuerza", "sup-inf", "split", "gluteos", "casa"];
+  const groups = {};
+  list.forEach((r) => {
+    const k = kindOf(r);
+    (groups[k] = groups[k] || []).push(r);
+  });
+  return order.filter((k) => groups[k] && groups[k].length).map((k) => {
+    const opts = groups[k].map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===currentId?"selected":""}>${r.days} días · ${escapeHtml(shortName(r))}</option>`).join("");
+    return `<optgroup label="${kindLabel(k)}">${opts}</optgroup>`;
+  }).join("");
+}
 function workPickerHtml(band, list, currentId) {
   const labels = [["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
+  const days = [["","Todos"],["2","2 días"],["3","3 días"],["4","4 días"],["5","5 días"],["6","6 días"]];
   const kinds = [["todas","Todas"],["cuerpo","Cuerpo"],["fuerza","Fuerza"],["sup-inf","Sup / inf"],["split","Split"],["gluteos","Glúteos"],["casa","Casa"]];
   const k = state.rtKind || "todas";
+  const d = String(state.rtDays || "");
+  const shown = list.slice();
+  if (currentId && !shown.some((r) => r.id === currentId)) {
+    const cur = findRoutine(currentId);
+    if (cur) shown.unshift(cur);
+  }
   return `<div class="work-pick">
+    <p class="pick-now">1. Nivel</p>
     <div class="filters">${labels.map(([id,l]) => `<button type="button" data-level="${id}" class="${band===id?"on":""}">${l}</button>`).join("")}</div>
-    <div class="filters" style="margin-top:8px">${kinds.map(([id,l]) => `<button type="button" data-kind="${id}" class="${k===id?"on":""}">${l}</button>`).join("")}</div>
-    <select id="pickRt">${list.map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===currentId?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}</select>
-    <p class="muted" style="margin-top:8px">${list.length} programas en este filtro. Los de cuerpo completo y fuerza van primero.</p>
+    <p class="pick-now">2. Días por semana</p>
+    <div class="filters">${days.map(([id,l]) => `<button type="button" data-days="${id}" class="${d===id?"on":""}">${l}</button>`).join("")}</div>
+    <p class="pick-now">3. Tipo</p>
+    <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-kind="${id}" class="${k===id?"on":""}">${l}</button>`).join("")}</div>
+    <select id="pickRt">${pickerOptions(shown, currentId) || `<option value="">No hay programas con este filtro</option>`}</select>
+    <p class="muted pick-count">${shown.length} en este filtro. Agrupadas por tipo. Cambiar el filtro no cambia su rutina hasta que elija otra.</p>
   </div>`;
+}
+function bindPick(root) {
+  const scope = root || document;
+  $$("[data-kind]", scope).forEach((b) => b.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    state.rtKind = b.dataset.kind === "todas" ? "" : b.dataset.kind;
+    store.set("nb_pick_open", 1);
+    if (root && root.classList && root.classList.contains("modal")) { root.remove(); routinesSheet(); }
+    else render();
+  });
+  $$("[data-days]", scope).forEach((b) => b.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    state.rtDays = b.dataset.days || "";
+    store.set("nb_pick_open", 1);
+    if (root && root.classList && root.classList.contains("modal")) { root.remove(); routinesSheet(); }
+    else render();
+  });
+  const pickEl = (scope.querySelector && scope.querySelector("#pickRt")) || (scope === document ? $("#pickRt") : null);
+  if (pickEl) pickEl.onchange = () => {
+    store.set("nb_pick_open", 1);
+    if (pickEl.value) assignRoutine(pickEl.value);
+    toast("Rutina lista");
+    if (root && root.classList && root.classList.contains("modal")) root.remove();
+    render();
+  };
 }
 
 function workView() {
   let rt = activeRoutine();
   const band = currentBand();
-  const pool = routinesByBand(band);
-  const list = pool.length ? pool : allRoutines();
-  if (rt && pool.length && !pool.some((x) => x.id === rt.id)) {
+  if (rt && bandOf(rt) !== band) {
     const next = preferredRoutine(band);
     if (next) {
       assignRoutine(next.id);
       rt = activeRoutine();
     }
   }
+  const pool = routinesByBand(band);
+  const list = pool.length ? pool : routinesOfBand(band);
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
     return `<section class="screen"><p class="tagline">Hoy</p><h2>No hay rutina asignada</h2>
       <p class="muted">Elija un nivel y una rutina para hoy.</p>
@@ -14418,13 +14482,7 @@ function bindWork() {
       }
     }, 2500);
   };
-  $$("[data-kind]").forEach((b) => b.onclick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    state.rtKind = b.dataset.kind === "todas" ? "" : b.dataset.kind;
-    store.set("nb_pick_open", 1);
-    render();
-  });
+  bindPick();
   $$("[data-level]").forEach((b) => b.onclick = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -14438,13 +14496,6 @@ function bindWork() {
     toast("Nivel: " + b.textContent + (next ? " · " + next.name : ""));
     render();
   });
-  const pick = $("#pickRt");
-  if (pick) pick.onchange = () => {
-    store.set("nb_pick_open", 1);
-    assignRoutine(pick.value);
-    toast("Rutina lista");
-    render();
-  };
   const fold = document.querySelector(".focus-session details.more-fold, .session-start details.more-fold");
   if (fold) fold.addEventListener("toggle", () => store.set("nb_pick_open", fold.open ? 1 : 0));
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) return;
@@ -15034,7 +15085,7 @@ function peopleView() {
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
         ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
-        <select data-assign="${c.id}">${allRoutines().map((r) => `<option value="${escapeHtml(r.id)}" ${r.id===c.routine?"selected":""}>${escapeHtml(r.name)}</option>`).join("")}</select>
+        <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
         ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>`}
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
         <details><summary>Más</summary>
@@ -15069,25 +15120,38 @@ function peopleView() {
 }
 
 function routinesSheet() {
+  const band = currentBand();
+  const list = routinesByBand(band);
   const groups = {};
-  allRoutines().slice().sort((a, b) => rankOf(a) - rankOf(b) || String(a.name).localeCompare(String(b.name), "es")).forEach((r) => {
+  list.forEach((r) => {
     const k = kindOf(r);
     (groups[k] = groups[k] || []).push(r);
   });
   const order = ["cuerpo", "fuerza", "sup-inf", "split", "gluteos", "casa"];
   const blocks = order.filter((k) => groups[k] && groups[k].length).map((k) => {
-    const cards = groups[k].map((r) => `<article class="card" data-rt="${r.id}" style="cursor:pointer"><h3>${escapeHtml(r.name)}</h3><p class="muted">${r.days} días · ${r.minutes} min · ${escapeHtml(r.level)}</p><p>${escapeHtml(r.goal)}</p></article>`).join("");
+    const cards = groups[k].map((r) => `<article class="card" data-rt="${r.id}" style="cursor:pointer"><h3>${escapeHtml(shortName(r))}</h3><p class="muted">${r.days} días · ${r.minutes} min · ${escapeHtml(r.level)}</p><p>${escapeHtml(r.goal)}</p></article>`).join("");
     return `<p class="tagline" style="margin:16px 0 8px">${kindLabel(k)}</p>${cards}`;
   }).join("");
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = `<div class="sheet"><div class="handle"></div><p class="tagline">Programas</p><h2>Rutinas completas</h2>
-    <p class="muted">Primero cuerpo completo y fuerza. Después superior/inferior. El split de sala al final, para quien ya tolera un grupo por día.</p>
-    ${blocks}
+  modal.innerHTML = `<div class="sheet"><div class="handle"></div><p class="tagline">Programas</p><h2>Rutinas de ${escapeHtml(band)}</h2>
+    ${workPickerHtml(band, list, (activeRoutine() && activeRoutine().id) || "")}
+    <p class="muted">Toque una tarjeta para ver ejercicios, series y repeticiones.</p>
+    ${blocks || "<p class='muted'>Nada con este filtro. Toque Todas o cambie los días.</p>"}
     <button class="btn ghost" id="closeSheet">Cerrar</button></div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+  bindPick(modal);
+  $$("[data-level]", modal).forEach((b) => b.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    state.profile.level = b.dataset.level;
+    store.set("nb_level", b.dataset.level);
+    persist();
+    modal.remove();
+    routinesSheet();
+  });
   $$("[data-rt]", modal).forEach((el) => el.onclick = () => { modal.remove(); openRoutine(el.dataset.rt); });
 }
 
@@ -16853,8 +16917,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "24") {
-        store.set("nb_sw", "24");
+      if (store.get("nb_sw") !== "25") {
+        store.set("nb_sw", "25");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -16867,7 +16931,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=24", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=25", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
