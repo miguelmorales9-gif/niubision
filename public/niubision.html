@@ -355,6 +355,21 @@ img { background: transparent; }
 .ex-loop img.b { animation: techFlip 1.6s steps(1) infinite; }
 @keyframes techFlip { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .ex-loop img.b { animation: none; opacity: 0; } }
+
+.preview-list { display:flex; flex-direction:column; gap:8px; margin:12px 0 4px; }
+.preview-row {
+  display:grid; grid-template-columns:56px 1fr auto; gap:12px; align-items:center;
+  width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:14px;
+  background:rgba(255,255,255,.03); color:inherit; font:inherit; text-align:left; cursor:pointer;
+}
+.preview-row:active { border-color: var(--gold-dim); }
+.preview-row img { width:56px; height:56px; border-radius:10px; object-fit:cover; background:#0d0c12; }
+.preview-row h4 { margin:0; font-size:15px; color:var(--cream); font-weight:600; line-height:1.25; }
+.preview-row .muted { margin:3px 0 0; font-size:12px; }
+.preview-row .sets { color:var(--gold); font-weight:700; font-size:13px; white-space:nowrap; }
+.week-peek .list-row { padding:8px 0; border-bottom:1px solid var(--line); }
+.week-peek .list-row:last-child { border-bottom:0; }
+.session-start .go { margin-top:14px; }
 .session-start { text-align:left; padding-top:8px; }
 .session-start h2 { font-family:var(--display); font-size:34px; line-height:1.05; margin:6px 0 10px; }
 .session-start .go { margin-top:18px; min-height:56px; font-size:18px; }
@@ -13928,6 +13943,29 @@ function saveLastLoads(ses) {
   });
   store.set("nb_last_load", map);
 }
+
+function dayPreviewHtml(day) {
+  return `<div class="preview-list">${(day.items || []).map((it) => {
+    const ex = findEx(it.exId);
+    const name = (ex && (ex.nameEs || ex.name)) || it.name || "";
+    return `<button type="button" class="preview-row" data-preview-ex="${escapeHtml(it.exId || "")}">
+      <img src="${imgOf(ex)}" alt="" loading="lazy" width="56" height="56">
+      <div><h4>${escapeHtml(name)}</h4><p class="muted">${it.rest ? "Descanso " + it.rest + " s" : "Toque para ver la técnica"}</p></div>
+      <span class="sets">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span>
+    </button>`;
+  }).join("")}</div>`;
+}
+function weekPeekHtml(rt, di) {
+  if (!rt || !rt.daysPlan) return "";
+  return `<details class="more-fold week-peek">
+    <summary>Ver los ${rt.daysPlan.length} días de esta rutina</summary>
+    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")}</p>
+    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : "Día " + (i + 1) + " · "}${escapeHtml(d.title)}</h3>
+      ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
+    </div>`).join("")}
+    <button type="button" class="btn ghost" id="seeWeekRt">Abrir ficha de la rutina</button>
+  </details>`;
+}
 function displayName(it) {
   const ex = findEx(it.exId);
   return (ex && (ex.nameEs || ex.name)) || it.name;
@@ -14007,12 +14045,20 @@ function workView() {
     return `<section class="screen session-start">
       <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)}</p>${voiceBtn}</div>
       <h2>${escapeHtml(day.title)}</h2>
-      <p class="muted">${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
+      <p class="muted">${escapeHtml(rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
       ${packChip(selfClient())}
       ${floorLine()}
       ${renewBannerHtml()}
       ${(selfClient() && selfClient().cue) ? `<div class="card"><h3>De Miguel</h3><p>${escapeHtml(selfClient().cue)}</p></div>` : ""}
-      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Toque Empezar. El reloj no corre hasta que pulse Empezar otra vez dentro.</p><button class="btn primary go" id="goLive">Empezar</button>`}
+      <p class="tagline" style="margin:14px 0 0">Hoy va a hacer esto</p>
+      ${dayPreviewHtml(day)}
+      <p class="muted">Toque un ejercicio para ver la foto y la técnica. El reloj no corre hasta Empezar.</p>
+      ${weekPeekHtml(rt, di)}
+      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<button class="btn primary go" id="goLive">Empezar</button>`}
+      <div class="actions" style="margin-top:8px">
+        <button type="button" class="btn ghost" id="seeRoutinesHoy">Ver todas las rutinas</button>
+        <button type="button" class="btn ghost" data-view="book">Biblioteca de ejercicios</button>
+      </div>
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
@@ -14121,6 +14167,13 @@ function bindWork() {
     const c = selfClient() || {};
     window.open(waLink("Hola Miguel, soy " + (c.name || state.profile.name || "") + ". Quiero renovar " + (c.plan || "") + "."), "_blank");
   };
+  $$("[data-preview-ex]").forEach((b) => {
+    b.onclick = () => { if (b.dataset.previewEx) openExercise(b.dataset.previewEx); };
+  });
+  const seeHoy = $("#seeRoutinesHoy");
+  if (seeHoy) seeHoy.onclick = () => routinesSheet();
+  const seeWeek = $("#seeWeekRt");
+  if (seeWeek) seeWeek.onclick = () => openRoutine(rt.id);
   const go = $("#goLive");
   if (go) go.onclick = () => {
     store.set("nb_live", 1);
@@ -16577,8 +16630,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "22") {
-        store.set("nb_sw", "22");
+      if (store.get("nb_sw") !== "23") {
+        store.set("nb_sw", "23");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -16591,7 +16644,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=22", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=23", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
