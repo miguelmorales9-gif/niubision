@@ -11352,7 +11352,7 @@ function maybeCoachPull() {
 }
 function maybeClientPull() {
   if (state.role !== "client") return;
-  if (state.sessStart || state.timer) return;
+  if (state.sessStart || state.timer || store.get("nb_live")) return;
   const now = Date.now();
   if (maybeClientPull._at && now - maybeClientPull._at < 18000) return;
   maybeClientPull._at = now;
@@ -11360,7 +11360,7 @@ function maybeClientPull() {
   if (code.length !== 6) return;
   lookupAccess(code).then((hit) => {
     if (state.role !== "client") return;
-    if (state.sessStart || state.timer) return;
+    if (state.sessStart || state.timer || store.get("nb_live")) return;
     if (!hit || hit.unpaid || isRevoked(hit.accessCode, hit.id)) {
       lockOutClient();
       render();
@@ -13131,22 +13131,32 @@ function notifyPay(planLabel, method) {
 }
 function showPayReceipt(row) {
   closeModals();
+  const phone = (state.profile && state.profile.phone) || "";
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
     <div class="handle"></div>
     <p class="tagline">Recibo</p>
-    <h2>Pago iniciado</h2>
+    <h2>Pago iniciado. Espere el código.</h2>
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}</p>
-    ${row.accessCode ? `<p class="muted">Este es su código de acceso. Guárdelo. En niubision.com: Entrar → pegar el código de 6 dígitos.</p>` : `<p class="muted">Referencia ${escapeHtml(row.ref || row.invoice || row.id)}. Cuando el pago se confirme, el código de 6 dígitos llega por WhatsApp. Péguelo en Entrar.</p>`}
+    ${row.accessCode ? `<p class="ok">Código: ${escapeHtml(row.accessCode)}. Portada → Entrar → péguelo.</p>` : `<p>Miguel confirma el pago. El código de 6 dígitos llega por WhatsApp${phone ? " al " + escapeHtml(phone) : ""}. La app no se abre sola.</p><p class="muted">Cuando le llegue: Portada → Entrar → péguelo.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
     <button class="btn primary" id="waPay">Avisar a Miguel por WhatsApp</button>
     <button class="btn ghost" id="printRec">Imprimir recibo</button>
-    <button class="btn ghost" id="closeSheet">Entendido</button>
+    <button class="btn ghost" id="haveCodeNow">Ya tengo el código</button>
+    <button class="btn ghost" id="closeSheet">Volver a la portada</button>
   </div>`;
   document.body.appendChild(modal);
-  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  modal.querySelector("#closeSheet").onclick = () => {
+    modal.remove();
+    state.role = null;
+    state.splash = false;
+    persist();
+    render();
+  };
+  const haveNow = modal.querySelector("#haveCodeNow");
+  if (haveNow) haveNow.onclick = () => { modal.remove(); openCodeEntry(); };
   const pr = modal.querySelector("#printRec");
   if (pr) pr.onclick = () => printReceipt(row);
   const wa = modal.querySelector("#waPay");
@@ -13670,7 +13680,8 @@ function openWaiver(after) {
     <h2>Relevo de responsabilidad</h2>
     <p class="muted">Obligatorio antes de escoger o pagar cualquier servicio. Léalo entero.</p>
     <pre class="contract">${WAIVER_TEXT}</pre>
-    <input class="field" id="wName" placeholder="Nombre completo" value="${escAttr(state.profile.name || (state.health && state.health.name) || '')}">
+    <label class="muted" for="wName">Nombre completo</label>
+    <input class="field" id="wName" placeholder="Nombre y apellido" autocomplete="name" value="${escAttr(state.profile.name || (state.health && state.health.name) || '')}">
     <p class="muted">Firme con el dedo en el recuadro.</p>
     <canvas id="sigPad" width="640" height="180"></canvas>
     <div class="work-tools">
@@ -13720,9 +13731,12 @@ function openHealth(planLabel) {
     <p class="tagline">Requisito de salud</p>
     <h2>Cuestionario de preparación</h2>
     <p class="muted">Criterio PAR-Q (CSEP) citado por el Reglamento 7611 del DRD para programas de personas sanas. No es el formulario oficial con marca CSEP; cubre las mismas siete preguntas de cribado. No diagnostica. Validez práctica: 12 meses o hasta que cambie su salud.</p>
-    <input class="field" id="hName" placeholder="Nombre completo" value="${(h.name || state.profile.name || "").replace(/"/g,"&quot;")}">
-    <input class="field" id="hPhone" placeholder="Teléfono" value="${(h.phone || "").replace(/"/g,"&quot;")}">
-    <input class="field" id="hEmer" placeholder="Contacto de emergencia" value="${(h.emer || "").replace(/"/g,"&quot;")}">
+    <label class="muted" for="hName">Nombre completo</label>
+    <input class="field" id="hName" placeholder="Nombre y apellido" autocomplete="name" value="${escAttr(h.name || state.profile.name || "")}">
+    <label class="muted" for="hPhone">Teléfono</label>
+    <input class="field" id="hPhone" placeholder="Teléfono de 10 dígitos" inputmode="tel" autocomplete="tel" value="${escAttr(h.phone || state.profile.phone || "")}">
+    <label class="muted" for="hEmer">Contacto de emergencia (nombre y teléfono)</label>
+    <input class="field" id="hEmer" placeholder="Ej. María 7875550000" autocomplete="off" value="${escAttr(h.emer || "")}">
     ${HEALTH_ITEMS.map((q) => `<div class="card" style="padding:12px">
       <p>${q.t}</p>
       <div class="row two" style="margin-top:8px">
@@ -13742,7 +13756,11 @@ function openHealth(planLabel) {
     if (!$("#hTrue").checked) return toast("Marque la declaración");
     const name = cleanName($("#hName").value);
     if (!name) return toast("Escriba su nombre");
-    const row = { name, phone: $("#hPhone").value.trim().slice(0, 24), emer: $("#hEmer").value.trim().slice(0, 80), notes: $("#hNotes").value.trim().slice(0, 400), date: todayKey(), clearance: false };
+    const emer = ($("#hEmer").value || "").trim();
+    if (emer.length < 4) return toast("Escriba un contacto de emergencia");
+    let phone = ($("#hPhone").value || "").replace(/\D/g, "");
+    if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
+    const row = { name, phone: phone.slice(0, 24), emer: emer.slice(0, 80), notes: $("#hNotes").value.trim().slice(0, 400), date: todayKey(), clearance: false };
     for (const q of HEALTH_ITEMS) {
       const sel = modal.querySelector(`input[name="${q.id}"]:checked`);
       if (!sel) return toast("Conteste todas las preguntas");
@@ -13795,7 +13813,8 @@ function openContract(planLabel) {
     <p class="tagline">Contrato</p>
     <h2>${planLabel}</h2>
     <pre class="contract">${text}</pre>
-    <input class="field" id="sigName" placeholder="Nombre al firmar" value="${escAttr((state.health && state.health.name) || "")}">
+    <label class="muted" for="sigName">Nombre al firmar</label>
+    <input class="field" id="sigName" placeholder="Nombre y apellido" autocomplete="name" value="${escAttr((state.health && state.health.name) || (state.profile && state.profile.name) || "")}">
     <p class="muted">Firme con el dedo en el recuadro.</p>
     <canvas id="sigPad" width="640" height="180"></canvas>
     <div class="work-tools">
@@ -14111,6 +14130,7 @@ function homeView() {
       <span>Videos <b>${vids}/2</b></span>
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
+    ${day ? `<div class="card"><h3>Hoy · ${escapeHtml(day.title)}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : ""}
     ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     ${(state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
@@ -14341,7 +14361,7 @@ function workView() {
       ${dayPreviewHtml(day)}
       <p class="muted">Toque un ejercicio para ver la foto y la técnica. El reloj no corre hasta Empezar.</p>
       ${weekPeekHtml(rt, di)}
-      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<button class="btn primary go" id="goLive">Empezar</button>`}
+      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Revise la lista. Empezar abre el primer ejercicio y arranca el reloj. Dentro puede pausar.</p><button class="btn primary go" id="goLive">Empezar</button>`}
       <div class="actions" style="margin-top:8px">
         <button type="button" class="btn ghost" id="seeRoutinesHoy">Ver todas las rutinas</button>
         <button type="button" class="btn ghost" data-view="book">Biblioteca de ejercicios</button>
@@ -14467,8 +14487,8 @@ function bindWork() {
     store.set("nb_open_ex", 0);
     const justLook = go.textContent.indexOf("Ver") >= 0;
     if (!justLook) {
-      state.sessStart = null;
       state.sessElapsed = 0;
+      state.sessStart = Date.now();
     }
     holdScreen(false);
     const first = (loadSession(rt).items[0] || {});
@@ -15722,16 +15742,16 @@ function openNeedCode(planLabel) {
     <label class="muted" for="leadSex">Sexo</label>
     <select id="leadSex" class="field">
       <option value="">Sexo</option>
-      <option value="Hombre">Hombre</option>
-      <option value="Mujer">Mujer</option>
-      <option value="Prefiero no decir">Prefiero no decir</option>
+      <option value="Hombre"${(state.profile && state.profile.sex)==="Hombre"?" selected":""}>Hombre</option>
+      <option value="Mujer"${(state.profile && state.profile.sex)==="Mujer"?" selected":""}>Mujer</option>
+      <option value="Prefiero no decir"${(state.profile && state.profile.sex)==="Prefiero no decir"?" selected":""}>Prefiero no decir</option>
     </select>
     <label class="muted" for="leadAge">Edad</label>
-    <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad" autocomplete="bday-year">
+    <input class="field" id="leadAge" inputmode="numeric" maxlength="2" placeholder="Edad" autocomplete="bday-year" value="${escAttr((state.profile && state.profile.age) || "")}">
     <label class="muted" for="leadPhone">Teléfono</label>
-    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono de 10 dígitos" autocomplete="tel">
+    <input class="field" id="leadPhone" inputmode="tel" placeholder="Teléfono de 10 dígitos" autocomplete="tel" value="${escAttr((state.profile && state.profile.phone) || "")}">
     <label class="muted" for="leadEmail">Correo (para el recibo)</label>
-    <input class="field" id="leadEmail" inputmode="email" placeholder="Correo" autocomplete="email">
+    <input class="field" id="leadEmail" inputmode="email" placeholder="Correo" autocomplete="email" value="${escAttr((state.profile && state.profile.email) || "")}">
     <button class="btn primary" id="leadSend">Continuar a firmar</button>
     <button class="btn ghost" id="leadHave">Ya firmé y tengo el código</button>
     <button class="btn ghost" id="closeSheet">Ahora no</button>
@@ -16704,6 +16724,9 @@ function viewOrder() {
 let viewGen = 0;
 function afterPaint() {
   $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
+  $$("[data-preview-ex]").forEach((b) => {
+    b.onclick = () => { if (b.dataset.previewEx) openExercise(b.dataset.previewEx); };
+  });
   if (state.view !== "work") {
     document.querySelectorAll(".timer, .rest-bar, .rest-face").forEach((el) => el.remove());
   }
@@ -16917,8 +16940,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "25") {
-        store.set("nb_sw", "25");
+      if (store.get("nb_sw") !== "26") {
+        store.set("nb_sw", "26");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -16931,7 +16954,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=25", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=26", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}

@@ -1,4 +1,4 @@
-const CACHE = "nb-offline-v25";
+const CACHE = "nb-offline-v26";
 const SHELL = [
   "/",
   "/index.html",
