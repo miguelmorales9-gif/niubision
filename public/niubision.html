@@ -13151,7 +13151,7 @@ function showPayReceipt(row) {
   modal.querySelector("#closeSheet").onclick = () => {
     modal.remove();
     state.role = null;
-    state.splash = false;
+    state.splash = true;
     persist();
     render();
   };
@@ -13507,7 +13507,7 @@ const HEALTH_ITEMS = [
 
 function healthComplete() {
   const h = state.health;
-  return !!(h && h.name && h.date && HEALTH_ITEMS.every((q) => h[q.id] === "sí" || h[q.id] === "no"));
+  return !!(h && h.name && h.date && String(h.emer || "").trim().length >= 4 && HEALTH_ITEMS.every((q) => h[q.id] === "sí" || h[q.id] === "no"));
 }
 function healthFlagged() {
   const h = state.health || {};
@@ -16940,8 +16940,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "26") {
-        store.set("nb_sw", "26");
+      if (store.get("nb_sw") !== "27") {
+        store.set("nb_sw", "27");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -16954,7 +16954,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=26", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=27", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
