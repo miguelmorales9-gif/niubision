@@ -9897,6 +9897,7 @@ function pruneOrphanDocs() {
     return false;
   };
   state.contracts = latestByPerson((state.contracts || []).filter((k) => keepGlobal(k)));
+  // Drop inbox/payment orphans: no living clientId AND no matching name (history with name match kept).
   state.payments = dedupePayments((state.payments || []).filter((p) => keepGlobal(p) || docBelongsToLiving(p, idx)));
   state.appointments = (state.appointments || []).filter((a) => a && a.clientId && idx.ids[a.clientId]);
   state.videos = (state.videos || []).filter((v) => v && v.clientId && idx.ids[v.clientId]);
@@ -11137,6 +11138,11 @@ function currentBand() {
 function assignRoutine(id) {
   const r = findRoutine(id);
   if (!r) return null;
+  // Clients must Pedir → coach Bandeja. Never silently overwrite active assignment.
+  if (state.role === "client") {
+    toast("Pida el programa en Programas. Miguel lo aprueba en Bandeja.");
+    return null;
+  }
   if (state.role === "coach" && currentClient()) currentClient().routine = r.id;
   else state.profile.routine = r.id;
   state.profile.level = bandOf(r);
@@ -11572,7 +11578,7 @@ async function downloadCloudExport() {
   const bases = apiBases();
   for (let i = 0; i < bases.length; i++) {
     try {
-      const res = await cloudGet(bases[i] + "/export?pin=" + encodeURIComponent(STUDIO_PIN), {
+      const res = await cloudGet(bases[i] + "/export", {
         headers: { Accept: "application/json", "x-nb-pin": STUDIO_PIN, Authorization: "Bearer " + authHeader() }
       });
       const data = await res.json().catch(() => null);
@@ -11594,7 +11600,12 @@ function mergeProgramRequests(a, b) {
     if (!r || !r.id) return;
     const prev = map[r.id];
     if (!prev) { map[r.id] = r; return; }
-    const rank = (x) => (x.status === "pending" ? 2 : (x.status === "approved" ? 1 : 0));
+    const rank = (x) => {
+      const s = x && x.status;
+      if (s === "approved" || s === "ignored" || s === "rejected") return 2;
+      if (s === "pending") return 1;
+      return 0;
+    };
     if (rank(r) > rank(prev) || (rank(r) === rank(prev) && Number(r.at || 0) >= Number(prev.at || 0))) map[r.id] = Object.assign({}, prev, r);
   });
   return Object.keys(map).map((k) => map[k]).sort((x, y) => Number(y.at || 0) - Number(x.at || 0)).slice(0, 80);
@@ -11659,14 +11670,32 @@ function approveProgramRequest(reqId) {
   const req = (state.programRequests || []).find((x) => x.id === reqId);
   if (!req || req.status !== "pending") { toast("Pedido no encontrado"); return false; }
   const r = findRoutine(req.routineId);
-  if (!r) { toast("Programa no encontrado"); return false; }
+  if (!r) {
+    req.status = "ignored";
+    req.ignoredAt = Date.now();
+    saveProgramRequests();
+    persist();
+    cloudPush().catch(() => {});
+    toast("Programa ya no está en la biblioteca");
+    return false;
+  }
   let c = null;
   if (req.clientId) c = (state.clients || []).find((x) => x.id === req.clientId) || null;
   if (!c && req.accessCode) c = (state.clients || []).find((x) => String(x.accessCode || "") === String(req.accessCode)) || null;
   if (!c && req.name) c = (state.clients || []).find((x) => cleanName(x.name) === cleanName(req.name)) || null;
   if (!c) {
-    toast("No hay ficha de cliente para asignar. Ábralo en Gente.");
-    return false;
+    const slimId = req.clientId || ("c" + Date.now());
+    const code = String(req.accessCode || "").replace(/\D/g, "").slice(0, 6);
+    c = {
+      id: slimId,
+      name: cleanName(req.name || "Cliente") || "Cliente",
+      accessCode: code,
+      routine: r.id,
+      plan: req.plan || "",
+      unpaid: false
+    };
+    state.clients = state.clients || [];
+    state.clients.push(c);
   }
   state.settings.clientId = c.id;
   c.routine = r.id;
@@ -11688,6 +11717,7 @@ function ignoreProgramRequest(reqId) {
   req.ignoredAt = Date.now();
   saveProgramRequests();
   persist();
+  cloudPush().catch(() => {});
   toast("Pedido ignorado");
 }
 function openProgramOtra(reqId) {
@@ -11907,7 +11937,8 @@ function bindProgramas() {
   const ai = $("#progOpenAi");
   if (ai) ai.onclick = () => { if (typeof openAiBuilder === "function") openAiBuilder(); };
   $$("[data-req-approve]").forEach((b) => b.onclick = () => {
-    if (approveProgramRequest(b.dataset.reqApprove)) render();
+    approveProgramRequest(b.dataset.reqApprove);
+    render();
   });
   $$("[data-req-ignore]").forEach((b) => b.onclick = () => {
     ignoreProgramRequest(b.dataset.reqIgnore);
@@ -12130,8 +12161,10 @@ function inboxView() {
     <div class="card inbox-bucket nb-fade">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
+        const missing = !findRoutine(req.routineId);
         const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
-        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">Plantilla · espera su ok</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
+        const hint = missing ? "Programa ya no está en la biblioteca" : "Plantilla · espera su ok";
+        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}${missing ? " · se cierra al aprobar" : ""}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">${missing ? "Cerrar" : "Aprobar"}</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : nbEmpty({ icon: "◎", title: "Bandeja quieta", hint: "Cuando un cliente pida un programa en Programas, aparece aquí para aprobar.", cta: `<button class="btn ghost" type="button" data-view="programas">Ver Programas</button>` })}
     </div>
     <div class="card inbox-bucket">
@@ -12664,9 +12697,10 @@ function bindStudioOps() {
         state.clients.push(cl);
       }
       const done = confirmClientPaid(cl, p.method);
-      toast(done && done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
+      if (!done) { render(); return; }
+      toast(done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
       render();
-      if (done && done.client && done.code) {
+      if (done.client && done.code) {
         showShare(done.client);
         if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
       } else openReceipt(p);
@@ -13975,6 +14009,7 @@ function openHealth(planLabel) {
   if (step < 1 || step > 3) step = 1;
   const modal = document.createElement("div");
   modal.className = "modal";
+  const answerOf = (id) => (h[id] === "sí" || h[id] === "no" ? h[id] : "");
   const paint = () => {
     const qChunk = step === 2 ? HEALTH_ITEMS.slice(0, 4) : step === 3 ? HEALTH_ITEMS.slice(4) : [];
     const stepLabel = step === 1 ? "Paso 1 de 3 · Contacto" : step === 2 ? "Paso 2 de 3 · PAR-Q" : "Paso 3 de 3 · PAR-Q y notas";
@@ -13988,13 +14023,17 @@ function openHealth(planLabel) {
     <label class="muted" for="hEmer">Contacto de emergencia (nombre y teléfono)</label>
     <input class="field" id="hEmer" placeholder="Ej. María 7875550000" autocomplete="off" value="${escAttr(h.emer || "")}">`;
     } else {
-      body = qChunk.map((q) => `<div class="card" style="padding:12px">
+      body = qChunk.map((q) => {
+        const ans = answerOf(q.id);
+        const miss = h._miss && !ans;
+        return `<div class="card${miss ? " warn" : ""}" data-hq="${q.id}" style="padding:12px">
       <p>${q.t}</p>
       <div class="row two" style="margin-top:8px">
-        <label class="habit"><input type="radio" name="${q.id}" value="no" ${h[q.id]==="no"?"checked":""}> No</label>
-        <label class="habit"><input type="radio" name="${q.id}" value="sí" ${h[q.id]==="sí"?"checked":""}> Sí</label>
+        <button type="button" class="btn ${ans === "no" ? "primary" : "ghost"}" data-hans="${q.id}" data-hval="no">No</button>
+        <button type="button" class="btn ${ans === "sí" ? "primary" : "ghost"}" data-hans="${q.id}" data-hval="sí">Sí</button>
       </div>
-    </div>`).join("");
+    </div>`;
+      }).join("");
       if (step === 3) {
         body += `<textarea id="hNotes" placeholder="Lesiones, medicamentos o detalles (sin prescribir tratamiento)">${escapeHtml(h.notes || "")}</textarea>
     <p class="muted">Si contestó “sí” a alguna pregunta, un médico debe autorizar la actividad antes de firmar el contrato.</p>
@@ -14018,11 +14057,6 @@ function openHealth(planLabel) {
         h.phone = (($("#hPhone") && $("#hPhone").value) || h.phone || "").trim();
         h.emer = (($("#hEmer") && $("#hEmer").value) || h.emer || "").trim();
       } else {
-        const chunk = step === 2 ? HEALTH_ITEMS.slice(0, 4) : HEALTH_ITEMS.slice(4);
-        for (const q of chunk) {
-          const sel = modal.querySelector(`input[name="${q.id}"]:checked`);
-          if (sel) h[q.id] = sel.value;
-        }
         if (step === 3) {
           const notes = $("#hNotes");
           if (notes) h.notes = notes.value.trim().slice(0, 400);
@@ -14033,9 +14067,29 @@ function openHealth(planLabel) {
       store.set("nb_health_draft", h);
       store.set("nb_health_step", step);
     };
+    modal.querySelectorAll("[data-hans]").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        const id = btn.getAttribute("data-hans");
+        const val = btn.getAttribute("data-hval");
+        if (!id || (val !== "sí" && val !== "no")) return;
+        h[id] = val;
+        delete h._miss;
+        store.set("nb_health_draft", h);
+        // repaint only answer styles for this card
+        const card = modal.querySelector(`[data-hq="${id}"]`);
+        if (card) {
+          card.classList.remove("warn");
+          card.querySelectorAll("[data-hans]").forEach((b) => {
+            const on = b.getAttribute("data-hval") === val;
+            b.className = "btn " + (on ? "primary" : "ghost");
+          });
+        }
+      };
+    });
     const back = modal.querySelector("#hBack");
     const close = modal.querySelector("#closeSheet");
-    if (back) back.onclick = () => { draftSave(); step -= 1; paint(); };
+    if (back) back.onclick = () => { draftSave(); step -= 1; delete h._miss; paint(); };
     if (close) close.onclick = () => { draftSave(); modal.remove(); };
     modal.querySelector("#hNext").onclick = () => {
       draftSave();
@@ -14046,18 +14100,28 @@ function openHealth(planLabel) {
         if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
         if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
         h.phone = phone.slice(0, 24);
-        step = 2; paint(); return;
+        step = 2; delete h._miss; paint(); return;
       }
       if (step === 2) {
-        for (const q of HEALTH_ITEMS.slice(0, 4)) {
-          if (h[q.id] !== "sí" && h[q.id] !== "no") return toast("Conteste todas las preguntas");
+        const miss = HEALTH_ITEMS.slice(0, 4).filter((q) => h[q.id] !== "sí" && h[q.id] !== "no");
+        if (miss.length) {
+          h._miss = true;
+          paint();
+          return toast("Conteste las " + miss.length + " pregunta" + (miss.length === 1 ? "" : "s") + " marcada" + (miss.length === 1 ? "" : "s"));
         }
-        step = 3; paint(); return;
+        step = 3; delete h._miss; paint(); return;
       }
-      // step 3 save
       if (!$("#hTrue") || !$("#hTrue").checked) return toast("Marque la declaración");
-      for (const q of HEALTH_ITEMS) {
-        if (h[q.id] !== "sí" && h[q.id] !== "no") return toast("Conteste todas las preguntas");
+      const missAll = HEALTH_ITEMS.filter((q) => h[q.id] !== "sí" && h[q.id] !== "no");
+      if (missAll.length) {
+        h._miss = true;
+        // if missing are on step 2, go back
+        if (missAll.some((q) => HEALTH_ITEMS.slice(0, 4).some((x) => x.id === q.id))) {
+          step = 2; paint();
+        } else {
+          paint();
+        }
+        return toast("Conteste todas las preguntas");
       }
       let phone = String(h.phone || "").replace(/\D/g, "");
       if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
@@ -14088,7 +14152,6 @@ function openHealth(planLabel) {
   document.body.appendChild(modal);
   paint();
 }
-
 
 function openClearance(planLabel) {
   const modal = document.createElement("div");
@@ -14625,6 +14688,12 @@ function pickerOptions(list, currentId) {
     return `<optgroup label="${kindLabel(k)}">${opts}</optgroup>`;
   }).join("");
 }
+function workClientAskHtml() {
+  return `<div class="work-pick">
+    <p class="muted">Hoy muestra solo su programa activo. Pedir otro no lo cambia solo — Miguel lo ve en Bandeja.</p>
+    <button class="btn primary" type="button" data-view="programas">Pedir en Programas</button>
+  </div>`;
+}
 function workPickerHtml(band, list, currentId) {
   const labels = [["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
   const days = [["","Todos"],["2","2 días"],["3","3 días"],["4","4 días"],["5","5 días"],["6","6 días"]];
@@ -14668,8 +14737,14 @@ function bindPick(root) {
   const pickEl = (scope.querySelector && scope.querySelector("#pickRt")) || (scope === document ? $("#pickRt") : null);
   if (pickEl) pickEl.onchange = () => {
     store.set("nb_pick_open", 1);
-    if (pickEl.value) assignRoutine(pickEl.value);
-    toast("Rutina lista");
+    if (pickEl.value) {
+      if (state.role === "client") {
+        requestProgram(pickEl.value);
+      } else {
+        assignRoutine(pickEl.value);
+        toast("Rutina lista");
+      }
+    }
     if (root && root.classList && root.classList.contains("modal")) root.remove();
     render();
   };
@@ -14678,7 +14753,7 @@ function bindPick(root) {
 function workView() {
   let rt = activeRoutine();
   const band = currentBand();
-  if (rt && bandOf(rt) !== band) {
+  if (rt && bandOf(rt) !== band && state.role !== "client") {
     const next = preferredRoutine(band);
     if (next) {
       assignRoutine(next.id);
@@ -14691,7 +14766,7 @@ function workView() {
     return `<section class="screen"><p class="tagline">Hoy</p>
       ${syncBannerHtml()}
       ${nbEmpty({ icon: "◆", title: "Hoy sin programa", hint: "Aún no hay rutina activa. Pida una en Programas o espere a que Miguel asigne.", cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>` })}
-      ${workPickerHtml(band, list, "")}
+      ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, "")}
     </section>`;
   }
   const di = dayIndex(rt) % rt.daysPlan.length;
@@ -14733,7 +14808,7 @@ function workView() {
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
-        ${workPickerHtml(band, list, rt.id)}
+        ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
         <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
       </details>
     </section>`;
@@ -14747,7 +14822,7 @@ function workView() {
     ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
-      ${workPickerHtml(band, list, rt.id)}
+      ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
       <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
     </details>
     ${ses.items.map((it, i) => {
@@ -14879,6 +14954,12 @@ function bindWork() {
     state.profile.level = band;
     store.set("nb_level", band);
     store.set("nb_pick_open", 1);
+    if (state.role === "client") {
+      persist();
+      toast("Filtro: " + b.textContent + " · pida en Programas para cambiar");
+      render();
+      return;
+    }
     const next = preferredRoutine(band);
     if (next) assignRoutine(next.id);
     else persist();
@@ -15524,7 +15605,7 @@ function peopleView() {
         ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
-        ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>`}
+        ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientHasLegal(c) ? `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
         <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
         <button class="btn small ghost" data-timeline="${c.id}">Línea de tiempo</button>
@@ -15614,6 +15695,11 @@ function openRoutine(id) {
   modal.querySelector("#closeSheet").onclick = close;
   const use = modal.querySelector("#useRt");
   if (use) use.onclick = () => {
+    if (state.role === "client") {
+      requestProgram(r.id);
+      close();
+      return;
+    }
     if (currentClient()) {
       currentClient().routine = r.id;
       assignRoutine(r.id);
@@ -16942,6 +17028,13 @@ function bindChrome() {
     const msg = "NiuBision\nHola " + c.name + ".\n" + (c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n") + "Plan: " + (c.plan || "") + "\n\nAbra niubision.com → Entrar → pegue el código.";
     window.open(waClientLink(c, msg), "_blank");
   });
+  $$("[data-wa-legal]").forEach((b) => b.onclick = () => {
+    const c = state.clients.find((x) => x.id === b.dataset.waLegal);
+    if (!c) return;
+    const gaps = clientLegalGaps(c).join(", ");
+    const msg = "NiuBision\nHola " + c.name + ".\nPara recibir su código falta firmar en la app: " + gaps + ".\nAbra niubision.com → elija el plan → complete relevo, PAR-Q y contrato.";
+    window.open(waClientLink(c, msg), "_blank");
+  });
   $$("[data-assignwa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.assignwa);
     if (c) openAssignWhatsApp(c);
@@ -17316,7 +17409,7 @@ function afterPaint() {
   if (state.view === "rutinas") bindRoutinesCoach();
   if (state.view === "programas") bindProgramas();
   if (state.view === "inbox") {
-    $$("[data-req-approve]").forEach((b) => b.onclick = () => { if (approveProgramRequest(b.dataset.reqApprove)) render(); });
+    $$("[data-req-approve]").forEach((b) => b.onclick = () => { approveProgramRequest(b.dataset.reqApprove); render(); });
     $$("[data-req-ignore]").forEach((b) => b.onclick = () => { ignoreProgramRequest(b.dataset.reqIgnore); render(); });
     $$("[data-req-otra]").forEach((b) => b.onclick = () => openProgramOtra(b.dataset.reqOtra));
   }
@@ -17543,7 +17636,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=33", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=35", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}

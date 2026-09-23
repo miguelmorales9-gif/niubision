@@ -354,7 +354,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 25 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 26 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -447,8 +447,10 @@ async function handle(req, env) {
   }
 
   if (path === "/api/export" && method === "GET") {
-    if (pinOf(req, url, {}) !== COACH_PIN) return json({ error: "No" }, 403);
     const row = await rowOf(env, "NIUBI");
+    const pinOk = pinOf(req, url, {}) === COACH_PIN; // x-nb-pin, body.pin, or query pin (back-compat)
+    const tok = bearer(req, url);
+    if (!pinOk && !tokOk(row, tok)) return json({ error: "No" }, 403);
     return json({
       ok: true,
       studioKey: "NIUBI",
@@ -484,7 +486,7 @@ async function handle(req, env) {
     if (dead.has(digits)) return json({ error: "Código anulado" }, 404);
     const list = (row.state && row.state.clients) || [];
     const hit = list.find((c) => String(c.accessCode || "") === digits);
-    if (!hit) return json({ error: "Estudio no encontrado" }, 404);
+    if (!hit) return json({ error: "Código no válido" }, 404);
     if (hit.unpaid) return json({ error: "Pago pendiente" }, 403);
     const library = {
       customRoutines: (row.state && row.state.customRoutines) || [],
@@ -662,11 +664,24 @@ async function handle(req, env) {
     if (!reqRow || !reqRow.id || !reqRow.routineId) return json({ error: "Falta el pedido" }, 400);
     const row = await rowOf(env, "NIUBI");
     const code = String(reqRow.accessCode || "").replace(/\D/g, "").slice(0, 6);
+    if (!/^\d{6}$/.test(code)) return json({ error: "Código de acceso requerido" }, 401);
+    const clients = (row.state && row.state.clients) || [];
+    const revoked = (row.state && row.state.revoked) || [];
+    const deadCodes = new Set(revoked.map((r) => String(r.code || "")).filter(Boolean));
+    const deadIds = new Set(revoked.map((r) => String(r.clientId || "")).filter(Boolean));
+    const living = clients.find((c) => {
+      if (!c || String(c.accessCode || "") !== code) return false;
+      if (c.id && deadIds.has(String(c.id))) return false;
+      if (deadCodes.has(code)) return false;
+      return true;
+    });
+    if (!living) return json({ error: "Cliente no encontrado o código anulado" }, 404);
+    const clientId = String(reqRow.clientId || living.id || "");
     const note = {
       id: "in" + Date.now(),
       type: "program_req",
-      name: String(reqRow.name || "Cliente").slice(0, 80),
-      clientId: String(reqRow.clientId || ""),
+      name: String(reqRow.name || living.name || "Cliente").slice(0, 80),
+      clientId,
       accessCode: code,
       routineId: String(reqRow.routineId || ""),
       routineName: String(reqRow.routineName || ""),
@@ -674,7 +689,13 @@ async function handle(req, env) {
       reqId: String(reqRow.id)
     };
     row.state = mergeStudio(row.state || {}, {
-      programRequests: [Object.assign({}, reqRow, { status: reqRow.status || "pending", at: reqRow.at || Date.now() })],
+      programRequests: [Object.assign({}, reqRow, {
+        status: reqRow.status || "pending",
+        at: reqRow.at || Date.now(),
+        accessCode: code,
+        clientId,
+        name: note.name
+      })],
       inbox: [note]
     });
     await putRow(env, row);
