@@ -10701,7 +10701,7 @@ async function postPayNotice(row) {
 async function postPaid(c, p) {
   if (!c) return { ok: false };
   if (state.role === "coach" && !(authGet() && authGet().token)) {
-    await authLogin("coach", STUDIO_PIN).catch(() => {});
+    await authLogin("coach", studioPin()).catch(() => {});
   }
   const bases = apiBases();
   const token = authHeader();
@@ -10738,7 +10738,7 @@ async function postPaid(c, p) {
 async function postRevoke(c) {
   if (!c) return { ok: false };
   if (state.role === "coach" && !(authGet() && authGet().token)) {
-    await authLogin("coach", STUDIO_PIN).catch(() => {});
+    await authLogin("coach", studioPin()).catch(() => {});
   }
   const token = authHeader();
   const bases = apiBases();
@@ -10894,8 +10894,8 @@ async function registerNative() {
     try {
       const res = await cloudGet(base + "/studio", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", "X-Nb-Pin": STUDIO_PIN },
-        body: JSON.stringify({ studioKey: key, pin: STUDIO_PIN })
+        headers: { "Content-Type": "application/json", Accept: "application/json", "X-Nb-Pin": studioPin() },
+        body: JSON.stringify({ studioKey: key, pin: studioPin() })
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.token) {
@@ -11579,7 +11579,7 @@ async function downloadCloudExport() {
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/export", {
-        headers: { Accept: "application/json", "x-nb-pin": STUDIO_PIN, Authorization: "Bearer " + authHeader() }
+        headers: { Accept: "application/json", "x-nb-pin": studioPin(), Authorization: "Bearer " + authHeader() }
       });
       const data = await res.json().catch(() => null);
       if (res.ok && data && data.state) {
@@ -12906,7 +12906,10 @@ function newSalt() {
 function hasPin() {
   return !!(state.pinHash || (state.pin && String(state.pin).length >= 4));
 }
-const STUDIO_PIN = "9798";
+/** Live coach PIN lives in Worker secret COACH_PIN — never ship it here. */
+function studioPin() {
+  return String(state.pin || "").trim();
+}
 const PAYPAL_DEST = "miguel.morales9@gmail.com";
 const ATH_DEST = "7874544038";
 function authGet() {
@@ -12963,9 +12966,8 @@ async function authLogout() {
   }
 }
 async function ensureStudioPin() {
-  if (hasPin()) return;
-  await setPin(STUDIO_PIN);
-  store.set("nb_pin_init_9798", 1);
+  /* PIN is set only after a successful coach unlock / login — no shipped default. */
+  return;
 }
 async function setPin(plain) {
   const p = String(plain || "").trim();
@@ -13759,7 +13761,15 @@ function openCoachGate() {
     const a = ($("#pinA").value || "").trim();
     if (!/^\d{4,8}$/.test(a)) return toast("Use 4 a 8 dígitos");
     try {
-      if (!(await checkPin(a))) {
+      let ok = false;
+      if (isOnline()) {
+        const sess = await authLogin("coach", a);
+        ok = !!(sess && sess.token);
+        if (ok) await setPin(a);
+      } else {
+        ok = await checkPin(a);
+      }
+      if (!ok) {
         if (!pinLocked() && (store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
         return;
       }
@@ -13769,7 +13779,6 @@ function openCoachGate() {
     }
     modal.remove();
     state.role = "coach"; state.view = "home"; persist();
-    authLogin("coach", a).catch(() => {});
     ensureCloud().finally(() => render());
   };
 }
@@ -17568,9 +17577,11 @@ async function boot() {
   state._pendingCode = null;
   if (state.splash) warmupIntro();
   pinLocked();
-  if (!store.get("nb_pin_init_9798")) {
-    await setPin(STUDIO_PIN);
-    store.set("nb_pin_init_9798", 1);
+  if (store.get("nb_pin_init_9798") && !store.get("nb_pin_secret_v38")) {
+    /* Drop device PIN seeded from the old shipped default; coach re-enters the cloud PIN once. */
+    resetStudioPin();
+    store.set("nb_pin_init_9798", 0);
+    store.set("nb_pin_secret_v38", 1);
   } else {
     await ensureStudioPin();
   }
@@ -17614,7 +17625,7 @@ async function boot() {
     console.error(err);
   }
   if (state.role === "coach") {
-    authLogin("coach", STUDIO_PIN).catch(() => {});
+    if (studioPin()) authLogin("coach", studioPin()).catch(() => {});
     const last = +store.get("nb_last_backup", 0) || 0;
     if (!last || Date.now() - last > 7 * 86400000) {
       setTimeout(() => toast("Haga un respaldo esta semana: Gente → Descargar JSON."), 1800);
@@ -17636,7 +17647,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=37", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=38", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
