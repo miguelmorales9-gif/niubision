@@ -9897,6 +9897,7 @@ function pruneOrphanDocs() {
     return false;
   };
   state.contracts = latestByPerson((state.contracts || []).filter((k) => keepGlobal(k)));
+  // Drop inbox/payment orphans: no living clientId AND no matching name (history with name match kept).
   state.payments = dedupePayments((state.payments || []).filter((p) => keepGlobal(p) || docBelongsToLiving(p, idx)));
   state.appointments = (state.appointments || []).filter((a) => a && a.clientId && idx.ids[a.clientId]);
   state.videos = (state.videos || []).filter((v) => v && v.clientId && idx.ids[v.clientId]);
@@ -11137,6 +11138,11 @@ function currentBand() {
 function assignRoutine(id) {
   const r = findRoutine(id);
   if (!r) return null;
+  // Clients must Pedir → coach Bandeja. Never silently overwrite active assignment.
+  if (state.role === "client") {
+    toast("Pida el programa en Programas. Miguel lo aprueba en Bandeja.");
+    return null;
+  }
   if (state.role === "coach" && currentClient()) currentClient().routine = r.id;
   else state.profile.routine = r.id;
   state.profile.level = bandOf(r);
@@ -11572,7 +11578,7 @@ async function downloadCloudExport() {
   const bases = apiBases();
   for (let i = 0; i < bases.length; i++) {
     try {
-      const res = await cloudGet(bases[i] + "/export?pin=" + encodeURIComponent(STUDIO_PIN), {
+      const res = await cloudGet(bases[i] + "/export", {
         headers: { Accept: "application/json", "x-nb-pin": STUDIO_PIN, Authorization: "Bearer " + authHeader() }
       });
       const data = await res.json().catch(() => null);
@@ -11594,7 +11600,12 @@ function mergeProgramRequests(a, b) {
     if (!r || !r.id) return;
     const prev = map[r.id];
     if (!prev) { map[r.id] = r; return; }
-    const rank = (x) => (x.status === "pending" ? 2 : (x.status === "approved" ? 1 : 0));
+    const rank = (x) => {
+      const s = x && x.status;
+      if (s === "approved" || s === "ignored" || s === "rejected") return 2;
+      if (s === "pending") return 1;
+      return 0;
+    };
     if (rank(r) > rank(prev) || (rank(r) === rank(prev) && Number(r.at || 0) >= Number(prev.at || 0))) map[r.id] = Object.assign({}, prev, r);
   });
   return Object.keys(map).map((k) => map[k]).sort((x, y) => Number(y.at || 0) - Number(x.at || 0)).slice(0, 80);
@@ -11665,8 +11676,18 @@ function approveProgramRequest(reqId) {
   if (!c && req.accessCode) c = (state.clients || []).find((x) => String(x.accessCode || "") === String(req.accessCode)) || null;
   if (!c && req.name) c = (state.clients || []).find((x) => cleanName(x.name) === cleanName(req.name)) || null;
   if (!c) {
-    toast("No hay ficha de cliente para asignar. Ábralo en Gente.");
-    return false;
+    const slimId = req.clientId || ("c" + Date.now());
+    const code = String(req.accessCode || "").replace(/\D/g, "").slice(0, 6);
+    c = {
+      id: slimId,
+      name: cleanName(req.name || "Cliente") || "Cliente",
+      accessCode: code,
+      routine: r.id,
+      plan: req.plan || "",
+      unpaid: false
+    };
+    state.clients = state.clients || [];
+    state.clients.push(c);
   }
   state.settings.clientId = c.id;
   c.routine = r.id;
@@ -11688,6 +11709,7 @@ function ignoreProgramRequest(reqId) {
   req.ignoredAt = Date.now();
   saveProgramRequests();
   persist();
+  cloudPush().catch(() => {});
   toast("Pedido ignorado");
 }
 function openProgramOtra(reqId) {
@@ -14625,6 +14647,12 @@ function pickerOptions(list, currentId) {
     return `<optgroup label="${kindLabel(k)}">${opts}</optgroup>`;
   }).join("");
 }
+function workClientAskHtml() {
+  return `<div class="work-pick">
+    <p class="muted">Hoy muestra solo su programa activo. Pedir otro no lo cambia solo — Miguel lo ve en Bandeja.</p>
+    <button class="btn primary" type="button" data-view="programas">Pedir en Programas</button>
+  </div>`;
+}
 function workPickerHtml(band, list, currentId) {
   const labels = [["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
   const days = [["","Todos"],["2","2 días"],["3","3 días"],["4","4 días"],["5","5 días"],["6","6 días"]];
@@ -14668,8 +14696,14 @@ function bindPick(root) {
   const pickEl = (scope.querySelector && scope.querySelector("#pickRt")) || (scope === document ? $("#pickRt") : null);
   if (pickEl) pickEl.onchange = () => {
     store.set("nb_pick_open", 1);
-    if (pickEl.value) assignRoutine(pickEl.value);
-    toast("Rutina lista");
+    if (pickEl.value) {
+      if (state.role === "client") {
+        requestProgram(pickEl.value);
+      } else {
+        assignRoutine(pickEl.value);
+        toast("Rutina lista");
+      }
+    }
     if (root && root.classList && root.classList.contains("modal")) root.remove();
     render();
   };
@@ -14678,7 +14712,7 @@ function bindPick(root) {
 function workView() {
   let rt = activeRoutine();
   const band = currentBand();
-  if (rt && bandOf(rt) !== band) {
+  if (rt && bandOf(rt) !== band && state.role !== "client") {
     const next = preferredRoutine(band);
     if (next) {
       assignRoutine(next.id);
@@ -14691,7 +14725,7 @@ function workView() {
     return `<section class="screen"><p class="tagline">Hoy</p>
       ${syncBannerHtml()}
       ${nbEmpty({ icon: "◆", title: "Hoy sin programa", hint: "Aún no hay rutina activa. Pida una en Programas o espere a que Miguel asigne.", cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>` })}
-      ${workPickerHtml(band, list, "")}
+      ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, "")}
     </section>`;
   }
   const di = dayIndex(rt) % rt.daysPlan.length;
@@ -14733,7 +14767,7 @@ function workView() {
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
-        ${workPickerHtml(band, list, rt.id)}
+        ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
         <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
       </details>
     </section>`;
@@ -14747,7 +14781,7 @@ function workView() {
     ${state.role === "coach" && state.clients.length ? `<div class="filters">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
-      ${workPickerHtml(band, list, rt.id)}
+      ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
       <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
     </details>
     ${ses.items.map((it, i) => {
@@ -14879,6 +14913,12 @@ function bindWork() {
     state.profile.level = band;
     store.set("nb_level", band);
     store.set("nb_pick_open", 1);
+    if (state.role === "client") {
+      persist();
+      toast("Filtro: " + b.textContent + " · pida en Programas para cambiar");
+      render();
+      return;
+    }
     const next = preferredRoutine(band);
     if (next) assignRoutine(next.id);
     else persist();
@@ -15614,6 +15654,11 @@ function openRoutine(id) {
   modal.querySelector("#closeSheet").onclick = close;
   const use = modal.querySelector("#useRt");
   if (use) use.onclick = () => {
+    if (state.role === "client") {
+      requestProgram(r.id);
+      close();
+      return;
+    }
     if (currentClient()) {
       currentClient().routine = r.id;
       assignRoutine(r.id);
@@ -17543,7 +17588,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=33", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=34", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
