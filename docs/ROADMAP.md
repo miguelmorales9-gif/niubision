@@ -53,11 +53,11 @@
 ## Phase 3 — Coach superpowers
 | ID | Work | Status |
 |----|------|--------|
-| 3.1 | Today inbox (paid / waiting code / PAR-Q / missed) | **this PR** |
-| 3.2 | Assign routine + WhatsApp template one-tap | **this PR** |
-| 3.3 | Auto-code after verified payment | **this PR** |
-| 3.4 | Client timeline | **this PR** |
-| 3.5 | Export PDF week | **this PR** |
+| 3.1 | Today inbox (paid / waiting code / PAR-Q / missed) | **done** (this PR) |
+| 3.2 | Assign routine + WhatsApp template one-tap | **done** (this PR) |
+| 3.3 | Auto-code after verified payment | **done** (this PR) |
+| 3.4 | Client timeline | **done** (this PR) |
+| 3.5 | Export PDF week | **done** (this PR) |
 
 ## Phase 4 — Platform
 | ID | Work | Status |
