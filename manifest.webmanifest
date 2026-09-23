@@ -31,6 +31,12 @@
       "short_name": "Planes",
       "url": "https://niubision.com/?view=price",
       "icons": [{ "src": "https://niubision.com/icon-192.png?v=and2", "sizes": "192x192" }]
+    },
+    {
+      "name": "Bandeja",
+      "short_name": "Bandeja",
+      "url": "https://niubision.com/?view=inbox",
+      "icons": [{ "src": "https://niubision.com/icon-192.png?v=and2", "sizes": "192x192" }]
     }
   ],
   "launch_handler": { "client_mode": ["focus-existing", "auto"] },

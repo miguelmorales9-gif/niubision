@@ -68,11 +68,13 @@
 ## Phase 4 — Platform
 | ID | Work | Status |
 |----|------|--------|
-| 4.1 | Real backend auth + backups + multi-device | planned |
-| 4.2 | Push notifications | planned |
-| 4.3 | English later — do not dilute ES-PR first | planned |
-| 4.4 | Store wrappers only after Phase 2 metrics | planned |
-| 4.5 | Motion / empty-state visual system | planned |
+| 4.1 | Real backend auth + backups + multi-device | **done** (this PR) |
+| 4.2 | Push notifications (SW + local + ntfy; VAPID follow-up) | **done** (this PR) |
+| 4.3 | English later — do not dilute ES-PR first | **deferred** (intentional hold) |
+| 4.4 | Store wrappers only after Phase 2 metrics | **deferred** (intentional hold) |
+| 4.5 | Motion / empty-state visual system | **done** (this PR) |
+
+See `docs/PLATFORM.md` for auth, sync, backup, and push notes.
 
 ## Working agreements
 - Engineering owns PRs and concrete diffs on this repo.

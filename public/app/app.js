@@ -10408,7 +10408,7 @@ function cloudPayload() {
     })(),
     revoked: revokedList().map((r) => ({ code: r.code || "", clientId: r.clientId || "", name: r.name || "", at: r.at || 0 })),
     inbox: (state.inbox || []).filter((n) => n && !isRevoked(n.accessCode, n.clientId)).slice(0, 40),
-    programRequests: (state.programRequests || []).filter((r) => r && r.status === "pending").slice(0, 40),
+    programRequests: (state.programRequests || []).filter((r) => r && (r.status === "pending" || r.status === "approved")).slice(0, 40),
     updatedAt: Date.now()
   };
 }
@@ -10549,6 +10549,10 @@ function applyClientAssignment(d) {
   if (Array.isArray(d.appointments)) {
     const mine = d.appointments.filter((a) => a.clientId === (local && local.id) || a.clientId === id);
     state.appointments = mergeRows(state.appointments || [], mine);
+  }
+  if (Array.isArray(d.programRequests)) {
+    state.programRequests = mergeProgramRequests(state.programRequests || [], d.programRequests);
+    try { store.set("nb_program_requests", state.programRequests); } catch (e) {}
   }
 }
 let cloudTimer = null;
@@ -11006,6 +11010,7 @@ async function cloudPull() {
           state.settings.cloudUrl = bases[i];
           state.settings.cloudKind = "api";
           store.set("nb_api", bases[i]);
+          try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
           return { ok: true, data: { state: data.state } };
         }
       } catch (e) {}
@@ -11430,6 +11435,159 @@ function offerCodeWhatsApp(c, opts) {
   }
   if (opts.open !== false) window.open(waClientLink(c, msg), "_blank");
 }
+function nbEmpty(opts) {
+  opts = opts || {};
+  const icon = opts.icon || "·";
+  const title = opts.title || "";
+  const hint = opts.hint || "";
+  const cta = opts.cta || "";
+  return `<div class="nb-empty nb-fade"><div class="nb-empty-icon" aria-hidden="true">${icon}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(hint)}</p>${cta || ""}</div>`;
+}
+function lastSyncLabel() {
+  const ts = store.get("nb_last_sync_at", 0);
+  if (!ts) return "Sin sincronizar aún";
+  try {
+    const d = new Date(Number(ts));
+    if (isNaN(d.getTime())) return "Sin sincronizar aún";
+    return d.toLocaleString("es-PR", { dateStyle: "short", timeStyle: "short" });
+  } catch (e) { return "Sin sincronizar aún"; }
+}
+function maskStudioId(id) {
+  const s = String(id || studioKey() || "NIUBI");
+  if (s.length <= 4) return s;
+  return s.slice(0, 2) + "···" + s.slice(-2);
+}
+function cloudConnected() {
+  const kind = String((state.settings && state.settings.cloudKind) || "");
+  const url = String((state.settings && state.settings.cloudUrl) || "");
+  const tok = !!(authGet() && authGet().token) || !!(state.settings && state.settings.cloudToken);
+  if (kind === "api" && tok) return true;
+  if (/api\.niubision\.com|workers\.dev/i.test(url) && tok) return true;
+  return false;
+}
+function syncBannerHtml() {
+  const online = isOnline();
+  const line = lastSyncLabel();
+  if (!online) {
+    return `<div class="sync-banner offline">Sin conexión · ${escapeHtml(line)}</div>`;
+  }
+  if (state.role === "client" || state.role === "coach") {
+    return `<div class="sync-banner">Nube · ${escapeHtml(line)}</div>`;
+  }
+  return "";
+}
+function notifyLocal(title, body, url) {
+  try {
+    store.set("nb_notify", (typeof Notification !== "undefined" && Notification.permission === "granted") ? 1 : store.get("nb_notify", 0));
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const opts = { body: String(body || ""), icon: "/icon-192.png", badge: "/icon-96.png", tag: "nb-local", data: { url: url || "/" } };
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.showNotification) reg.showNotification(String(title || "NiuBision"), opts);
+      }).catch(() => { try { new Notification(String(title || "NiuBision"), opts); } catch (e) {} });
+    } else {
+      try { new Notification(String(title || "NiuBision"), opts); } catch (e) {}
+    }
+  } catch (e) {}
+}
+async function ensureNotifyPermission() {
+  if (typeof Notification === "undefined") return false;
+  if (Notification.permission === "granted") {
+    store.set("nb_notify", 1);
+    return true;
+  }
+  if (Notification.permission === "denied") {
+    store.set("nb_notify", 0);
+    return false;
+  }
+  try {
+    const p = await Notification.requestPermission();
+    store.set("nb_notify", p === "granted" ? 1 : 0);
+    return p === "granted";
+  } catch (e) { return false; }
+}
+async function postProgramRequest(row) {
+  if (!row || !row.id) return { ok: false };
+  if (!isOnline()) return { ok: false, offline: true };
+  const bases = apiBases();
+  const body = JSON.stringify({ request: row });
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/program-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body
+      });
+      if (res.ok) return { ok: true };
+    } catch (e) {}
+  }
+  return { ok: false };
+}
+async function clientCloudRefresh() {
+  const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+  if (code.length !== 6) return { ok: false };
+  if (!isOnline()) return { ok: false, offline: true };
+  const prevRoutine = state.profile && state.profile.routine;
+  const hit = await lookupAccess(code);
+  if (!hit) return { ok: false };
+  applyClientAssignment({
+    clients: [hit],
+    customRoutines: state.customRoutines,
+    routineEdits: state.routineEdits,
+    contracts: state.contracts,
+    payments: state.payments,
+    receipts: state.receipts,
+    appointments: state.appointments
+  });
+  try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
+  persist();
+  if (prevRoutine && hit.routine && hit.routine !== prevRoutine) {
+    notifyLocal("Programa listo", "Miguel aprobó su programa. Ábralo en Hoy.", "/?view=work");
+  }
+  return { ok: true, routine: hit.routine || "" };
+}
+async function syncOnResume() {
+  if (!isOnline() || state.splash) return;
+  if (syncOnResume._busy) return;
+  syncOnResume._busy = true;
+  try {
+    if (state.role === "coach") {
+      const p = await cloudPull().catch(() => ({ ok: false }));
+      if (p && p.ok) {
+        try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
+        try { render(); } catch (e) {}
+      }
+      scheduleCloudPush();
+    } else if (state.role === "client" || (state.profile && state.profile.unlocked)) {
+      const p = await clientCloudRefresh().catch(() => ({ ok: false }));
+      cloudPushClient().catch(() => {});
+      pendingProgramRequests().forEach((r) => { postProgramRequest(r).catch(() => {}); });
+      if (p && p.ok) { try { render(); } catch (e) {} }
+    }
+  } finally {
+    syncOnResume._busy = false;
+  }
+}
+async function downloadCloudExport() {
+  const bases = apiBases();
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/export?pin=" + encodeURIComponent(STUDIO_PIN), {
+        headers: { Accept: "application/json", "x-nb-pin": STUDIO_PIN, Authorization: "Bearer " + authHeader() }
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.state) {
+        const blob = new Blob([JSON.stringify({ v: 3, at: Date.now(), cloud: true, state: data.state, clients: data.state.clients, programRequests: data.state.programRequests }, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "niubision-nube-" + todayKey() + ".json";
+        a.click();
+        return { ok: true };
+      }
+    } catch (e) {}
+  }
+  return { ok: false };
+}
 function mergeProgramRequests(a, b) {
   const map = {};
   (a || []).concat(b || []).forEach((r) => {
@@ -11488,7 +11646,12 @@ function requestProgram(routineId) {
       programRequests: [row]
     }).catch(() => {});
   } catch (e) {}
+  postProgramRequest(row).then((r) => {
+    if (r && r.ok) { try { store.set("nb_last_sync_at", Date.now()); } catch (e) {} }
+  }).catch(() => {});
   scheduleClientPush();
+  pingCoach("Pedido de programa", (row.name || "Cliente") + " pide " + (row.routineName || row.routineId || "programa"));
+  notifyLocal("Pedido enviado", "Miguel lo ve en Bandeja.", "/?view=programas");
   toast("Pedido enviado. Miguel lo ve en Bandeja.");
   return row;
 }
@@ -11514,6 +11677,7 @@ function approveProgramRequest(reqId) {
   saveProgramRequests();
   persist();
   cloudPush().catch(() => {});
+  notifyLocal("Programa asignado", (shortName(r) || r.name) + " → " + c.name, "/?view=inbox");
   toast("Asignado: " + (shortName(r) || r.name) + " → " + c.name);
   return true;
 }
@@ -11654,7 +11818,7 @@ function programasView() {
     <div class="filters">${bands.map(([id,l]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}">${l}</button>`).join("")}</div>
     <div class="filters">${days.map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
     <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    ${blocks || "<p class='muted'>Nada con este filtro.</p>"}
+    ${blocks || nbEmpty({ icon: "☰", title: "Sin resultados", hint: "Pruebe otro nivel, días o tipo. La biblioteca sigue ahí; solo cambió el filtro.", cta: `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>` })}
   </section>`;
 }
 function bindProgramas() {
@@ -11962,12 +12126,13 @@ function inboxView() {
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
     <p class="muted">${total ? total + " cosas que necesitan toque." : "Nadie urgente. El roster está en Gente."}</p>
-    <div class="card inbox-bucket">
+    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja vacía", hint: "Hoy no hay pagos, pedidos ni silencios. Eso también es trabajo limpio.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    <div class="card inbox-bucket nb-fade">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
         const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
-        return `<div class="list-row inbox-row"><div><strong>${label}</strong><div class="muted">Plantilla · espera su ok</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
-      }).join("") : "<p class='muted'>Nadie pidió un programa.</p>"}
+        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">Plantilla · espera su ok</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
+      }).join("") : nbEmpty({ icon: "◎", title: "Bandeja quieta", hint: "Cuando un cliente pida un programa en Programas, aparece aquí para aprobar.", cta: `<button class="btn ghost" type="button" data-view="programas">Ver Programas</button>` })}
     </div>
     <div class="card inbox-bucket">
       <h3>Pagó · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
@@ -12359,7 +12524,7 @@ function coachOpsCards() {
 function clientOpsCards() {
   const c = selfClient();
   if (!c) {
-    return `<div class="card"><h3>Su plan</h3><p class="muted">Entre con el código del coach para ver vigencia, citas y videos.</p></div>`;
+    return nbEmpty({ icon: "◇", title: "Plan vacío", hint: "Entre con el código de Miguel para ver vigencia, citas y videos en este teléfono.", cta: `<button class="btn primary" type="button" id="guestCodePlan">Tengo código</button>` });
   }
   normalizeClient(c);
   const st = clientStatus(c);
@@ -12394,10 +12559,34 @@ function clientOpsCards() {
       <h3>Armado de rutina</h3>
       <p class="muted">12 USD. Usa la biblioteca, no un modelo de IA. Créditos: ${state.aiCredits || 0}. El entrenador puede revisarla.</p>
       <button class="btn primary" id="openAi">${(state.aiCredits || 0) > 0 ? "Armar rutina" : "Pagar 12 USD y armar"}</button>
+    </div>
+    <div class="card">
+      <h3>Avisos y nube</h3>
+      <p class="muted">Última sync: ${escapeHtml(lastSyncLabel())}. Permiso: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "activado" : "apagado"}.</p>
+      <button class="btn ghost" id="enableClientAlerts" type="button">Activar avisos</button>
+      <button class="btn ghost" id="clientSyncNow" type="button">Sincronizar ahora</button>
     </div>`;
 }
 function bindStudioOps() {
   const stset = $("#studioSettings"); if (stset) stset.onclick = openStudioSettings;
+  const gcp = $("#guestCodePlan"); if (gcp) gcp.onclick = () => openCodeEntry();
+  const eca = $("#enableClientAlerts");
+  if (eca) eca.onclick = async () => {
+    const ok = await ensureNotifyPermission();
+    toast(ok ? "Avisos activos en este teléfono" : "Permita las notificaciones del navegador");
+    if (ok) notifyLocal("NiuBision", "Avisos listos. Cuando Miguel apruebe un programa, se lo avisamos.", "/?view=work");
+    render();
+  };
+  const csn = $("#clientSyncNow");
+  if (csn) csn.onclick = async () => {
+    csn.disabled = true;
+    try {
+      const p = await clientCloudRefresh();
+      toast(p && p.ok ? "Sincronizado · " + lastSyncLabel() : "No se pudo sincronizar. Revise el código o la conexión.");
+      if (p && p.ok) render();
+    } catch (e) { toast("No se pudo sincronizar"); }
+    finally { csn.disabled = false; }
+  };
   const more = $("#toggleMore");
   if (more) more.onclick = () => {
     const el = $("#moreStudio");
@@ -14041,7 +14230,7 @@ function openStudioSettings() {
   closeModals();
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = `<div class="sheet">
+  modal.innerHTML = `<div class="sheet nb-fade">
     <div class="handle"></div>
     <p class="tagline">Estudio</p>
     <h2>Ajustes</h2>
@@ -14070,29 +14259,32 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Avisos en este teléfono</h3>
-      <p class="muted">Aviso privado de este estudio. Nadie más ve el canal. Pulse activar una vez en este teléfono.</p>
+      <p class="muted">Permiso del navegador + canal ntfy del estudio. Pulse activar una vez en este teléfono.</p>
+      <p class="muted">Estado: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "<span class='ok'>permitidas</span>" : (typeof Notification !== "undefined" && Notification.permission === "denied" ? "<span class='warn'>bloqueadas</span>" : "sin pedir")}</p>
       <button class="btn primary" id="enableAlerts">Activar avisos</button>
       <button class="btn ghost" id="copyAlerts" type="button">Copiar canal privado</button>
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
-      <p class="muted">Servidor: Cloudflare. Respaldo diario a GitHub. Recibos al correo del estudio.</p>
+      <p class="muted">Servidor principal: api.niubision.com. El trabajo se sincroniza entre dispositivos del estudio.</p>
+      <div class="cloud-status">
+        <div class="row-line"><span>Estado</span><strong class="${cloudConnected() ? "ok" : "warn"}">${cloudConnected() ? "Conectado" : "Desconectado"}</strong></div>
+        <div class="row-line"><span>Última sync</span><span>${escapeHtml(lastSyncLabel())}</span></div>
+        <div class="row-line"><span>Estudio</span><span>${escapeHtml(maskStudioId(studioKey()))}</span></div>
+      </div>
       <input class="field" id="cloudApiUrl" placeholder="https://api.niubision.com/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
       <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
-      <p class="${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "ok" : (state.settings.cloudId ? "ok" : "muted")}">${state.settings.cloudKind === "api" || /workers\.dev/i.test(String(state.settings.cloudUrl || "")) ? "Conectado a la nube · estudio " + escapeHtml(studioKey()) : (state.settings.cloudKind === "github" ? "Respaldo GitHub · estudio " + escapeHtml(studioKey()) : (state.settings.cloudId ? "Conectado · estudio " + escapeHtml(studioKey()) : "Pulse conectar. Solo hace falta una vez."))}</p>
-      <button class="btn primary" id="cloudConnect">${state.settings.cloudId ? "Sincronizar de nuevo" : "Conectar la nube"}</button>
-      <button class="btn ghost" id="cloudNow">Sincronizar ahora</button>
+      <button class="btn primary" id="cloudConnect">Conectar</button>
+      <button class="btn ghost" id="cloudNow">Sincronizar</button>
+      <button class="btn ghost" id="exportData">Descargar respaldo</button>
+      <button class="btn ghost" id="exportCloud" type="button">Descargar de la nube</button>
+      <input type="file" id="importData" accept="application/json" class="field" style="margin-top:8px">
+      <p class="muted" style="margin-top:6px">Restaurar: elija el archivo JSON arriba.</p>
     </div>
     <div class="card">
       <h3>Clave del estudio</h3>
-      <p class="muted">PIN 9798. Cámbiela solo si necesita recuperar el acceso.</p>
+      <p class="muted">PIN del estudio. Cámbiela solo si necesita recuperar el acceso.</p>
       <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
-    </div>
-    <div class="card">
-      <h3>Respaldo</h3>
-      <p class="muted">Si se pierde el teléfono, esto restaura clientes, contratos y pagos.</p>
-      <button class="btn primary" id="exportData">Descargar respaldo</button>
-      <input type="file" id="importData" accept="application/json" class="field" style="margin-top:8px">
     </div>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
@@ -14115,14 +14307,15 @@ function openStudioSettings() {
   const al = $("#enableAlerts", modal);
   if (al) al.onclick = async () => {
     try {
-      if (typeof Notification !== "undefined") {
-        const p = await Notification.requestPermission();
-        if (p !== "granted") return toast("Permita las notificaciones del navegador");
-      }
+      const ok = await ensureNotifyPermission();
+      if (!ok) return toast("Permita las notificaciones del navegador");
       store.set("nb_alerts", 1);
       listenPayAlerts();
       pingCoach("NiuBision", "Avisos activos en este teléfono");
+      notifyLocal("Avisos activos", "Este teléfono recibirá avisos del estudio.", "/?view=inbox");
       toast("Avisos activos");
+      modal.remove();
+      openStudioSettings();
     } catch (e) { toast("No se pudieron activar"); }
   };
   const copyAl = $("#copyAlerts", modal);
@@ -14176,6 +14369,15 @@ function openStudioSettings() {
   if (rp) rp.onclick = () => { modal.remove(); openPinRecover(); };
   const exp = $("#exportData", modal);
   if (exp) exp.onclick = () => { downloadBackup(); toast("Respaldo descargado"); };
+  const expC = $("#exportCloud", modal);
+  if (expC) expC.onclick = async () => {
+    expC.disabled = true;
+    try {
+      const r = await downloadCloudExport();
+      toast(r.ok ? "Respaldo de la nube descargado" : "No se pudo exportar de la nube. Use el respaldo local.");
+    } catch (e) { toast("No se pudo exportar"); }
+    finally { expC.disabled = false; }
+  };
   const imp = $("#importData", modal);
   if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0], () => { modal.remove(); render(); });
 }
@@ -14486,8 +14688,9 @@ function workView() {
   const pool = routinesByBand(band);
   const list = pool.length ? pool : routinesOfBand(band);
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
-    return `<section class="screen"><p class="tagline">Hoy</p><h2>No hay rutina asignada</h2>
-      <p class="muted">Elija un nivel y una rutina para hoy.</p>
+    return `<section class="screen"><p class="tagline">Hoy</p>
+      ${syncBannerHtml()}
+      ${nbEmpty({ icon: "◆", title: "Hoy sin programa", hint: "Aún no hay rutina activa. Pida una en Programas o espere a que Miguel asigne.", cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>` })}
       ${workPickerHtml(band, list, "")}
     </section>`;
   }
@@ -14510,6 +14713,7 @@ function workView() {
   const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz sí":"Voz no"}</button>`;
   if (!live) {
     return `<section class="screen session-start">
+      ${syncBannerHtml()}
       <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)}</p>${voiceBtn}</div>
       <h2>${escapeHtml(day.title)}</h2>
       <p class="muted">${escapeHtml(rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
@@ -15299,7 +15503,7 @@ function peopleView() {
     </div>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
     ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : ((state.clients || []).some((c) => !c.accessCode && ((p.clientId && c.id === p.clientId) || (p.name && cleanName(c.name) === cleanName(p.name)))) ? `<span class="muted">confirme en la ficha</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`)}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
-    ${!Array.isArray(state.clients) || !state.clients.length ? "<p class='muted'>Aún no hay clientes. Añada el primero abajo.</p>" : (state.clients || []).slice().sort((a, b) => {
+    ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" }) : (state.clients || []).slice().sort((a, b) => {
       const au = !a.accessCode ? 0 : (clientStatus(a) === "por vencer" || clientStatus(a) === "vencido" ? 1 : 2);
       const bu = !b.accessCode ? 0 : (clientStatus(b) === "por vencer" || clientStatus(b) === "vencido" ? 1 : 2);
       if (au !== bu) return au - bu;
@@ -15616,7 +15820,9 @@ function backupPayload() {
     appointments: state.appointments,
     videos: state.videos,
     receipts: state.receipts,
-    aiCredits: state.aiCredits
+    aiCredits: state.aiCredits,
+    inbox: state.inbox || [],
+    programRequests: state.programRequests || []
   };
 }
 function restoreBackupFromFile(f, after) {
@@ -15650,6 +15856,12 @@ function restoreBackupFromFile(f, after) {
       if (d.appointments) state.appointments = d.appointments;
       if (d.videos) state.videos = d.videos;
       if (typeof d.aiCredits === "number") state.aiCredits = d.aiCredits;
+      if (Array.isArray(d.inbox)) state.inbox = mergeRows(state.inbox || [], d.inbox);
+      if (Array.isArray(d.programRequests)) state.programRequests = mergeProgramRequests(state.programRequests || [], d.programRequests);
+      if (d.state && typeof d.state === "object") {
+        if (Array.isArray(d.state.clients) && !d.clients) state.clients = d.state.clients;
+        if (Array.isArray(d.state.programRequests)) state.programRequests = mergeProgramRequests(state.programRequests || [], d.state.programRequests);
+      }
       pruneOrphanDocs();
       persist();
       cloudPush().catch(() => {});
@@ -16525,6 +16737,8 @@ function bindChrome() {
   };
   const gc = $("#guestCode");
   if (gc) gc.onclick = () => openCodeEntry();
+  const gcp2 = $("#guestCodePlan");
+  if (gcp2) gcp2.onclick = () => openCodeEntry();
   $$(".nav [data-view]").forEach((b) => b.onclick = () => { state.view = b.dataset.view; render(); });
   $$("button[data-view]").forEach((b) => { if (!b.closest(".nav")) b.onclick = () => { state.view = b.dataset.view; render(); }; });
   const q = $("#q");
@@ -17233,6 +17447,11 @@ async function boot() {
   window.addEventListener("offline", () => {
     if (state.role && !state.splash) render();
   });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncOnResume();
+  });
+  window.addEventListener("focus", () => { syncOnResume(); });
+  window.addEventListener("pageshow", () => { syncOnResume(); });
   try { await loadStudioPointer(); } catch (e) {}
   try { await hydrateVault(); } catch (e) {}
   try {
@@ -17310,8 +17529,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "28") {
-        store.set("nb_sw", "28");
+      if (store.get("nb_sw") !== "33") {
+        store.set("nb_sw", "33");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -17324,7 +17543,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=32", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=33", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
@@ -17337,11 +17556,20 @@ async function boot() {
     window.speechSynthesis.onvoiceschanged = () => { try { window.speechSynthesis.getVoices(); } catch (e2) {} };
   } catch (e) {}
   if (isOnline() && (state.role === "client" || state.role === "coach" || (state.profile && state.profile.unlocked))) {
-    cloudPull().then((p) => {
-      if (lockIfRevokedSeat()) { try { render(); } catch (e) {} return; }
-      if (p && p.ok && state.role && !state.splash) render();
-      else if (p && p.ok && state.splash) render();
-    }).catch(() => {});
+    if (state.role === "coach") {
+      cloudPull().then((p) => {
+        if (lockIfRevokedSeat()) { try { render(); } catch (e) {} return; }
+        if (p && p.ok) { try { store.set("nb_last_sync_at", Date.now()); } catch (e) {} }
+        if (p && p.ok && state.role && !state.splash) render();
+        else if (p && p.ok && state.splash) render();
+      }).catch(() => {});
+    } else {
+      clientCloudRefresh().then((p) => {
+        if (lockIfRevokedSeat()) { try { render(); } catch (e) {} return; }
+        if (p && p.ok && !state.splash) render();
+      }).catch(() => {});
+      pendingProgramRequests().forEach((r) => { postProgramRequest(r).catch(() => {}); });
+    }
   }
   (state.clients || []).filter((c) => c && c.unpaid && (c.waiver || c.contract || c.health)).slice(0, 3).forEach((c) => {
     postLead(c).catch(() => {});

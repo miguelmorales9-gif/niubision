@@ -161,7 +161,18 @@ function mergeStudio(prev, next) {
     return Array.from(m.values());
   };
   const rest = Object.assign({}, b);
-  ["clients", "payments", "inbox", "contracts", "receipts", "revoked", "_op"].forEach((k) => { delete rest[k]; });
+  ["clients", "payments", "inbox", "contracts", "receipts", "revoked", "programRequests", "_op"].forEach((k) => { delete rest[k]; });
+  const mergePr = (aa, bb) => {
+    const map = {};
+    [].concat(aa || [], bb || []).forEach((r) => {
+      if (!r || !r.id) return;
+      const prev = map[r.id];
+      if (!prev) { map[r.id] = r; return; }
+      const rank = (x) => (x.status === "pending" ? 2 : (x.status === "approved" ? 1 : 0));
+      if (rank(r) > rank(prev) || (rank(r) === rank(prev) && Number(r.at || 0) >= Number(prev.at || 0))) map[r.id] = Object.assign({}, prev, r);
+    });
+    return Object.keys(map).map((k) => map[k]).sort((x, y) => Number(y.at || 0) - Number(x.at || 0)).slice(0, 80);
+  };
   const fromClients = (folded.length ? folded : Array.from(map.values()))
     .map((c) => c && c.contract ? Object.assign({ clientId: c.id }, c.contract) : null)
     .filter(Boolean);
@@ -172,6 +183,7 @@ function mergeStudio(prev, next) {
     payments: Array.from(payMap.values()).filter((p) => !gone(p)).slice(-80),
     contracts: byDoc([].concat(a.contracts || [], b.contracts || [], fromClients)).filter((k) => !gone(k)),
     receipts: byDoc([].concat(a.receipts || [], b.receipts || [])).filter((r) => !gone(r)),
+    programRequests: mergePr(a.programRequests, b.programRequests),
     updatedAt: Date.now()
   });
   delete out._op;
@@ -342,7 +354,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 24 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 25 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -640,6 +652,31 @@ async function handle(req, env) {
       revoked: [{ code, clientId: cid, at: Date.now() }]
     });
     dropSessions(row, (s) => s && ((cid && s.clientId === cid) || (code && s.code === code)));
+    await putRow(env, row);
+    return json({ ok: true });
+  }
+
+  if (path === "/api/program-request" && method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const reqRow = body.request || body;
+    if (!reqRow || !reqRow.id || !reqRow.routineId) return json({ error: "Falta el pedido" }, 400);
+    const row = await rowOf(env, "NIUBI");
+    const code = String(reqRow.accessCode || "").replace(/\D/g, "").slice(0, 6);
+    const note = {
+      id: "in" + Date.now(),
+      type: "program_req",
+      name: String(reqRow.name || "Cliente").slice(0, 80),
+      clientId: String(reqRow.clientId || ""),
+      accessCode: code,
+      routineId: String(reqRow.routineId || ""),
+      routineName: String(reqRow.routineName || ""),
+      at: Date.now(),
+      reqId: String(reqRow.id)
+    };
+    row.state = mergeStudio(row.state || {}, {
+      programRequests: [Object.assign({}, reqRow, { status: reqRow.status || "pending", at: reqRow.at || Date.now() })],
+      inbox: [note]
+    });
     await putRow(env, row);
     return json({ ok: true });
   }

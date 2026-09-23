@@ -1,9 +1,9 @@
-const CACHE = "nb-offline-v32";
+const CACHE = "nb-offline-v33";
 const SHELL = [
   "/",
   "/index.html",
-  "/app/styles.css?v=32",
-  "/app/app.js?v=32",
+  "/app/styles.css?v=33",
+  "/app/app.js?v=33",
   "/favicon.svg",
   "/logo.png",
   "/icon-48.png",
@@ -140,13 +140,51 @@ self.addEventListener("fetch", (e) => {
   );
 });
 
+self.addEventListener("push", (e) => {
+  let data = {};
+  try {
+    data = e.data ? (e.data.json ? e.data.json() : JSON.parse(e.data.text())) : {};
+  } catch (err) {
+    try { data = { body: e.data && e.data.text ? e.data.text() : "NiuBision" }; } catch (e2) { data = {}; }
+  }
+  const title = String(data.title || "NiuBision");
+  const body = String(data.body || data.message || "Hay algo nuevo en el estudio.");
+  const url = String(data.url || data.click || "/");
+  const tag = String(data.tag || "nb-push");
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-96.png",
+      tag,
+      data: { url },
+      renotify: true
+    })
+  );
+});
+
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
+  const raw = (e.notification.data && e.notification.data.url) || "/";
+  let target = "/";
+  try {
+    if (/^https?:/i.test(raw)) target = raw;
+    else if (raw.charAt(0) === "/" || raw.charAt(0) === "?") target = raw;
+    else if (raw === "bandeja" || raw === "inbox") target = "/?view=inbox";
+    else if (raw === "hoy" || raw === "work") target = "/?view=work";
+    else target = "/" + String(raw).replace(/^\//, "");
+  } catch (err) { target = "/"; }
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      const hit = list.find((c) => c.url && "focus" in c);
-      if (hit) return hit.focus();
-      if (self.clients.openWindow) return self.clients.openWindow("/");
+      for (const c of list) {
+        if (c.url && "focus" in c) {
+          try {
+            if (c.navigate) c.navigate(target);
+          } catch (err) {}
+          return c.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
     })
   );
 });
