@@ -504,3 +504,20 @@ img { background: transparent; }
 .work-ex header:active { background:rgba(212,176,106,.06); }
 #setLive { color:var(--gold); }
 
+/* Phase 1+2 UX */
+.guest-tour { border-color: var(--gold-dim); }
+.tour-steps { margin: 10px 0 14px 18px; color: var(--cream); font-size: 14px; line-height: 1.55; }
+.tour-steps li { margin-bottom: 6px; }
+.offline-bar { flex-wrap: wrap; text-align: center; gap: 4px; line-height: 1.35; }
+.prev-load { display:block; font-size:11px; color:var(--mute); letter-spacing:.04em; margin-top:2px; }
+.focus-session .set-row { min-height: 52px; }
+.focus-session .set-row input[type=checkbox] { width: 28px; height: 28px; min-width: 28px; min-height: 28px; }
+.set-done-btn, .focus-session .set-row .set-check {
+  min-width: 44px; min-height: 44px; width: 44px; height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.btn.set-complete, #finishDay, .focus-session .btn.primary {
+  min-height: 44px;
+}
+.rest-bar { min-height: 52px; box-shadow: 0 8px 24px rgba(212,176,106,.35); }
+.rest-face .rest-actions .btn { min-height: 48px; flex: 1; }

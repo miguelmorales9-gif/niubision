@@ -10599,10 +10599,13 @@ async function cloudPushClient() {
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, Accept: "application/json" },
         body: JSON.stringify({ clientId: report.clientId, accessCode: report.accessCode, report })
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) { try { store.set("nb_last_sync_at", Date.now()); } catch (e) {} return { ok: true }; }
     } catch (e) {}
   }
-  if (await mirrorPublic("report", { clients: [{ id: report.clientId, accessCode: report.accessCode, report }] })) return { ok: true };
+  if (await mirrorPublic("report", { clients: [{ id: report.clientId, accessCode: report.accessCode, report }] })) {
+    try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
+    return { ok: true };
+  }
   return { ok: false };
 }
 let leadTimer = null;
@@ -10942,6 +10945,7 @@ async function cloudPush() {
         state.settings.cloudKind = "api";
         store.set("nb_api", bases[i]);
         store.set("nb_settings", state.settings);
+        try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
         return { ok: true };
       }
     } catch (e) {}
@@ -12729,8 +12733,10 @@ function renderGate() {
         <button type="button" id="seeSocial">Facebook</button>
         <button type="button" id="seePrivacy">Privacidad</button>
       </div>
+      ${guestTourHtml()}
       <p class="disclaimer">${APP_DISCLAIMER}</p>
     </section>`;
+  bindGuestTour();
   $("#logoPulse").onclick = () => {
     $("#logoPulse").classList.add("spin");
     setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
@@ -13128,65 +13134,125 @@ function openWaiver(after) {
 
 function openHealth(planLabel) {
   closeModals();
-  const h = state.health || {};
+  const h = state.health || store.get("nb_health_draft", {}) || {};
+  let step = Number(store.get("nb_health_step", 1)) || 1;
+  if (step < 1 || step > 3) step = 1;
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = `<div class="sheet">
-    <div class="handle"></div>
-    <p class="tagline">Requisito de salud</p>
-    <h2>Cuestionario de preparación</h2>
-    <p class="muted">Criterio PAR-Q (CSEP) citado por el Reglamento 7611 del DRD para programas de personas sanas. No es el formulario oficial con marca CSEP; cubre las mismas siete preguntas de cribado. No diagnostica. Validez práctica: 12 meses o hasta que cambie su salud.</p>
+  const paint = () => {
+    const qChunk = step === 2 ? HEALTH_ITEMS.slice(0, 4) : step === 3 ? HEALTH_ITEMS.slice(4) : [];
+    const stepLabel = step === 1 ? "Paso 1 de 3 · Contacto" : step === 2 ? "Paso 2 de 3 · PAR-Q" : "Paso 3 de 3 · PAR-Q y notas";
+    let body = "";
+    if (step === 1) {
+      body = `
     <label class="muted" for="hName">Nombre completo</label>
     <input class="field" id="hName" placeholder="Nombre y apellido" autocomplete="name" value="${escAttr(h.name || state.profile.name || "")}">
     <label class="muted" for="hPhone">Teléfono</label>
     <input class="field" id="hPhone" placeholder="Teléfono de 10 dígitos" inputmode="tel" autocomplete="tel" value="${escAttr(h.phone || state.profile.phone || "")}">
     <label class="muted" for="hEmer">Contacto de emergencia (nombre y teléfono)</label>
-    <input class="field" id="hEmer" placeholder="Ej. María 7875550000" autocomplete="off" value="${escAttr(h.emer || "")}">
-    ${HEALTH_ITEMS.map((q) => `<div class="card" style="padding:12px">
+    <input class="field" id="hEmer" placeholder="Ej. María 7875550000" autocomplete="off" value="${escAttr(h.emer || "")}">`;
+    } else {
+      body = qChunk.map((q) => `<div class="card" style="padding:12px">
       <p>${q.t}</p>
       <div class="row two" style="margin-top:8px">
         <label class="habit"><input type="radio" name="${q.id}" value="no" ${h[q.id]==="no"?"checked":""}> No</label>
         <label class="habit"><input type="radio" name="${q.id}" value="sí" ${h[q.id]==="sí"?"checked":""}> Sí</label>
       </div>
-    </div>`).join("")}
-    <textarea id="hNotes" placeholder="Lesiones, medicamentos o detalles (sin prescribir tratamiento)">${escapeHtml(h.notes || "")}</textarea>
+    </div>`).join("");
+      if (step === 3) {
+        body += `<textarea id="hNotes" placeholder="Lesiones, medicamentos o detalles (sin prescribir tratamiento)">${escapeHtml(h.notes || "")}</textarea>
     <p class="muted">Si contestó “sí” a alguna pregunta, un médico debe autorizar la actividad antes de firmar el contrato.</p>
-    <label class="habit"><input type="checkbox" id="hTrue"> Declaro que las respuestas son ciertas.</label>
-    <button class="btn primary" id="saveHealth">Guardar cuestionario</button>
-    <button class="btn ghost" id="closeSheet">Cerrar</button>
-  </div>`;
-  document.body.appendChild(modal);
-  modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  modal.querySelector("#saveHealth").onclick = () => {
-    if (!$("#hTrue").checked) return toast("Marque la declaración");
-    const name = cleanName($("#hName").value);
-    if (!name) return toast("Escriba su nombre");
-    const emer = ($("#hEmer").value || "").trim();
-    if (emer.length < 4) return toast("Escriba un contacto de emergencia");
-    let phone = ($("#hPhone").value || "").replace(/\D/g, "");
-    if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
-    if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
-    const row = { name, phone: phone.slice(0, 24), emer: emer.slice(0, 80), notes: $("#hNotes").value.trim().slice(0, 400), date: todayKey(), clearance: false };
-    for (const q of HEALTH_ITEMS) {
-      const sel = modal.querySelector(`input[name="${q.id}"]:checked`);
-      if (!sel) return toast("Conteste todas las preguntas");
-      row[q.id] = sel.value;
+    <label class="habit"><input type="checkbox" id="hTrue" ${h._true ? "checked" : ""}> Declaro que las respuestas son ciertas.</label>`;
+      }
     }
-    const flagged = HEALTH_ITEMS.some((q) => row[q.id] === "sí");
-    const who = selfClient() || (state.clients || []).find((x) => cleanName(x.name) === name);
-    if (who) row.clientId = who.id;
-    state.health = row;
-    state.profile.name = name;
-    if (who) who.health = row;
-    persistClients();
-    persist();
-    if (who) postLead(who).catch(() => {});
-    modal.remove();
-    if (flagged) return openClearance(planLabel);
-    if (planLabel) continueJoin(planLabel);
-    else toast("Cuestionario guardado");
+    modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">${stepLabel}</p>
+    <h2>Cuestionario de preparación</h2>
+    <p class="muted">Criterio PAR-Q (CSEP) citado por el Reglamento 7611 del DRD. No diagnostica. Borrador se guarda en este teléfono.</p>
+    ${body}
+    <div class="actions">
+      ${step > 1 ? `<button class="btn ghost" id="hBack">Atrás</button>` : `<button class="btn ghost" id="closeSheet">Cerrar</button>`}
+      <button class="btn primary" id="hNext">${step < 3 ? "Siguiente" : "Guardar cuestionario"}</button>
+    </div>
+  </div>`;
+    const draftSave = () => {
+      if (step === 1) {
+        h.name = cleanName(($("#hName") && $("#hName").value) || h.name || "");
+        h.phone = (($("#hPhone") && $("#hPhone").value) || h.phone || "").trim();
+        h.emer = (($("#hEmer") && $("#hEmer").value) || h.emer || "").trim();
+      } else {
+        const chunk = step === 2 ? HEALTH_ITEMS.slice(0, 4) : HEALTH_ITEMS.slice(4);
+        for (const q of chunk) {
+          const sel = modal.querySelector(`input[name="${q.id}"]:checked`);
+          if (sel) h[q.id] = sel.value;
+        }
+        if (step === 3) {
+          const notes = $("#hNotes");
+          if (notes) h.notes = notes.value.trim().slice(0, 400);
+          const t = $("#hTrue");
+          h._true = !!(t && t.checked);
+        }
+      }
+      store.set("nb_health_draft", h);
+      store.set("nb_health_step", step);
+    };
+    const back = modal.querySelector("#hBack");
+    const close = modal.querySelector("#closeSheet");
+    if (back) back.onclick = () => { draftSave(); step -= 1; paint(); };
+    if (close) close.onclick = () => { draftSave(); modal.remove(); };
+    modal.querySelector("#hNext").onclick = () => {
+      draftSave();
+      if (step === 1) {
+        if (!h.name) return toast("Escriba su nombre");
+        if ((h.emer || "").trim().length < 4) return toast("Escriba un contacto de emergencia");
+        let phone = String(h.phone || "").replace(/\D/g, "");
+        if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
+        if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
+        h.phone = phone.slice(0, 24);
+        step = 2; paint(); return;
+      }
+      if (step === 2) {
+        for (const q of HEALTH_ITEMS.slice(0, 4)) {
+          if (h[q.id] !== "sí" && h[q.id] !== "no") return toast("Conteste todas las preguntas");
+        }
+        step = 3; paint(); return;
+      }
+      // step 3 save
+      if (!$("#hTrue") || !$("#hTrue").checked) return toast("Marque la declaración");
+      for (const q of HEALTH_ITEMS) {
+        if (h[q.id] !== "sí" && h[q.id] !== "no") return toast("Conteste todas las preguntas");
+      }
+      let phone = String(h.phone || "").replace(/\D/g, "");
+      if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
+      if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
+      const emer = String(h.emer || "").trim();
+      if (emer.length < 4) return toast("Escriba un contacto de emergencia");
+      const name = cleanName(h.name);
+      if (!name) return toast("Escriba su nombre");
+      const row = { name, phone: phone.slice(0, 24), emer: emer.slice(0, 80), notes: String(h.notes || "").trim().slice(0, 400), date: todayKey(), clearance: false };
+      for (const q of HEALTH_ITEMS) row[q.id] = h[q.id];
+      const flagged = HEALTH_ITEMS.some((q) => row[q.id] === "sí");
+      const who = selfClient() || (state.clients || []).find((x) => cleanName(x.name) === name);
+      if (who) row.clientId = who.id;
+      state.health = row;
+      state.profile.name = name;
+      if (who) who.health = row;
+      persistClients();
+      persist();
+      store.set("nb_health_draft", null);
+      store.set("nb_health_step", 1);
+      if (who) postLead(who).catch(() => {});
+      modal.remove();
+      if (flagged) return openClearance(planLabel);
+      if (planLabel) continueJoin(planLabel);
+      else toast("Cuestionario guardado");
+    };
   };
+  document.body.appendChild(modal);
+  paint();
 }
+
 
 function openClearance(planLabel) {
   const modal = document.createElement("div");
@@ -13291,7 +13357,17 @@ function header() {
   const stand = typeof window !== "undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone);
   const showInstall = !stand && !store.get("nb_hide_install") && (state._installEvt || ios || android);
   const hint = ios ? "Compartir → Añadir a pantalla de inicio" : state._installEvt ? "Añadir NiuBision a este teléfono" : "Menú de Chrome → Instalar app";
-  const offline = !isOnline() ? `<div class="offline-bar">Sin conexión · el trabajo queda en este teléfono</div>` : "";
+  const offline = !isOnline() ? (() => {
+    const ts = store.get("nb_last_sync_at", 0);
+    let syncLine = "Sin sincronizar aún";
+    if (ts) {
+      try {
+        const d = new Date(Number(ts));
+        if (!isNaN(d.getTime())) syncLine = "Última sync: " + d.toLocaleString("es-PR", { dateStyle: "short", timeStyle: "short" });
+      } catch (e) {}
+    }
+    return `<div class="offline-bar">Sin conexión · el trabajo queda en este teléfono · ${syncLine}</div>`;
+  })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
     <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
@@ -14407,6 +14483,7 @@ function termsView() {
 function pricesView() {
   const chip = state.role === "client" ? `<p>${packChip(selfClient())}</p>` : "";
   return `<section class="screen">
+    ${guestTourHtml()}
     <p class="tagline">Servicios</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
     ${chip}
@@ -14966,11 +15043,15 @@ function ingestLead(raw) {
   persist();
   return c;
 }
+function digitsOnly(s) {
+  return String(s || "").replace(/\D/g, "");
+}
 function parseClientCode(raw) {
   const t = (raw || "").trim().replace(/\s+/g, "");
   if (!t) return null;
-  const m6 = (raw || "").match(/\b(\d{6})\b/) || t.match(/(\d{6})/);
-  if (m6 && t.indexOf("|") < 0) {
+  const digits = digitsOnly(raw);
+  const m6 = (raw || "").match(/\b(\d{6})\b/) || t.match(/(\d{6})/) || (digits.length >= 6 && t.indexOf("|") < 0 ? [null, digits.slice(0, 6)] : null);
+  if (m6 && t.indexOf("|") < 0 && !/^NB[12]/i.test(t)) {
     const code = m6[1];
     const c = findByAccessCode(code);
     if (c) return { name: c.name, plan: c.plan, routine: c.routine || "full-inicio", accessCode: code, clientId: c.id, sex: c.sex, age: c.age, phone: c.phone };
@@ -15212,6 +15293,68 @@ function openNeedCode(planLabel) {
     continueJoin(plan);
   };
 }
+
+function guestTourHtml() {
+  if (store.get("nb_guest_tour_v1")) return "";
+  if (state.profile && state.profile.unlocked) return "";
+  if (state.role && state.role !== "guest") return "";
+  return `<div class="card guest-tour" id="guestTour">
+    <p class="tagline">Primera vez</p>
+    <h3>Así entra a NiuBision</h3>
+    <ol class="tour-steps">
+      <li><strong>Planes</strong> — escoja el suyo</li>
+      <li><strong>Confianza</strong> — relevo y PAR-Q</li>
+      <li><strong>Pagar</strong> — PayPal o ATH</li>
+      <li><strong>Código</strong> — llega por WhatsApp</li>
+      <li><strong>Entrar</strong> — péguelo aquí</li>
+    </ol>
+    <div class="actions">
+      <button type="button" class="btn primary" id="tourPlans">Ver planes</button>
+      <button type="button" class="btn ghost" id="tourCode">Ya tengo código</button>
+      <button type="button" class="btn ghost" id="tourDismiss">Entendido</button>
+    </div>
+  </div>`;
+}
+function bindGuestTour() {
+  const dismiss = () => { store.set("nb_guest_tour_v1", 1); const el = $("#guestTour"); if (el) el.remove(); };
+  const d = $("#tourDismiss"); if (d) d.onclick = dismiss;
+  const p = $("#tourPlans"); if (p) p.onclick = () => { dismiss(); state.role = "guest"; state.view = "price"; persist(); render(); };
+  const c = $("#tourCode"); if (c) c.onclick = () => { dismiss(); openCodeEntry(); };
+}
+function showDay1IfNeeded() {
+  if (store.get("nb_day1_seen")) return;
+  if (!(state.profile && state.profile.unlocked)) return;
+  store.set("nb_day1_seen", 1);
+  const rt = typeof activeRoutine === "function" ? activeRoutine() : null;
+  const day = rt && rt.daysPlan ? rt.daysPlan[(typeof dayIndex === "function" ? dayIndex(rt) : 0) % rt.daysPlan.length] : null;
+  const trustOk = (typeof waiverSigned === "function" && waiverSigned()) && (typeof healthComplete === "function" && healthComplete());
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Tu día 1</p>
+    <h2>Hoy empieza el trabajo.</h2>
+    <p class="muted">${day ? ("Foco: " + escapeHtml(day.title)) : "Abra Hoy y cierre la primera serie."}</p>
+    ${!trustOk ? `<p class="muted">Falta firmar confianza (relevo / PAR-Q). Sin eso no hay sesión limpia.</p>` : ""}
+    <div class="actions">
+      <button class="btn primary" id="day1Go">Ir a Hoy</button>
+      ${!trustOk ? `<button class="btn ghost" id="day1Trust">Completar confianza</button>` : ""}
+      <button class="btn ghost" id="closeSheet">Seguir</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const go = modal.querySelector("#day1Go");
+  if (go) go.onclick = () => { modal.remove(); state.view = "work"; persist(); render(); };
+  const tr = modal.querySelector("#day1Trust");
+  if (tr) tr.onclick = () => {
+    modal.remove();
+    if (!waiverSigned()) openWaiver(() => { if (!healthComplete()) openHealth(); else render(); });
+    else if (!healthComplete()) openHealth();
+    else render();
+  };
+}
+
 function openCodeEntry() {
   closeModals();
   const modal = document.createElement("div");
@@ -15263,10 +15406,32 @@ function openCodeEntry() {
     persist();
     render();
     toast("Bienvenido. Hoy se entrena.");
+    setTimeout(() => showDay1IfNeeded(), 350);
   };
+  const codeIn = $("#codeIn");
+  const normalizeCodeField = () => {
+    if (!codeIn) return;
+    const raw = codeIn.value || "";
+    if (/NB[12]\|/i.test(raw) || raw.indexOf("|") >= 0) return;
+    const dig = digitsOnly(raw).slice(0, 12);
+    if (raw !== dig) {
+      codeIn.value = dig;
+      try { codeIn.setSelectionRange(dig.length, dig.length); } catch (e) {}
+    }
+  };
+  if (codeIn) {
+    codeIn.addEventListener("input", normalizeCodeField);
+    codeIn.addEventListener("paste", (e) => {
+      const clip = (e.clipboardData || window.clipboardData);
+      const text = clip ? clip.getData("text") : "";
+      if (/NB[12]\|/i.test(text) || String(text).indexOf("|") >= 0) return;
+      e.preventDefault();
+      codeIn.value = digitsOnly(text).slice(0, 12);
+    });
+    codeIn.addEventListener("keydown", (e) => { if (e.key === "Enter") goCode(); });
+  }
   $("#useCode").onclick = goCode;
-  $("#codeIn").addEventListener("keydown", (e) => { if (e.key === "Enter") goCode(); });
-  setTimeout(() => { try { $("#codeIn").focus(); } catch (e) {} }, 80);
+  setTimeout(() => { try { if (codeIn) { codeIn.focus(); } } catch (e) {} }, 80);
 }
 
 function dossierHtml(filterName) {
@@ -15764,6 +15929,7 @@ function bindChrome() {
   $$("[data-contract]").forEach((b) => b.onclick = () => startOnboard(b.dataset.contract));
   $$("[data-health]").forEach((b) => b.onclick = () => openHealth(null));
   const oc = $("#openCheck"); if (oc) oc.onclick = openCheckin;
+  bindGuestTour();
   const sr = $("#seeRoutines"); if (sr) sr.onclick = routinesSheet;
   $$("[data-h]").forEach((el) => el.onchange = () => {
     const day = state.habits[todayKey()] || {};
