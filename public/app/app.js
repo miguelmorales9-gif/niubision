@@ -12686,9 +12686,10 @@ function bindStudioOps() {
         state.clients.push(cl);
       }
       const done = confirmClientPaid(cl, p.method);
-      toast(done && done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
+      if (!done) { render(); return; }
+      toast(done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
       render();
-      if (done && done.client && done.code) {
+      if (done.client && done.code) {
         showShare(done.client);
         if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
       } else openReceipt(p);
@@ -15564,7 +15565,7 @@ function peopleView() {
         ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
-        ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>`}
+        ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientHasLegal(c) ? `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
         <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
         <button class="btn small ghost" data-timeline="${c.id}">Línea de tiempo</button>
@@ -16987,6 +16988,13 @@ function bindChrome() {
     const msg = "NiuBision\nHola " + c.name + ".\n" + (c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n") + "Plan: " + (c.plan || "") + "\n\nAbra niubision.com → Entrar → pegue el código.";
     window.open(waClientLink(c, msg), "_blank");
   });
+  $$("[data-wa-legal]").forEach((b) => b.onclick = () => {
+    const c = state.clients.find((x) => x.id === b.dataset.waLegal);
+    if (!c) return;
+    const gaps = clientLegalGaps(c).join(", ");
+    const msg = "NiuBision\nHola " + c.name + ".\nPara recibir su código falta firmar en la app: " + gaps + ".\nAbra niubision.com → elija el plan → complete relevo, PAR-Q y contrato.";
+    window.open(waClientLink(c, msg), "_blank");
+  });
   $$("[data-assignwa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.assignwa);
     if (c) openAssignWhatsApp(c);
@@ -17588,7 +17596,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=34", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=35", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
