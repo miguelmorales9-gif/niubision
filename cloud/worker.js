@@ -1,4 +1,3 @@
-const COACH_PIN = "9798";
 const COACH_MAIL = "miguel.morales9@gmail.com";
 const LEGACY = "nb-cloud-v1";
 
@@ -230,6 +229,16 @@ function pinOf(req, url, body) {
   return String((body && body.pin) || url.searchParams.get("pin") || req.headers.get("x-nb-pin") || "");
 }
 
+function coachPin(env) {
+  return String((env && env.COACH_PIN) || "").trim();
+}
+function pinOk(env, got) {
+  const want = coachPin(env);
+  if (!want) return false;
+  return String(got || "") === want;
+}
+
+
 function tokOk(row, tok) {
   if (!tok || !row) return false;
   if (tok === row.token) return true;
@@ -354,7 +363,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 26 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 27 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -366,7 +375,7 @@ async function handle(req, env) {
       return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
     }
     if (role === "coach") {
-      if (String(body.pin || "") !== COACH_PIN) {
+      if (!(pinOk(env, body.pin))) {
         rateHit(row, "coach");
         await putRow(env, row);
         return json({ error: "Clave incorrecta" }, 403);
@@ -437,7 +446,7 @@ async function handle(req, env) {
     let body = {};
     if (method === "POST") body = await req.json().catch(() => ({}));
     let key = String(body.studioKey || url.searchParams.get("key") || "NIUBI").toUpperCase();
-    if (pinOf(req, url, body) !== COACH_PIN) return json({ error: "PIN de estudio requerido" }, 403);
+    if (!pinOk(env, pinOf(req, url, body))) return json({ error: "PIN de estudio requerido" }, 403);
     const row = await rowOf(env, key || "NIUBI");
     if (!row.token || row.token === LEGACY) {
       row.token = newToken();
@@ -448,9 +457,9 @@ async function handle(req, env) {
 
   if (path === "/api/export" && method === "GET") {
     const row = await rowOf(env, "NIUBI");
-    const pinOk = pinOf(req, url, {}) === COACH_PIN; // x-nb-pin, body.pin, or query pin (back-compat)
+    const pinMatches = pinOk(env, pinOf(req, url, {})); // x-nb-pin, body.pin, or query pin (back-compat)
     const tok = bearer(req, url);
-    if (!pinOk && !tokOk(row, tok)) return json({ error: "No" }, 403);
+    if (!pinMatches && !tokOk(row, tok)) return json({ error: "No" }, 403);
     return json({
       ok: true,
       studioKey: "NIUBI",
@@ -617,7 +626,7 @@ async function handle(req, env) {
   if (path === "/api/paid" && method === "POST") {
     const body = await req.json().catch(() => ({}));
     const idn = await identity(req, env, url);
-    if (idn.role !== "coach" && pinOf(req, url, body) !== COACH_PIN) {
+    if (idn.role !== "coach" && !pinOk(env, pinOf(req, url, body))) {
       return json({ error: "Estudio no encontrado" }, 404);
     }
     const row = idn.row;
@@ -643,7 +652,7 @@ async function handle(req, env) {
   if (path === "/api/revoke" && method === "POST") {
     const body = await req.json().catch(() => ({}));
     const idn = await identity(req, env, url);
-    if (idn.role !== "coach" && pinOf(req, url, body) !== COACH_PIN) {
+    if (idn.role !== "coach" && !pinOk(env, pinOf(req, url, body))) {
       return json({ error: "Estudio no encontrado" }, 404);
     }
     const row = idn.row;
