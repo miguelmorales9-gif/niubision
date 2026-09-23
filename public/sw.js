@@ -1,7 +1,9 @@
-const CACHE = "nb-offline-v28";
+const CACHE = "nb-offline-v29";
 const SHELL = [
   "/",
   "/index.html",
+  "/app/styles.css",
+  "/app/app.js",
   "/favicon.svg",
   "/logo.png",
   "/icon-48.png",
@@ -105,7 +107,7 @@ self.addEventListener("fetch", (e) => {
   if (/\/api\//.test(u.pathname)) return;
   const same = u.origin === self.location.origin;
   const nav = e.request.mode === "navigate" || (same && (u.pathname === "/" || /index\.html|niubision\.html/.test(u.pathname)));
-  const asset = same && /favicon|og\.jpg|icon-|poster|manifest|intro|logo\.png/.test(u.pathname + u.search);
+  const asset = same && /favicon|og\.jpg|icon-|poster|manifest|intro|logo\.png|\/app\//.test(u.pathname + u.search);
   const img = /\.(png|jpe?g|webp|svg|gif)(\?|$)/i.test(u.pathname);
   if (!nav && !asset && !img) return;
   e.respondWith(
