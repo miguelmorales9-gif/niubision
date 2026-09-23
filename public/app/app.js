@@ -11670,7 +11670,15 @@ function approveProgramRequest(reqId) {
   const req = (state.programRequests || []).find((x) => x.id === reqId);
   if (!req || req.status !== "pending") { toast("Pedido no encontrado"); return false; }
   const r = findRoutine(req.routineId);
-  if (!r) { toast("Programa no encontrado"); return false; }
+  if (!r) {
+    req.status = "ignored";
+    req.ignoredAt = Date.now();
+    saveProgramRequests();
+    persist();
+    cloudPush().catch(() => {});
+    toast("Programa ya no está en la biblioteca");
+    return false;
+  }
   let c = null;
   if (req.clientId) c = (state.clients || []).find((x) => x.id === req.clientId) || null;
   if (!c && req.accessCode) c = (state.clients || []).find((x) => String(x.accessCode || "") === String(req.accessCode)) || null;
@@ -11929,7 +11937,8 @@ function bindProgramas() {
   const ai = $("#progOpenAi");
   if (ai) ai.onclick = () => { if (typeof openAiBuilder === "function") openAiBuilder(); };
   $$("[data-req-approve]").forEach((b) => b.onclick = () => {
-    if (approveProgramRequest(b.dataset.reqApprove)) render();
+    approveProgramRequest(b.dataset.reqApprove);
+    render();
   });
   $$("[data-req-ignore]").forEach((b) => b.onclick = () => {
     ignoreProgramRequest(b.dataset.reqIgnore);
@@ -12152,8 +12161,10 @@ function inboxView() {
     <div class="card inbox-bucket nb-fade">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
+        const missing = !findRoutine(req.routineId);
         const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
-        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">Plantilla · espera su ok</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
+        const hint = missing ? "Programa ya no está en la biblioteca" : "Plantilla · espera su ok";
+        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}${missing ? " · se cierra al aprobar" : ""}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">${missing ? "Cerrar" : "Aprobar"}</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : nbEmpty({ icon: "◎", title: "Bandeja quieta", hint: "Cuando un cliente pida un programa en Programas, aparece aquí para aprobar.", cta: `<button class="btn ghost" type="button" data-view="programas">Ver Programas</button>` })}
     </div>
     <div class="card inbox-bucket">
@@ -17369,7 +17380,7 @@ function afterPaint() {
   if (state.view === "rutinas") bindRoutinesCoach();
   if (state.view === "programas") bindProgramas();
   if (state.view === "inbox") {
-    $$("[data-req-approve]").forEach((b) => b.onclick = () => { if (approveProgramRequest(b.dataset.reqApprove)) render(); });
+    $$("[data-req-approve]").forEach((b) => b.onclick = () => { approveProgramRequest(b.dataset.reqApprove); render(); });
     $$("[data-req-ignore]").forEach((b) => b.onclick = () => { ignoreProgramRequest(b.dataset.reqIgnore); render(); });
     $$("[data-req-otra]").forEach((b) => b.onclick = () => openProgramOtra(b.dataset.reqOtra));
   }
