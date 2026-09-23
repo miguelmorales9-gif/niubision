@@ -16,7 +16,7 @@
 2. Onboarding friction (code wall, PAR-Q behind waiver with no preview)
 3. Manual 6-digit codes after payment
 4. Workout UX behind Strong/Hevy (rest timer, last weights, offline clarity)
-5. Coach cockpit lacks “who needs attention”
+5. ~~Coach cockpit lacks “who needs attention”~~ → Phase 3 bandeja (this PR)
 6. Cloud half-built (`REPLACE_AFTER_CREATE` KV)
 7. No funnel/crash analytics
 8. A11y / empty states / error copy gaps
@@ -53,11 +53,11 @@
 ## Phase 3 — Coach superpowers
 | ID | Work | Status |
 |----|------|--------|
-| 3.1 | Today inbox (paid / waiting code / PAR-Q / missed) | planned |
-| 3.2 | Assign routine + WhatsApp template one-tap | planned |
-| 3.3 | Auto-code after verified payment | planned |
-| 3.4 | Client timeline | planned |
-| 3.5 | Export PDF week | planned |
+| 3.1 | Today inbox (paid / waiting code / PAR-Q / missed) | **done** (this PR) |
+| 3.2 | Assign routine + WhatsApp template one-tap | **done** (this PR) |
+| 3.3 | Auto-code after verified payment | **done** (this PR) |
+| 3.4 | Client timeline | **done** (this PR) |
+| 3.5 | Export PDF week | **done** (this PR) |
 
 ## Phase 4 — Platform
 | ID | Work | Status |

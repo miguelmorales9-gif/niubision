@@ -527,3 +527,11 @@ img { background: transparent; }
   min-width: 44px; min-height: 44px; margin: 0; justify-self: center;
 }
 .focus-session .set-row .set-check input { width: 28px; height: 28px; margin: 0; }
+
+/* Phase 3 — coach bandeja */
+.inbox-bucket h3 { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.inbox-bucket .muted { font-weight:400; }
+.inbox-row { align-items:flex-start; }
+.inbox-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; max-width:52%; }
+.timeline-row .st-chip { text-transform:none; letter-spacing:.04em; font-size:10px; }
+.nav.slim button { font-size:11px; }
