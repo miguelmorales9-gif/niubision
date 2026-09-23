@@ -6,6 +6,8 @@
     "start": "node server.mjs",
     "sync:html": "bash scripts/sync-html.sh",
     "check:html": "bash scripts/check-html-sync.sh",
+    "build": "bash scripts/build-html.sh",
+    "build:html": "bash scripts/build-html.sh",
     "prestart": "npm run sync:html"
   }
 }
