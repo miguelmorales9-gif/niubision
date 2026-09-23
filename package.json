@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "sync:html": "bash scripts/sync-html.sh",
+    "check:html": "bash scripts/check-html-sync.sh",
+    "prestart": "npm run sync:html"
   }
 }
