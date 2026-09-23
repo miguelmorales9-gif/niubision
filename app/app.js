@@ -9416,6 +9416,10 @@ state.waiver = store.get("nb_waiver", null);
 if (!state.settings) state.settings = {};
 state.settings.wa = "7874544038";
 if (!state.settings.pay) state.settings.pay = {};
+if (typeof state.settings.autoCode === "undefined") {
+  const ac = store.get("nb_auto_code", 1);
+  state.settings.autoCode = ac === 0 || ac === false ? false : true;
+}
 if (!String(state.settings.pay.ath || "").replace(/\D/g, "")) state.settings.pay.ath = "7874544038";
 state.payments = store.get("nb_payments", []);
 state.appointments = store.get("nb_appointments", []);
@@ -11132,6 +11136,7 @@ function icon(name) {
     book: "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3V4z",
     price: "M12 3v18M8 8h5.5a2.5 2.5 0 0 1 0 5H9m0 0h4.5a2.5 2.5 0 0 1 0 5H8",
     people: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+    inbox: "M4 6h16v12H4zM4 10h16M9 14h6",
     coach: "M16 19v-1a4 4 0 0 0-8 0v1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
     habit: "M12 3v6l4 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
     rutinas: "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3V4z",
@@ -11358,6 +11363,302 @@ function sessionAgeDays(c) {
 }
 function silentClients() {
   return (state.clients || []).filter((c) => clientStatus(c) !== "vencido" && sessionAgeDays(c) >= 7);
+}
+
+function autoCodeOn() {
+  return !(state.settings && state.settings.autoCode === false);
+}
+function clientPhoneDigits(c) {
+  let n = String((c && c.phone) || "").replace(/\D/g, "");
+  if (n.length === 11 && n[0] === "1") n = n.slice(1);
+  return n.length >= 10 ? n : "";
+}
+function waClientLink(c, text) {
+  const dig = clientPhoneDigits(c);
+  if (!dig) return waLink(text);
+  let num = dig;
+  if (num.length === 10) num = "1" + num;
+  return "https://wa.me/" + num + "?text=" + encodeURIComponent(text);
+}
+function codeWaText(c, routineName) {
+  const code = (c && c.accessCode) || "";
+  const rt = routineName || ((c && findRoutine(c.routine) && findRoutine(c.routine).name) || "");
+  let msg = "NiuBision\nHola " + ((c && c.name) || "cliente") + ".\n";
+  if (rt) msg += "Su rutina: " + rt + ".\n";
+  if (code) msg += "Su código de acceso es: " + code + "\n";
+  msg += "\nAbra niubision.com → Entrar → pegue el código.\nSee the work. Enjoy the day.";
+  return msg;
+}
+function assignWaText(c, r) {
+  const name = (r && (r.name || shortName(r))) || "su rutina";
+  const code = (c && c.accessCode) || "";
+  let msg = "NiuBision\nHola " + ((c && c.name) || "cliente") + ".\n";
+  msg += "Le asigné: " + name + ".\n";
+  msg += "Abra niubision.com → Entrar";
+  if (code) msg += " → código " + code;
+  msg += ".\nSee the work. Enjoy the day.";
+  return msg;
+}
+function pushInboxNote(row) {
+  state.inbox = Array.isArray(state.inbox) ? state.inbox : [];
+  state.inbox.unshift(Object.assign({ id: "in" + Date.now(), at: Date.now() }, row || {}));
+  state.inbox = state.inbox.slice(0, 80);
+  try { store.set("nb_inbox", state.inbox); } catch (e) {}
+}
+function offerCodeWhatsApp(c, opts) {
+  opts = opts || {};
+  if (!c || !c.accessCode) return;
+  const msg = codeWaText(c, opts.routine);
+  const dig = clientPhoneDigits(c);
+  if (!dig) {
+    copyText(msg).then((ok) => toast(ok ? "Código copiado · sin teléfono en la ficha" : "Código " + c.accessCode + " · copie y envíe"));
+    if (!opts.silentShare) showShare(c);
+    return;
+  }
+  if (opts.open !== false) window.open(waClientLink(c, msg), "_blank");
+}
+function inboxBuckets() {
+  const clients = (state.clients || []).map(attachLegalToClient);
+  const paidNoCode = clients.filter((c) => !c.accessCode && clientHasLegal(c));
+  const codedIds = new Set(clients.filter((c) => c.accessCode).map((c) => c.id));
+  const codedNames = new Set(clients.filter((c) => c.accessCode).map((c) => cleanName(c.name)));
+  const waiting = [];
+  const seenWait = {};
+  (state.inbox || []).slice().reverse().forEach((n) => {
+    if (!n || (n.type !== "pay" && n.type !== "lead")) return;
+    const id = n.clientId || "";
+    const nm = cleanName(n.name || "");
+    if (id && codedIds.has(id)) return;
+    if (nm && codedNames.has(nm)) return;
+    const cl = clients.find((c) => (id && c.id === id) || (nm && cleanName(c.name) === nm));
+    if (cl && cl.accessCode) return;
+    if (cl && paidNoCode.some((x) => x.id === cl.id)) return;
+    const k = id || nm || n.id;
+    if (!k || seenWait[k]) return;
+    seenWait[k] = 1;
+    waiting.push(Object.assign({}, n, { _client: cl || null }));
+  });
+  const legalPend = clients.filter((c) => !clientHasLegal(c));
+  const silent = silentClients();
+  return { paidNoCode, waiting, legalPend, silent };
+}
+function inboxBucketCount() {
+  const b = inboxBuckets();
+  return b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length;
+}
+function weekRangeLocal() {
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  mon.setHours(12, 0, 0, 0);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mon);
+    d.setDate(mon.getDate() + i);
+    days.push(fmt(d));
+  }
+  return { start: fmt(mon), end: fmt(sun), days, labels: ["L", "M", "X", "J", "V", "S", "D"] };
+}
+function clientSessionsInWeek(c, days) {
+  const set = new Set(days || []);
+  const out = [];
+  const push = (h) => {
+    if (!h || !h.date || !set.has(h.date)) return;
+    out.push(h);
+  };
+  (c && c.history || []).forEach(push);
+  if (c && c.report && c.report.lastSession) push(c.report.lastSession);
+  if (c && c.lastSession) push(c.lastSession);
+  (state.history || []).forEach((h) => {
+    if (c && h.clientId && h.clientId === c.id) push(h);
+  });
+  const seen = {};
+  return out.filter((h) => {
+    const k = h.date + "|" + (h.day || "") + "|" + (h.doneSets || "");
+    if (seen[k]) return false;
+    seen[k] = 1;
+    return true;
+  }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+function clientTimeline(c) {
+  if (!c) return [];
+  const ev = [];
+  const add = (at, title, detail, kind) => {
+    if (!at) return;
+    let t = at;
+    if (typeof t === "string" && /^\d{4}-\d{2}-\d{2}/.test(t)) t = new Date(t.slice(0, 10) + "T12:00:00").getTime();
+    if (typeof t !== "number" || isNaN(t)) return;
+    ev.push({ at: t, title, detail: detail || "", kind: kind || "note" });
+  };
+  (state.payments || []).forEach((p) => {
+    if (!p) return;
+    if (p.clientId !== c.id && cleanName(p.name || "") !== cleanName(c.name)) return;
+    add(p.date || p.at, p.status === "recibido" ? "Pago recibido" : "Pago iniciado",
+      ((p.amount != null && p.amount !== "") ? p.amount + " USD · " : "") + (p.method || "") + (p.plan ? " · " + p.plan : ""), "pay");
+  });
+  (state.inbox || []).forEach((n) => {
+    if (!n) return;
+    if (n.clientId !== c.id && cleanName(n.name || "") !== cleanName(c.name)) return;
+    add(n.at || n.date, n.type === "pay" ? "Aviso de pago" : (n.type === "code" ? "Código emitido" : "Aviso / lead"),
+      (n.plan || "") + (n.amount ? " · " + n.amount + " USD" : "") + (n.accessCode ? " · " + n.accessCode : ""), n.type || "inbox");
+  });
+  if (c.accessCode) {
+    const issued = c.codeIssuedAt || (c.startDate ? c.startDate : null);
+    add(issued || Date.now(), "Código de acceso", c.accessCode, "code");
+  }
+  const w = c.waiver;
+  if (w && (w.date || w.signedAt)) add(w.date || w.signedAt, "Relevo firmado", w.name || "", "legal");
+  const k = c.contract;
+  if (k && k.date) add(k.date, "Contrato", k.plan || c.plan || "", "legal");
+  const h = c.health;
+  if (h && h.date) add(h.date, "PAR-Q / salud", "", "legal");
+  const sess = [];
+  if (c.lastSession) sess.push(c.lastSession);
+  if (c.report && c.report.lastSession) sess.push(c.report.lastSession);
+  (c.history || []).slice(-12).forEach((x) => sess.push(x));
+  const seenS = {};
+  sess.forEach((s) => {
+    if (!s || !s.date) return;
+    const key = s.date + "|" + (s.day || "");
+    if (seenS[key]) return;
+    seenS[key] = 1;
+    add(s.date, "Sesión", (s.day || "entrenamiento") + (s.doneSets != null ? " · " + s.doneSets + "/" + (s.total || "?") + " series" : ""), "session");
+  });
+  return ev.sort((a, b) => b.at - a.at).slice(0, 40);
+}
+function fmtTimelineWhen(at) {
+  try {
+    return new Date(at).toLocaleString("es-PR", { dateStyle: "medium", timeStyle: "short" });
+  } catch (e) {
+    return "";
+  }
+}
+function openClientTimeline(c) {
+  if (!c) return;
+  closeModals();
+  const rows = clientTimeline(c);
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Línea de tiempo</p>
+    <h2>${escapeHtml(c.name)}</h2>
+    <p class="muted">${escapeHtml(c.plan || "")}${c.accessCode ? " · código " + escapeHtml(c.accessCode) : ""}</p>
+    ${rows.length ? rows.map((e) => `<div class="list-row timeline-row"><div><strong>${escapeHtml(e.title)}</strong><div class="muted">${escapeHtml(e.detail)}</div><div class="muted" style="font-size:11px">${escapeHtml(fmtTimelineWhen(e.at))}</div></div><span class="st-chip">${escapeHtml(e.kind)}</span></div>`).join("") : "<p class='muted'>Aún no hay eventos locales de este cliente.</p>"}
+    <div class="actions" style="margin-top:12px">
+      <button class="btn ghost" type="button" data-weekpdf="${escAttr(c.id)}">PDF de la semana</button>
+      <button class="btn ghost" type="button" id="closeSheet">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  const wp = modal.querySelector("[data-weekpdf]");
+  if (wp) wp.onclick = () => { printWeekPdf(c); };
+}
+function openAssignWhatsApp(c) {
+  if (!c) return;
+  closeModals();
+  const list = allRoutines().slice().sort((a, b) => (a.days || 0) - (b.days || 0) || rankOf(a) - rankOf(b));
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <p class="tagline">Asignar + WhatsApp</p>
+    <h2>${escapeHtml(c.name)}</h2>
+    <p class="muted">Elija la rutina. Se guarda y se abre WhatsApp con el mensaje.</p>
+    <select id="awRt" class="field">${pickerOptions(list, c.routine)}</select>
+    <button class="btn primary" type="button" id="awGo">Asignar y abrir WhatsApp</button>
+    <button class="btn ghost" type="button" id="closeSheet">Cerrar</button>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  modal.querySelector("#awGo").onclick = () => {
+    const id = ($("#awRt", modal) && $("#awRt", modal).value) || c.routine;
+    state.settings.clientId = c.id;
+    const r = assignRoutine(id);
+    if (!r) { toast("No se encontró la rutina"); return; }
+    c.routine = r.id;
+    persist();
+    cloudPush().catch(() => {});
+    const msg = assignWaText(c, r);
+    const dig = clientPhoneDigits(c);
+    modal.remove();
+    toast("Rutina asignada: " + (shortName(r) || r.name));
+    if (!dig) {
+      copyText(msg).then((ok) => toast(ok ? "Mensaje copiado · sin teléfono" : "Sin teléfono · copie el mensaje"));
+      window.open(waLink(msg), "_blank");
+    } else {
+      window.open(waClientLink(c, msg), "_blank");
+    }
+    render();
+  };
+}
+function printWeekPdf(c) {
+  if (!c) {
+    toast("Elija un cliente");
+    return;
+  }
+  const wr = weekRangeLocal();
+  const sessions = clientSessionsInWeek(c, wr.days);
+  const doneDates = new Set(sessions.map((s) => s.date));
+  const rt = findRoutine(c.routine);
+  const missed = wr.days.filter((d) => d <= todayKey() && !doneDates.has(d));
+  const rows = sessions.map((s) => "<tr><td>" + escapeHtml(s.date) + "</td><td>" + escapeHtml(s.day || "Sesión") + "</td><td>" + escapeHtml(String(s.doneSets != null ? s.doneSets + "/" + (s.total || "?") : "—")) + "</td></tr>").join("");
+  const missLine = missed.length ? missed.map(escapeHtml).join(", ") : "Ninguno registrado";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>NiuBision · semana</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:480px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} table{width:100%;margin-top:16px;border-collapse:collapse} td,th{padding:6px 0;border-bottom:1px solid #eee;font-size:14px;text-align:left} td:last-child,th:last-child{text-align:right}</style></head><body><h1>NiuBision · semana</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>" + escapeHtml(c.name) + "</strong></p><p class='muted'>" + escapeHtml(wr.start) + " → " + escapeHtml(wr.end) + "<br>Plan: " + escapeHtml(c.plan || "—") + "<br>Rutina: " + escapeHtml(rt ? rt.name : (c.routine || "—")) + "</p><p><strong>Sesiones esta semana:</strong> " + sessions.length + "</p><table><tr><th>Fecha</th><th>Día</th><th>Series</th></tr>" + (rows || "<tr><td colspan='3'>Sin sesiones registradas</td></tr>") + "</table><p class='muted' style='margin-top:16px'><strong>Días sin sesión (hasta hoy):</strong> " + missLine + "</p><p class='muted'>Resumen local del estudio. No es diagnóstico médico.</p></body></html>";
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
+  if (!w) { toast("Permita ventanas emergentes para el PDF"); return; }
+  setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
+}
+function inboxView() {
+  const b = inboxBuckets();
+  const rowClient = (c, actionHtml) => {
+    normalizeClient(c);
+    return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.accessCode ? " · código listo" : ""}</div></div><span class="inbox-actions">${actionHtml}</span></div>`;
+  };
+  const rowNotice = (n, actionHtml) => `<div class="list-row inbox-row"><div><strong>${escapeHtml(n.name || "Cliente")}</strong><div class="muted">${escapeHtml(n.type === "pay" ? "Pago en la nube" : "Lead")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(String(n.amount)) + " USD" : ""}</div></div><span class="inbox-actions">${actionHtml}</span></div>`;
+  const total = b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length;
+  return `<section class="screen">
+    <p class="tagline">Estudio</p>
+    <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
+    <p class="muted">${total ? total + " cosas que necesitan toque." : "Nadie urgente. El roster está en Gente."}</p>
+    <div class="card inbox-bucket">
+      <h3>Pagó · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
+      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">Confirmar+código</button>`)).join("") : "<p class='muted'>Nadie en esta cola.</p>"}
+    </div>
+    <div class="card inbox-bucket">
+      <h3>Esperando código <span class="muted">${b.waiting.length}</span></h3>
+      ${b.waiting.length ? b.waiting.map((n) => {
+        const cid = (n._client && n._client.id) || n.clientId || "";
+        const act = cid
+          ? `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir cliente</button>`
+          : `<button class="btn small ghost" type="button" data-view="people">Gente</button>`;
+        return rowNotice(n, act);
+      }).join("") : "<p class='muted'>Sin avisos pendientes.</p>"}
+    </div>
+    <div class="card inbox-bucket">
+      <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
+      ${b.legalPend.length ? b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir cliente</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button>`)).join("") : "<p class='muted'>Todos con relevo, salud y contrato.</p>"}
+      <p class="muted">Falta lo que firma el cliente en la app (relevo, PAR-Q, contrato).</p>
+    </div>
+    <div class="card inbox-bucket">
+      <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
+      ${b.silent.length ? b.silent.map((c) => {
+        const age = sessionAgeDays(c);
+        const label = age >= 900 ? "Aún no cierra un día" : age + " días";
+        return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")} · ${escapeHtml(label)}</div></div><span class="inbox-actions"><button class="btn small ghost" type="button" data-assignwa="${escAttr(c.id)}">Asignar + WhatsApp</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button></span></div>`;
+      }).join("") : "<p class='muted'>Nadie silencioso (7+ días).</p>"}
+    </div>
+    <div class="actions">
+      <button class="btn ghost" data-view="people">Gente y códigos</button>
+      <button class="btn ghost" data-view="home">Hoy el piso</button>
+    </div>
+  </section>`;
 }
 function pendingVideos() {
   return (state.videos || []).filter((v) => v.status === "pendiente");
@@ -11834,8 +12135,10 @@ function bindStudioOps() {
       const done = confirmClientPaid(cl, p.method);
       toast(done && done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
       render();
-      if (done && done.client) showShare(done.client);
-      else openReceipt(p);
+      if (done && done.client && done.code) {
+        showShare(done.client);
+        if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
+      } else openReceipt(p);
     };
   });
 }
@@ -11957,6 +12260,8 @@ function waReady(kind, extra) {
   if (kind === "video") return "Miguel, soy " + who + ". Video de técnica: " + (extra.ex || "ejercicio") + ".";
   if (kind === "reschedule") return "Miguel, soy " + who + ". Necesito reprogramar mi cita con 12 horas.";
   if (kind === "week") return extra.text || "";
+  if (kind === "assign") return assignWaText({ name: who, accessCode: extra.accessCode || "", plan: plan }, { name: extra.routine || "" });
+  if (kind === "code") return codeWaText({ name: who, accessCode: extra.accessCode || "", plan: plan });
   return "Miguel, soy " + who + ".";
 }
 function weekDots() {
@@ -13377,7 +13682,7 @@ function header() {
 }
 function nav() {
   const items = state.role === "coach"
-    ? [["home","Hoy"],["work","Sesión"],["people","Gente"]]
+    ? [["home","Hoy"],["inbox","Bandeja"],["work","Sesión"],["people","Gente"]]
     : state.role === "guest"
     ? [["price","Planes"],["about","Acerca"],["coach","Entrenador"],["social","Facebook"]]
     : [["work","Hoy"],["home","Yo"],["price","Plan"]];
@@ -13402,6 +13707,15 @@ function openStudioSettings() {
       <p class="muted">Los botones de pedir código y video usan este número.</p>
       <input class="field" id="waNum" placeholder="7874544038" value="${escAttr(state.settings.wa || "7874544038")}">
       <button class="btn primary" id="saveWa">Guardar número</button>
+    </div>
+    <div class="card">
+      <h3>Código al confirmar pago</h3>
+      <p class="muted">Al confirmar pago se crea el código. Con esto activo, también se ofrece WhatsApp.</p>
+      <label class="list-row" style="cursor:pointer;border:0;padding:8px 0">
+        <span>Ofrecer WhatsApp al confirmar pago</span>
+        <input type="checkbox" id="autoCodeToggle" ${autoCodeOn() ? "checked" : ""}>
+      </label>
+      <button class="btn primary" id="saveAutoCode">Guardar</button>
     </div>
     <div class="card">
       <h3>Métodos de pago</h3>
@@ -13446,6 +13760,14 @@ function openStudioSettings() {
     state.settings.wa = ($("#waNum", modal).value || "").replace(/[^\d+]/g, "").slice(0, 16);
     persist();
     toast("Número guardado");
+  };
+  const saveAc = $("#saveAutoCode", modal);
+  if (saveAc) saveAc.onclick = () => {
+    const on = !!( $("#autoCodeToggle", modal) && $("#autoCodeToggle", modal).checked );
+    state.settings.autoCode = on;
+    store.set("nb_auto_code", on ? 1 : 0);
+    persist();
+    toast(on ? "Al confirmar se ofrece WhatsApp con el código" : "Sin oferta automática de WhatsApp");
   };
   const al = $("#enableAlerts", modal);
   if (al) al.onclick = async () => {
@@ -13567,10 +13889,12 @@ function homeView() {
       vids[0] ? { k: "vid", id: vids[0].clientId, t: "Video pendiente", n: vids[0].name, d: (vids[0].exercise || "") + " · " + (vids[0].date || ""), extra: vids.length > 1 ? "+" + (vids.length - 1) : "" } : null,
       silent[0] ? { k: "late", id: silent[0].id, t: "Sin sesión", n: silent[0].name, d: sessionAgeDays(silent[0]) >= 900 ? "Aún no cierra un día" : sessionAgeDays(silent[0]) + " días", extra: silent.length > 1 ? "+" + (silent.length - 1) : "" } : null
     ].filter(Boolean);
+    const bandejaN = inboxBucketCount();
     return `<section class="screen">
       <p class="tagline">Estudio</p>
       <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
       ${floorLine()}
+      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : ""}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">Pagó sin código · avisos · PAR-Q · sin sesión</p></div>
       ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">Nadie urgente. El roster está abajo.</p></div>`}
       ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
         normalizeClient(c);
@@ -13581,6 +13905,7 @@ function homeView() {
       ${cur ? lastWorkHtml(cur) : ""}
       <div class="actions">
         <button class="btn primary" data-view="work">Abrir sesión</button>
+        <button class="btn ghost" data-view="inbox">Bandeja de hoy</button>
         <button class="btn ghost" data-view="people">Gente y códigos</button>
         <button class="btn ghost" data-view="rutinas">Rutinas</button>
         <button class="btn ghost" data-view="book">Ejercicios</button>
@@ -14620,6 +14945,7 @@ function peopleView() {
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
     <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
+    <button class="btn ghost" type="button" data-view="inbox" style="margin-bottom:10px">Abrir bandeja de hoy</button>
     <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
     ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div></div>`).join("")}<p class="muted">Ya están en el roster si el aviso llegó. Marque el pago cuando el dinero esté en PayPal o ATH.</p></div>` : ""}
     <div class="card">
@@ -14652,7 +14978,10 @@ function peopleView() {
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
         ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>`}
+        <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
+        <button class="btn small ghost" data-timeline="${c.id}">Línea de tiempo</button>
+        <button class="btn small ghost" data-weekpdf="${c.id}">PDF de la semana</button>
         <details><summary>Más</summary>
         <button class="btn small ghost" data-agenda="${c.id}">Agenda</button>
         <button class="btn small ghost" data-video-in="${c.id}">Video</button>
@@ -14835,7 +15164,12 @@ function confirmClientPaid(c, method) {
     toast("Falta " + clientLegalGaps(c).join(", ") + ". El cliente los firma en la app al elegir el plan, antes del código.");
     return null;
   }
+  const hadCode = /^\d{6}$/.test(String(c.accessCode || "")) && !isRevoked(c.accessCode, c.id);
   const code = ensureAccessCode(c);
+  if (!hadCode) {
+    c.codeIssuedAt = Date.now();
+    pushInboxNote({ type: "code", name: c.name, plan: c.plan, clientId: c.id, accessCode: code });
+  }
   c.unpaid = false;
   c.startDate = c.startDate || todayKey();
   const meta = planMeta(c.plan);
@@ -15265,7 +15599,7 @@ function showShare(c) {
   const box = $("#shareBox");
   box.focus(); box.select();
   $("#copyShare").onclick = () => copyText(box.value).then((ok) => toast(ok ? "Copiado" : "Seleccione el texto y copie"));
-  $("#waShare").onclick = () => window.open(waLink(msg), "_blank");
+  $("#waShare").onclick = () => window.open(waClientLink(c, msg), "_blank");
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
 }
 function openNeedCode(planLabel) {
@@ -15871,15 +16205,27 @@ function bindChrome() {
       openAgenda(c);
       return;
     }
-    if (b.dataset.needk === "confirm" || b.dataset.needk === "inbox") {
+    if (b.dataset.needk === "bandeja") {
+      state.view = "inbox";
+      render();
+      return;
+    }
+    if (b.dataset.needk === "confirm") {
       const c = state.clients.find((x) => x.id === b.dataset.cid);
       if (c && !c.accessCode && clientHasLegal(c)) {
         const done = confirmClientPaid(c, "ATH Móvil");
-        if (done && done.client) showShare(done.client);
-        else { state.view = "people"; render(); }
+        if (done && done.client && done.code) {
+          showShare(done.client);
+          if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
+        } else { state.view = "inbox"; render(); }
         return;
       }
-      state.view = "people";
+      state.view = "inbox";
+      render();
+      return;
+    }
+    if (b.dataset.needk === "inbox" || b.dataset.needk === "late") {
+      state.view = "inbox";
       render();
       return;
     }
@@ -16015,14 +16361,40 @@ function bindChrome() {
     if (!c) return;
     const done = confirmClientPaid(c);
     if (!done) { render(); return; }
-    toast("Código listo: " + done.code);
+    toast(done.code ? ("Código listo: " + done.code) : "Pago recibido");
     render();
-    if (done.client) showShare(done.client);
+    if (done.client && done.code) {
+      showShare(done.client);
+      if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
+    }
     if (done.payment) setTimeout(() => openReceipt(done.payment), 500);
   });
   $$("[data-wa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.wa);
-    if (c) window.open(waLink(`NiuBision\nHola ${c.name}.\n${c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n"}Plan: ${c.plan}\n\nAbra niubision.com, mantenga el logo, toque Entrar y pegue esos 6 dígitos.`), "_blank");
+    if (!c) return;
+    const msg = "NiuBision\nHola " + c.name + ".\n" + (c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n") + "Plan: " + (c.plan || "") + "\n\nAbra niubision.com → Entrar → pegue el código.";
+    window.open(waClientLink(c, msg), "_blank");
+  });
+  $$("[data-assignwa]").forEach((b) => b.onclick = () => {
+    const c = state.clients.find((x) => x.id === b.dataset.assignwa);
+    if (c) openAssignWhatsApp(c);
+  });
+  $$("[data-timeline]").forEach((b) => b.onclick = () => {
+    const c = state.clients.find((x) => x.id === b.dataset.timeline);
+    if (c) openClientTimeline(c);
+  });
+  $$("[data-weekpdf]").forEach((b) => b.onclick = () => {
+    const c = state.clients.find((x) => x.id === b.dataset.weekpdf);
+    if (c) printWeekPdf(c);
+  });
+  $$("[data-openclient]").forEach((b) => b.onclick = () => {
+    const id = b.dataset.openclient;
+    if (id) state.settings.clientId = id;
+    persist();
+    state.view = "people";
+    render();
+    const c = state.clients.find((x) => x.id === id);
+    if (c) setTimeout(() => openClientTimeline(c), 200);
   });
   $$("[data-delc]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.delc);
@@ -16338,6 +16710,7 @@ function bindRoutinesCoach() {
 
 function viewBody() {
   if (state.view === "home") return homeView();
+  if (state.view === "inbox") return inboxView();
   if (state.view === "work") return workView();
   if (state.view === "book") return libraryView();
   if (state.view === "price") return pricesView();
@@ -16351,7 +16724,7 @@ function viewBody() {
   return peopleView();
 }
 function viewOrder() {
-  if (state.role === "coach") return ["home", "work", "people", "rutinas", "book"];
+  if (state.role === "coach") return ["home", "inbox", "work", "people", "rutinas", "book"];
   if (state.role === "guest") return ["price", "about", "coach", "social", "privacy", "terms"];
   return ["work", "home", "price", "habit", "book"];
 }
@@ -16397,6 +16770,7 @@ function afterPaint() {
     ensureCloud().then((r) => { if (r && r.ok && state.view === "home") render(); });
   }
   if (state.role === "coach" && state.view === "home") maybeCoachPull();
+  if (state.role === "coach" && state.view === "inbox") maybeCoachPull();
   if (state.role === "coach" && state.view === "people") maybeCoachPull();
   if (state.role === "client") maybeClientPull();
   if (state.role === "client" && isOnline() && !state._seatTried) {
