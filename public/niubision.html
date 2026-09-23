@@ -13507,7 +13507,9 @@ const HEALTH_ITEMS = [
 
 function healthComplete() {
   const h = state.health;
-  return !!(h && h.name && h.date && String(h.emer || "").trim().length >= 4 && HEALTH_ITEMS.every((q) => h[q.id] === "sí" || h[q.id] === "no"));
+  const phone = String((h && h.phone) || "").replace(/\D/g, "");
+  const digits = phone.length === 11 && phone[0] === "1" ? phone.slice(1) : phone;
+  return !!(h && h.name && h.date && digits.length === 10 && String(h.emer || "").trim().length >= 4 && HEALTH_ITEMS.every((q) => h[q.id] === "sí" || h[q.id] === "no"));
 }
 function healthFlagged() {
   const h = state.health || {};
@@ -13760,6 +13762,7 @@ function openHealth(planLabel) {
     if (emer.length < 4) return toast("Escriba un contacto de emergencia");
     let phone = ($("#hPhone").value || "").replace(/\D/g, "");
     if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
+    if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
     const row = { name, phone: phone.slice(0, 24), emer: emer.slice(0, 80), notes: $("#hNotes").value.trim().slice(0, 400), date: todayKey(), clearance: false };
     for (const q of HEALTH_ITEMS) {
       const sel = modal.querySelector(`input[name="${q.id}"]:checked`);
@@ -16940,8 +16943,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "27") {
-        store.set("nb_sw", "27");
+      if (store.get("nb_sw") !== "28") {
+        store.set("nb_sw", "28");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -16954,7 +16957,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=27", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=28", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
