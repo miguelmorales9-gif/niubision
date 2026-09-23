@@ -238,6 +238,11 @@ img { background: transparent; }
   color: var(--cream); margin: 0 0 14px;
 }
 .nav.slim { grid-template-columns:1fr 1fr 1fr; }
+.nav.four { grid-template-columns:1fr 1fr 1fr 1fr; }
+.prog-card .prog-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+.prog-card .prog-head h3 { margin:0; flex:1; }
+.prog-card.is-active { border-color: var(--gold-dim); }
+.prog-badge { flex-shrink:0; }
 .st-chip { display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; padding:4px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mute); }
 .st-chip.ok { color:var(--mint); border-color:#3a5348; background:#1a2622; }
 .st-chip.warn { color:var(--peach); border-color:#5a4030; background:#2a221c; }

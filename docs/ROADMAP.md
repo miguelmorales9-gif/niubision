@@ -59,6 +59,12 @@
 | 3.4 | Client timeline | **done** (this PR) |
 | 3.5 | Export PDF week | **done** (this PR) |
 
+## Phase 3.5 — Programas IA (A+B+C)
+| ID | Work | Status |
+|----|------|--------|
+| 3.5.1 | Shared Programas shelf + Pedir → Bandeja → Aprobar | **this PR** |
+| 3.5.2 | Coach/client nav: Programas tab; Hoy stays active-only | **this PR** |
+
 ## Phase 4 — Platform
 | ID | Work | Status |
 |----|------|--------|
