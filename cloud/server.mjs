@@ -102,11 +102,25 @@ function mergeStudio(prev, next) {
     if (!p) return;
     payMap.set(String(p.id || p.date + p.name), Object.assign({}, payMap.get(String(p.id || p.date + p.name)) || {}, p));
   });
-  const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : b, {
+  const mergePr = (aa, bb) => {
+    const m = {};
+    [].concat(aa || [], bb || []).forEach((r) => {
+      if (!r || !r.id) return;
+      const prev = m[r.id];
+      if (!prev) { m[r.id] = r; return; }
+      const rank = (x) => (x.status === "pending" ? 2 : (x.status === "approved" ? 1 : 0));
+      if (rank(r) > rank(prev) || (rank(r) === rank(prev) && Number(r.at || 0) >= Number(prev.at || 0))) m[r.id] = Object.assign({}, prev, r);
+    });
+    return Object.keys(m).map((k) => m[k]).sort((x, y) => Number(y.at || 0) - Number(x.at || 0)).slice(0, 80);
+  };
+  const rest = Object.assign({}, b);
+  ["clients", "payments", "inbox", "revoked", "programRequests", "_op"].forEach((k) => { delete rest[k]; });
+  const out = Object.assign({}, a, op === "lead" || op === "pay" ? {} : rest, {
     clients: Array.from(map.values()),
     revoked,
     inbox: Array.from(inboxMap.values()).sort((x, y) => (y.at || 0) - (x.at || 0)).slice(0, 80),
     payments: Array.from(payMap.values()).slice(-200),
+    programRequests: mergePr(a.programRequests, b.programRequests),
     updatedAt: Date.now(),
   });
   delete out._op;
@@ -207,7 +221,7 @@ function bearer(req) {
   return m ? m[1].trim() : "";
 }
 
-const API = ["/api/studio", "/api/state", "/api/redeem", "/api/lead", "/api/report", "/api/pay", "/api/paypal", "/api/revoke", "/api/health", "/health"];
+const API = ["/api/studio", "/api/state", "/api/redeem", "/api/lead", "/api/program-request", "/api/report", "/api/pay", "/api/paypal", "/api/revoke", "/api/health", "/health"];
 
 async function handle(req, res) {
   const url = new URL(req.url || "/", "http://" + (req.headers.host || "localhost"));
@@ -344,6 +358,33 @@ async function handle(req, res) {
     });
     await save(db);
     send(res, 200, { ok: true, state: row.state });
+    return;
+  }
+  if (path === "/api/program-request" && method === "POST") {
+    const body = JSON.parse((await readBody(req)) || "{}");
+    const reqRow = body.request || body;
+    if (!reqRow || !reqRow.id || !reqRow.routineId) {
+      send(res, 400, { error: "Falta el pedido" });
+      return;
+    }
+    const row = await studioRow(db, "NIUBI");
+    const note = {
+      id: "in" + Date.now(),
+      type: "program_req",
+      name: String(reqRow.name || "Cliente").slice(0, 80),
+      clientId: String(reqRow.clientId || ""),
+      accessCode: String(reqRow.accessCode || "").replace(/\D/g, "").slice(0, 6),
+      routineId: String(reqRow.routineId || ""),
+      routineName: String(reqRow.routineName || ""),
+      at: Date.now(),
+      reqId: String(reqRow.id)
+    };
+    row.state = mergeStudio(row.state || {}, {
+      programRequests: [Object.assign({}, reqRow, { status: reqRow.status || "pending", at: reqRow.at || Date.now() })],
+      inbox: [note]
+    });
+    await save(db);
+    send(res, 200, { ok: true });
     return;
   }
   if (path === "/api/report" && (method === "POST" || method === "PUT")) {

@@ -540,3 +540,90 @@ img { background: transparent; }
 .inbox-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; max-width:52%; }
 .timeline-row .st-chip { text-transform:none; letter-spacing:.04em; font-size:10px; }
 .nav.slim button { font-size:11px; }
+
+/* Phase 4 — empty states + motion */
+.nb-empty {
+  text-align: center;
+  padding: 28px 18px 22px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(36,34,44,.65), rgba(27,26,34,.4));
+  margin-bottom: 12px;
+}
+.nb-empty .nb-empty-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 10px;
+  color: var(--gold);
+  opacity: .9;
+}
+.nb-empty h3 {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+.nb-empty p {
+  color: var(--mute);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 auto 14px;
+  max-width: 28em;
+}
+.nb-empty .btn { max-width: 280px; margin-left: auto; margin-right: auto; }
+.nb-empty .btn + .btn { margin-top: 8px; }
+
+.nb-fade { animation: nbFade .28s ease both; }
+.card.nb-fade, .people-card.nb-fade, .rt-card.nb-fade, .inbox-bucket.nb-fade {
+  animation: nbFade .32s ease both;
+}
+.sheet.nb-fade { animation: nbSheet .28s ease both; }
+
+@keyframes nbFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nbSheet {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-fade, .card.nb-fade, .people-card.nb-fade, .rt-card.nb-fade,
+  .inbox-bucket.nb-fade, .sheet.nb-fade, .screen {
+    animation: none !important;
+  }
+}
+
+.cloud-status {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.cloud-status .row-line { display: flex; justify-content: space-between; gap: 10px; }
+.cloud-status .ok { color: var(--mint); }
+.cloud-status .warn { color: var(--peach); }
+.sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  border-radius: 12px;
+  background: rgba(143,203,179,.1);
+  border: 1px solid rgba(143,203,179,.25);
+  font-size: 12px;
+  color: var(--mint);
+}
+.sync-banner.offline {
+  background: rgba(243,177,132,.1);
+  border-color: rgba(243,177,132,.28);
+  color: var(--peach);
+}
