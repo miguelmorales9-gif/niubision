@@ -13672,13 +13672,23 @@ function sessionProgress(rt) {
 }
 function lastLoad(exId) {
   const map = store.get("nb_last_load", {});
-  return map[exId] || "";
+  const v = map[exId];
+  if (v == null || v === "") return "";
+  if (typeof v === "object") return v.w || "";
+  return v;
+}
+function lastLoadInfo(exId) {
+  const map = store.get("nb_last_load", {});
+  const v = map[exId];
+  if (v == null || v === "") return null;
+  if (typeof v === "object") return { w: v.w || "", r: v.r || "" };
+  return { w: String(v), r: "" };
 }
 function saveLastLoads(ses) {
   const map = store.get("nb_last_load", {});
   ses.items.forEach((it) => {
-    const done = [...it.sets].reverse().find((s) => s.done && s.w);
-    if (done && it.exId) map[it.exId] = done.w;
+    const done = [...it.sets].reverse().find((s) => s.done && (s.w || s.r));
+    if (done && it.exId) map[it.exId] = { w: done.w || "", r: done.r || "" };
   });
   store.set("nb_last_load", map);
 }
@@ -13871,13 +13881,18 @@ function workView() {
     ${ses.items.map((it, i) => {
       const ex = findEx(it.exId);
       const last = lastLoad(it.exId);
+      const prev = lastLoadInfo(it.exId);
+      const prevLine = prev && (prev.w || prev.r)
+        ? ` · antes ${escapeHtml(String(prev.w || "—"))} lb × ${escapeHtml(String(prev.r || "—"))}`
+        : (last ? ` · último ${escapeHtml(String(last))} lb` : "");
       const name = displayName(it);
       const cue = exCue(ex);
       return `<article class="card work-ex ${open===i?"":"is-min"}" data-item="${i}">
         <header>
           ${open===i ? techLoopHtml(ex, name) : `<img src="${imgOf(ex)}" alt="${escapeHtml(name)}" data-open="${escapeHtml(it.exId || "")}" loading="lazy" decoding="async" width="64" height="64">`}
-          <div data-toggle="${i}"><h3>${escapeHtml(name)}</h3><p class="muted">${it.sets.length} series · descanso ${it.rest}s${last?` · último ${escapeHtml(String(last))} lb`:""}</p>
-          ${open===i && cue ? `<p class="muted">${escapeHtml(String(cue).slice(0, 140))}</p>` : ""}</div>
+          <div data-toggle="${i}"><h3>${escapeHtml(name)}</h3><p class="muted">${it.sets.length} series · descanso ${it.rest}s${prevLine}</p>
+          ${open===i && cue ? `<p class="muted">${escapeHtml(String(cue).slice(0, 140))}</p>` : ""}
+          ${open===i && prev && (prev.w || prev.r) ? `<span class="prev-load">Sesión anterior: ${escapeHtml(String(prev.w || "—"))} lb × ${escapeHtml(String(prev.r || "—"))}</span>` : ""}</div>
         </header>
         <div class="work-body">
         <div class="rest-dock"${open===i ? ' id="restDock"' : ""}></div>
@@ -13885,10 +13900,10 @@ function workView() {
         ${it.sets.map((s, si) => `<div class="set-row ${s.done?"done":""}">
           <span>${si + 1}</span>
           <div class="stepper"><button type="button" data-adj="${i}|${si}|w|-">−</button>
-          <input class="field" data-w="${i}-${si}" value="${escapeHtml(String(s.w || last || ""))}" inputmode="decimal" placeholder="${escapeHtml(String(last || "lb"))}">
+          <input class="field" data-w="${i}-${si}" value="${escapeHtml(String(s.w || last || ""))}" inputmode="decimal" placeholder="${escapeHtml(String(last || "lb"))}" aria-label="Peso">
           <button type="button" data-adj="${i}|${si}|w|+">+</button></div>
-          <input class="field" data-r="${i}-${si}" value="${escapeHtml(String(s.r || ""))}" placeholder="repeticiones">
-          <input type="checkbox" data-d="${i}-${si}" ${s.done?"checked":""}>
+          <input class="field" data-r="${i}-${si}" value="${escapeHtml(String(s.r || (prev && prev.r) || ""))}" placeholder="${escapeHtml(String((prev && prev.r) || "reps"))}" inputmode="numeric" aria-label="Reps">
+          <label class="set-check"><input type="checkbox" data-d="${i}-${si}" ${s.done?"checked":""} aria-label="Serie lista"></label>
         </div>`).join("")}
         <div class="work-tools">
           <button class="btn small ghost" data-addset="${i}">+ serie</button>
@@ -14241,9 +14256,9 @@ function startTimer(sec) {
     const m = Math.floor(Math.max(0, left) / 60);
     const s = Math.max(0, left) % 60;
     const clock = m + ":" + String(s).padStart(2, "0");
-    face.innerHTML = `<small>descanso</small><b>${clock}</b><div class="rest-actions"><button type="button" class="btn ghost" data-restadd="1">+15 s</button><button type="button" class="btn primary" data-restskip="1">Listo</button></div>`;
+    face.innerHTML = `<small>descanso</small><b>${clock}</b><div class="rest-actions"><button type="button" class="btn ghost" data-restsub="1">−15 s</button><button type="button" class="btn ghost" data-restadd="1">+15 s</button><button type="button" class="btn primary" data-restskip="1">Saltar</button></div>`;
     if (dock) {
-      el.innerHTML = `<span><small>descanso · toque +15 s</small></span><b>${clock}</b>`;
+      el.innerHTML = `<span><small>descanso · −15 / +15 / saltar</small></span><b>${clock}</b>`;
       return;
     }
     const circ = 2 * Math.PI * 40;
@@ -14272,13 +14287,26 @@ function startTimer(sec) {
     if (state.timer) state.timer.left = left;
   };
   tick();
-  state.timer = { id: setInterval(tick, 1000), left, add() { left += 15; if (state.timer) state.timer.left = left; paint(); toast("+15 s"); } };
+  state.timer = {
+    id: setInterval(tick, 1000),
+    left,
+    add() { left += 15; if (state.timer) state.timer.left = left; paint(); toast("+15 s"); },
+    sub() { left = Math.max(0, left - 15); if (state.timer) state.timer.left = left; paint(); toast("−15 s"); }
+  };
   const bump = () => { if (state.timer && state.timer.add) state.timer.add(); };
-  el.onclick = bump;
-  face.onclick = (e) => {
-    const t = e.target && e.target.closest ? e.target.closest("[data-restskip], [data-restadd]") : e.target;
-    if (t && t.getAttribute && t.getAttribute("data-restskip")) { e.preventDefault(); stop("Descanso listo"); return; }
+  el.onclick = (e) => {
+    e.preventDefault();
+    // cycle hint: short press +15
     bump();
+  };
+  face.onclick = (e) => {
+    const t = e.target && e.target.closest ? e.target.closest("[data-restskip], [data-restadd], [data-restsub]") : e.target;
+    if (!t || !t.getAttribute) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (t.getAttribute("data-restskip")) { stop("Descanso listo"); return; }
+    if (t.getAttribute("data-restsub")) { if (state.timer && state.timer.sub) state.timer.sub(); return; }
+    if (t.getAttribute("data-restadd")) { bump(); return; }
   };
 }
 function flashClose(done, total, lb) {
@@ -14291,6 +14319,9 @@ function flashClose(done, total, lb) {
 }
 function openDone(done, total, lb) {
   const st = streak();
+  const durSec = Math.max(0, Math.floor(((state.sessElapsed || 0) + (state.sessStart ? Date.now() - state.sessStart : 0)) / 1000));
+  const durMin = Math.max(1, Math.round(durSec / 60));
+  const shareText = `NiuBision — sesión lista\n${state.profile.name || "Cliente"}\nSeries: ${done}/${total}\nVolumen: ${lb || 0} lb\nTiempo: ${durMin} min\nRacha: ${st}`;
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet done-sheet">
@@ -14299,11 +14330,11 @@ function openDone(done, total, lb) {
     <h2>El trabajo se ve.</h2>
     <div class="rings" style="margin:16px 0">
       <div class="ring-card"><b>${done}</b><span>series</span></div>
-      <div class="ring-card"><b>${st}</b><span>racha</span></div>
+      <div class="ring-card"><b>${durMin}</b><span>min</span></div>
       <div class="ring-card"><b>${lb || (total ? Math.round((done/total)*100) : 0)}${lb ? " lb" : "%"}</b><span>${lb ? "movidas" : "hoy"}</span></div>
     </div>
+    <p class="muted">Racha ${st}. Mañana otro día. Hoy ya está hecho.</p>
     ${floorLine()}
-    <p class="muted">Mañana otro día. Hoy ya está hecho.</p>
     <p class="tagline" style="margin-top:12px">¿Cómo se sintió?</p>
     <div class="filters" id="feelRow">
       ${[1,2,3,4,5].map((n) => `<button type="button" class="btn small ghost" data-feel="${n}">${n}</button>`).join("")}
@@ -14311,11 +14342,14 @@ function openDone(done, total, lb) {
     <label class="habit"><input type="checkbox" id="sessPain"><div><strong>Hubo molestia</strong><div class="muted">Rodilla, hombro, espalda… avísele a Miguel.</div></div></label>
     <textarea class="field" id="sessNote" placeholder="Una frase para Miguel. Ejemplo: el press pesó más que ayer."></textarea>
     <div class="actions">
-      <button class="btn primary" id="toHabits">Guardar y marcar hábitos</button>
+      <button class="btn primary" id="shareSessWa">Compartir por WhatsApp</button>
+      <button class="btn ghost" id="toHabits">Guardar y marcar hábitos</button>
       <button class="btn ghost" id="closeSheet">Guardar y seguir</button>
     </div>
   </div>`;
   document.body.appendChild(modal);
+  const shareBtn = modal.querySelector("#shareSessWa");
+  if (shareBtn) shareBtn.onclick = () => window.open(waLink(shareText), "_blank");
   let feel = 0;
   $$("[data-feel]", modal).forEach((b) => b.onclick = () => {
     feel = Number(b.dataset.feel);
@@ -14334,8 +14368,36 @@ function openDone(done, total, lb) {
     persist();
     if (state.role === "client") cloudPushClient().catch(() => {});
   };
-  modal.querySelector("#closeSheet").onclick = () => { saveFeel(); modal.remove(); maybeWeekRecap(false); render(); };
-  modal.querySelector("#toHabits").onclick = () => { saveFeel(); modal.remove(); state.view = "habit"; render(); };
+  modal.querySelector("#closeSheet").onclick = () => { saveFeel(); modal.remove(); maybeWeekRecap(false); maybeWeeklyCheckinPrompt(); render(); };
+  modal.querySelector("#toHabits").onclick = () => { saveFeel(); modal.remove(); state.view = "habit"; render(); maybeWeeklyCheckinPrompt(); };
+}
+
+function maybeWeeklyCheckinPrompt() {
+  if (state.role !== "client") return;
+  const weekKey = (typeof isoWeekKey === "function" ? isoWeekKey() : todayKey().slice(0, 7));
+  if (store.get("nb_week_check_ask_" + weekKey)) return;
+  const recent = (state.checkins || []).some((c) => {
+    try { return (Date.now() - new Date(c.date + "T12:00:00").getTime()) / 86400000 < 7; } catch (e) { return false; }
+  });
+  if (recent) return;
+  store.set("nb_week_check_ask_" + weekKey, 1);
+  setTimeout(() => {
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.innerHTML = `<div class="sheet">
+      <div class="handle"></div>
+      <p class="tagline">Check-in semanal</p>
+      <h2>Veinte segundos.</h2>
+      <p class="muted">Energía y molestia. No bloquea el entrenamiento.</p>
+      <div class="actions">
+        <button class="btn primary" id="wkGo">Hacer check-in</button>
+        <button class="btn ghost" id="closeSheet">Ahora no</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector("#closeSheet").onclick = () => modal.remove();
+    modal.querySelector("#wkGo").onclick = () => { modal.remove(); openCheckin(); };
+  }, 600);
 }
 
 function libraryView() {
