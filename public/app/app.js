@@ -14009,6 +14009,7 @@ function openHealth(planLabel) {
   if (step < 1 || step > 3) step = 1;
   const modal = document.createElement("div");
   modal.className = "modal";
+  const answerOf = (id) => (h[id] === "sí" || h[id] === "no" ? h[id] : "");
   const paint = () => {
     const qChunk = step === 2 ? HEALTH_ITEMS.slice(0, 4) : step === 3 ? HEALTH_ITEMS.slice(4) : [];
     const stepLabel = step === 1 ? "Paso 1 de 3 · Contacto" : step === 2 ? "Paso 2 de 3 · PAR-Q" : "Paso 3 de 3 · PAR-Q y notas";
@@ -14022,13 +14023,17 @@ function openHealth(planLabel) {
     <label class="muted" for="hEmer">Contacto de emergencia (nombre y teléfono)</label>
     <input class="field" id="hEmer" placeholder="Ej. María 7875550000" autocomplete="off" value="${escAttr(h.emer || "")}">`;
     } else {
-      body = qChunk.map((q) => `<div class="card" style="padding:12px">
+      body = qChunk.map((q) => {
+        const ans = answerOf(q.id);
+        const miss = h._miss && !ans;
+        return `<div class="card${miss ? " warn" : ""}" data-hq="${q.id}" style="padding:12px">
       <p>${q.t}</p>
       <div class="row two" style="margin-top:8px">
-        <label class="habit"><input type="radio" name="${q.id}" value="no" ${h[q.id]==="no"?"checked":""}> No</label>
-        <label class="habit"><input type="radio" name="${q.id}" value="sí" ${h[q.id]==="sí"?"checked":""}> Sí</label>
+        <button type="button" class="btn ${ans === "no" ? "primary" : "ghost"}" data-hans="${q.id}" data-hval="no">No</button>
+        <button type="button" class="btn ${ans === "sí" ? "primary" : "ghost"}" data-hans="${q.id}" data-hval="sí">Sí</button>
       </div>
-    </div>`).join("");
+    </div>`;
+      }).join("");
       if (step === 3) {
         body += `<textarea id="hNotes" placeholder="Lesiones, medicamentos o detalles (sin prescribir tratamiento)">${escapeHtml(h.notes || "")}</textarea>
     <p class="muted">Si contestó “sí” a alguna pregunta, un médico debe autorizar la actividad antes de firmar el contrato.</p>
@@ -14052,11 +14057,6 @@ function openHealth(planLabel) {
         h.phone = (($("#hPhone") && $("#hPhone").value) || h.phone || "").trim();
         h.emer = (($("#hEmer") && $("#hEmer").value) || h.emer || "").trim();
       } else {
-        const chunk = step === 2 ? HEALTH_ITEMS.slice(0, 4) : HEALTH_ITEMS.slice(4);
-        for (const q of chunk) {
-          const sel = modal.querySelector(`input[name="${q.id}"]:checked`);
-          if (sel) h[q.id] = sel.value;
-        }
         if (step === 3) {
           const notes = $("#hNotes");
           if (notes) h.notes = notes.value.trim().slice(0, 400);
@@ -14067,9 +14067,29 @@ function openHealth(planLabel) {
       store.set("nb_health_draft", h);
       store.set("nb_health_step", step);
     };
+    modal.querySelectorAll("[data-hans]").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        const id = btn.getAttribute("data-hans");
+        const val = btn.getAttribute("data-hval");
+        if (!id || (val !== "sí" && val !== "no")) return;
+        h[id] = val;
+        delete h._miss;
+        store.set("nb_health_draft", h);
+        // repaint only answer styles for this card
+        const card = modal.querySelector(`[data-hq="${id}"]`);
+        if (card) {
+          card.classList.remove("warn");
+          card.querySelectorAll("[data-hans]").forEach((b) => {
+            const on = b.getAttribute("data-hval") === val;
+            b.className = "btn " + (on ? "primary" : "ghost");
+          });
+        }
+      };
+    });
     const back = modal.querySelector("#hBack");
     const close = modal.querySelector("#closeSheet");
-    if (back) back.onclick = () => { draftSave(); step -= 1; paint(); };
+    if (back) back.onclick = () => { draftSave(); step -= 1; delete h._miss; paint(); };
     if (close) close.onclick = () => { draftSave(); modal.remove(); };
     modal.querySelector("#hNext").onclick = () => {
       draftSave();
@@ -14080,18 +14100,28 @@ function openHealth(planLabel) {
         if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
         if (phone.length !== 10) return toast("Teléfono de 10 dígitos");
         h.phone = phone.slice(0, 24);
-        step = 2; paint(); return;
+        step = 2; delete h._miss; paint(); return;
       }
       if (step === 2) {
-        for (const q of HEALTH_ITEMS.slice(0, 4)) {
-          if (h[q.id] !== "sí" && h[q.id] !== "no") return toast("Conteste todas las preguntas");
+        const miss = HEALTH_ITEMS.slice(0, 4).filter((q) => h[q.id] !== "sí" && h[q.id] !== "no");
+        if (miss.length) {
+          h._miss = true;
+          paint();
+          return toast("Conteste las " + miss.length + " pregunta" + (miss.length === 1 ? "" : "s") + " marcada" + (miss.length === 1 ? "" : "s"));
         }
-        step = 3; paint(); return;
+        step = 3; delete h._miss; paint(); return;
       }
-      // step 3 save
       if (!$("#hTrue") || !$("#hTrue").checked) return toast("Marque la declaración");
-      for (const q of HEALTH_ITEMS) {
-        if (h[q.id] !== "sí" && h[q.id] !== "no") return toast("Conteste todas las preguntas");
+      const missAll = HEALTH_ITEMS.filter((q) => h[q.id] !== "sí" && h[q.id] !== "no");
+      if (missAll.length) {
+        h._miss = true;
+        // if missing are on step 2, go back
+        if (missAll.some((q) => HEALTH_ITEMS.slice(0, 4).some((x) => x.id === q.id))) {
+          step = 2; paint();
+        } else {
+          paint();
+        }
+        return toast("Conteste todas las preguntas");
       }
       let phone = String(h.phone || "").replace(/\D/g, "");
       if (phone.length === 11 && phone[0] === "1") phone = phone.slice(1);
@@ -14122,7 +14152,6 @@ function openHealth(planLabel) {
   document.body.appendChild(modal);
   paint();
 }
-
 
 function openClearance(planLabel) {
   const modal = document.createElement("div");
