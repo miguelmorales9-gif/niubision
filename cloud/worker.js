@@ -372,7 +372,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 28 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 29 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -562,8 +562,11 @@ async function handle(req, env) {
       return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
     }
     rateHit(row, payKey);
+    const invoice = String(body.invoice || body.id || ("p" + Date.now()));
     const payment = {
-      id: String(body.invoice || "p" + Date.now()),
+      id: invoice,
+      invoice,
+      ref: String(body.ref || ("NB-" + invoice.replace(/\D/g, "").slice(-6))),
       date: new Date().toISOString().slice(0, 10),
       plan: body.plan || "",
       amount: body.amount || "",
@@ -578,7 +581,7 @@ async function handle(req, env) {
     row.state = mergeStudio(row.state || {}, {
       _op: "pay",
       payments: [payment],
-      inbox: dupPay ? [] : [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, amount: payment.amount, method: payment.method }]
+      inbox: dupPay ? [] : [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, amount: payment.amount, method: payment.method, invoice: payment.invoice, ref: payment.ref }]
     });
     await putRow(env, row);
     return json({ ok: true });
@@ -596,8 +599,11 @@ async function handle(req, env) {
     const row = await rowOf(env, "NIUBI");
     if (ct.indexOf("json") >= 0) {
       const body = JSON.parse(raw || "{}");
+      const invoice = String(body.invoice || body.id || ("p" + Date.now()));
       const payment = {
-        id: String(body.invoice || "p" + Date.now()),
+        id: invoice,
+        invoice,
+        ref: String(body.ref || ("NB-" + invoice.replace(/\D/g, "").slice(-6))),
         date: new Date().toISOString().slice(0, 10),
         plan: body.plan || "",
         amount: body.amount || "",
