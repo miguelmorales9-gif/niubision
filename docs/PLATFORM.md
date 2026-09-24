@@ -18,7 +18,7 @@ Short reference for auth, sync, backup, and push. Spanish-first product; this do
 | `nb_notify` / `nb_alerts` | notification permission + coach ntfy listen |
 | `nb_auth_sess` | short-lived Bearer session |
 
-Cloud payload always includes **pending + recently approved** `programRequests`. Worker/server `mergeStudio` merges them by id (pending wins over ignored; no silent wipe of active routine on the client — redeem applies coach assignment).
+Cloud payload always includes **pending + recently approved** `programRequests`. Worker/server `mergeStudio` merges them by id (terminal approved/ignored/rejected ranks above pending; no silent wipe of active routine on the client — redeem applies coach assignment).
 
 ### Multi-device flow
 1. Client **Pedir** → local queue + `POST /api/program-request` + ntfy ping to coach.

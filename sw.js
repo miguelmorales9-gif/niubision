@@ -1,9 +1,9 @@
-const CACHE = "nb-offline-v38";
+const CACHE = "nb-offline-v39";
 const SHELL = [
   "/",
   "/index.html",
-  "/app/styles.css?v=38",
-  "/app/app.js?v=38",
+  "/app/styles.css?v=39",
+  "/app/app.js?v=39",
   "/favicon.svg",
   "/logo.png",
   "/icon-48.png",

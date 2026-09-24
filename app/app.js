@@ -10067,10 +10067,10 @@ function mergeRows(localArr, remoteArr) {
   (localArr || []).forEach(put);
   return list;
 }
-const JB_CLOUD = "https://jsonblob.com/api/jsonBlob";
-const CR_CLOUD = "https://crudcrud.com/api/25e3d135532e4964b496a8f7141e838d";
-const REST_CLOUD = "https://api.restful-api.dev/objects";
-const GH_STUDIO = "https://api.github.com/repos/miguelmorales9-gif/niubision-data/contents/studio.json";
+const JB_CLOUD = "";
+const CR_CLOUD = "";
+const REST_CLOUD = "";
+const GH_STUDIO = "";
 const CLOUD_API = "https://api.niubision.com/api";
 const CLOUD_API_CUSTOM = "https://niubision-api.miguel-morales9.workers.dev/api";
 const NB_CLOUD = {
@@ -11621,6 +11621,12 @@ function requestProgram(routineId) {
   const r = findRoutine(routineId);
   if (!r) { toast("No se encontró el programa"); return null; }
   const who = selfClient() || {};
+  const code = String((state.profile && state.profile.accessCode) || (who && who.accessCode) || "").replace(/\D/g, "").slice(0, 6);
+  if (!/^\d{6}$/.test(code)) {
+    toast("Entre con su código de 6 dígitos para pedir un programa.");
+    try { openCodeEntry(); } catch (e) {}
+    return null;
+  }
   const name = cleanName((who && who.name) || state.profile.name || "Cliente") || "Cliente";
   const clientId = (who && who.id) || state.profile.clientId || "";
   const dup = pendingProgramRequests().find((x) => x.routineId === r.id && (
@@ -11635,7 +11641,7 @@ function requestProgram(routineId) {
     routineName: shortName(r) || r.name,
     name,
     clientId,
-    accessCode: state.profile.accessCode || (who && who.accessCode) || "",
+    accessCode: code,
     at: Date.now()
   };
   state.programRequests = state.programRequests || [];
@@ -11666,6 +11672,17 @@ function requestProgram(routineId) {
   toast("Pedido enviado. Miguel lo ve en Bandeja.");
   return row;
 }
+function clearProgramReqInbox(reqId) {
+  const id = String(reqId || "");
+  if (!id) return;
+  state.inbox = (state.inbox || []).filter((n) => {
+    if (!n || (n.type !== "program_req" && n.type !== "program-request")) return true;
+    if (n.reqId && String(n.reqId) === id) return false;
+    if (n.id && String(n.id) === id) return false;
+    return true;
+  });
+  try { store.set("nb_inbox", state.inbox); } catch (e) {}
+}
 function approveProgramRequest(reqId) {
   const req = (state.programRequests || []).find((x) => x.id === reqId);
   if (!req || req.status !== "pending") { toast("Pedido no encontrado"); return false; }
@@ -11673,6 +11690,7 @@ function approveProgramRequest(reqId) {
   if (!r) {
     req.status = "ignored";
     req.ignoredAt = Date.now();
+    clearProgramReqInbox(req.id);
     saveProgramRequests();
     persist();
     cloudPush().catch(() => {});
@@ -11703,6 +11721,7 @@ function approveProgramRequest(reqId) {
   if (!prev) return false;
   req.status = "approved";
   req.approvedAt = Date.now();
+  clearProgramReqInbox(req.id);
   saveProgramRequests();
   persist();
   cloudPush().catch(() => {});
@@ -11715,6 +11734,7 @@ function ignoreProgramRequest(reqId) {
   if (!req) return;
   req.status = "ignored";
   req.ignoredAt = Date.now();
+  clearProgramReqInbox(req.id);
   saveProgramRequests();
   persist();
   cloudPush().catch(() => {});
@@ -14652,7 +14672,7 @@ function weekPeekHtml(rt, di) {
     <summary>Ver los ${rt.daysPlan.length} días de esta rutina</summary>
     <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")}</p>
     ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : "Día " + (i + 1) + " · "}${escapeHtml(d.title)}</h3>
-      ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
+      ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(displayName(it))}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
     </div>`).join("")}
     <button type="button" class="btn ghost" id="seeWeekRt">Abrir ficha de la rutina</button>
   </details>`;
@@ -16391,10 +16411,10 @@ function showDay1IfNeeded() {
     <p class="tagline">Tu día 1</p>
     <h2>Hoy empieza el trabajo.</h2>
     <p class="muted">${day ? ("Foco: " + escapeHtml(day.title)) : "Abra Hoy y cierre la primera serie."}</p>
-    ${!trustOk ? `<p class="muted">Falta firmar confianza (relevo / PAR-Q). Sin eso no hay sesión limpia.</p>` : ""}
+    ${!trustOk ? `<p class="muted">Si falta algún papel de confianza, puede completarlo luego. Hoy el foco es la primera serie.</p>` : `<p class="muted">Papeles listos. Empiece y cierre la primera serie.</p>`}
     <div class="actions">
       <button class="btn primary" id="day1Go">Ir a Hoy</button>
-      ${!trustOk ? `<button class="btn ghost" id="day1Trust">Completar confianza</button>` : ""}
+      ${!trustOk ? `<button class="btn ghost" id="day1Trust">Confianza (opcional)</button>` : ""}
       <button class="btn ghost" id="closeSheet">Seguir</button>
     </div>
   </div>`;
@@ -17569,9 +17589,15 @@ async function boot() {
     try { Notification.requestPermission(); } catch (e) {}
   }
   applyHash();
+  /* Keep paid client seat across reloads when unlocked + 6-digit code still local. */
   if (state.role === "client") {
-    state.role = null;
-    if (state.profile) state.profile.unlocked = false;
+    const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+    const unlocked = !!(state.profile && state.profile.unlocked);
+    const dead = unlocked && code.length === 6 && typeof isRevoked === "function" && isRevoked(code, state.profile && state.profile.clientId);
+    if (!unlocked || code.length !== 6 || dead) {
+      state.role = null;
+      if (state.profile) state.profile.unlocked = false;
+    }
   }
   if (state.role === "guest") state.role = null;
   state._pendingCode = null;
@@ -17633,8 +17659,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "33") {
-        store.set("nb_sw", "33");
+      if (store.get("nb_sw") !== "39") {
+        store.set("nb_sw", "39");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -17647,7 +17673,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=38", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=39", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}

@@ -167,7 +167,12 @@ function mergeStudio(prev, next) {
       if (!r || !r.id) return;
       const prev = map[r.id];
       if (!prev) { map[r.id] = r; return; }
-      const rank = (x) => (x.status === "pending" ? 2 : (x.status === "approved" ? 1 : 0));
+      const rank = (x) => {
+        const s = x && x.status;
+        if (s === "approved" || s === "ignored" || s === "rejected") return 2;
+        if (s === "pending") return 1;
+        return 0;
+      };
       if (rank(r) > rank(prev) || (rank(r) === rank(prev) && Number(r.at || 0) >= Number(prev.at || 0))) map[r.id] = Object.assign({}, prev, r);
     });
     return Object.keys(map).map((k) => map[k]).sort((x, y) => Number(y.at || 0) - Number(x.at || 0)).slice(0, 80);
@@ -257,6 +262,10 @@ function pruneSessions(row) {
     if (f[k] && f[k].until && f[k].until < now && !f[k].n) delete f[k];
   });
   row.fails = f;
+}
+
+function clientIp(req) {
+  return (req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "anon");
 }
 
 function rateBlocked(row, key) {
@@ -363,7 +372,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 27 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 28 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -509,6 +518,12 @@ async function handle(req, env) {
     const c = body.client || {};
     if (!c.name) return json({ error: "Falta el nombre" }, 400);
     const row = await rowOf(env, "NIUBI");
+    pruneSessions(row);
+    const leadKey = "lead:" + clientIp(req);
+    if (rateBlocked(row, leadKey)) {
+      return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
+    }
+    rateHit(row, leadKey);
     const revoked = (row.state && row.state.revoked) || [];
     const deadIds = new Set(revoked.map((r) => String(r.clientId || "")).filter(Boolean));
     let cid = String(c.id || "c" + Date.now());
@@ -541,6 +556,12 @@ async function handle(req, env) {
   if (path === "/api/pay" && method === "POST") {
     const body = await req.json().catch(() => ({}));
     const row = await rowOf(env, "NIUBI");
+    pruneSessions(row);
+    const payKey = "pay:" + clientIp(req);
+    if (rateBlocked(row, payKey)) {
+      return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
+    }
+    rateHit(row, payKey);
     const payment = {
       id: String(body.invoice || "p" + Date.now()),
       date: new Date().toISOString().slice(0, 10),
