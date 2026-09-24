@@ -10671,6 +10671,11 @@ async function postLead(c) {
 }
 async function postPayNotice(row) {
   if (!row) return { ok: false };
+  const invoice = String(row.invoice || row.id || ("p" + Date.now()));
+  const ref = String(row.ref || ("NB-" + invoice.replace(/\D/g, "").slice(-6)));
+  if (!row.invoice) row.invoice = invoice;
+  if (!row.id) row.id = invoice;
+  if (!row.ref) row.ref = ref;
   const bases = apiBases();
   const payload = {
     studioKey: "NIUBI",
@@ -10680,7 +10685,9 @@ async function postPayNotice(row) {
     method: row.method,
     clientId: row.clientId,
     phone: state.profile.phone || "",
-    email: state.profile.email || ""
+    email: state.profile.email || "",
+    invoice,
+    ref
   };
   let ok = false;
   for (let i = 0; i < bases.length; i++) {
@@ -10693,9 +10700,9 @@ async function postPayNotice(row) {
       if (res.ok) ok = true;
     } catch (e) {}
   }
-  const inbox = [{ id: "in" + Date.now(), type: "pay", name: row.name, plan: row.plan, at: Date.now(), clientId: row.clientId, amount: row.amount, method: row.method }];
+  const inbox = [{ id: "in" + Date.now(), type: "pay", name: row.name, plan: row.plan, at: Date.now(), clientId: row.clientId, amount: row.amount, method: row.method, invoice, ref }];
   if (await mirrorPublic("pay", { payments: [row], inbox })) ok = true;
-  pingCoach("Pago NiuBision", (row.name || "Cliente") + " · " + (row.amount || "") + " USD · " + (row.method || ""));
+  pingCoach("Pago NiuBision", (row.name || "Cliente") + " · " + (row.amount || "") + " USD · " + (row.method || "") + " · " + invoice);
   return { ok };
 }
 async function postPaid(c, p) {
@@ -13274,8 +13281,8 @@ function payButtonsHtml(planLabel) {
   return `<div class="pay-grid">${payMethods(planLabel).map((m) => `<button type="button" class="pay-btn" data-pay="${m.id}"><span class="mark ${m.cls}">${m.mark}</span><span><strong>${m.name}</strong><em>${m.hint}</em></span></button>`).join("")}</div>
     <div class="card" style="margin-top:12px">
       <p class="muted">Copie el destino y pague. El código no sale hasta que Miguel confirme.</p>
-      <button type="button" class="btn small ghost" data-copypay="ath">Copiar ATH ${escapeHtml(cfg.ath || ATH_DEST)}</button>
-      <button type="button" class="btn small ghost" data-copypay="paypal">Copiar PayPal ${escapeHtml(cfg.paypal || PAYPAL_DEST)}</button>
+      <button type="button" class="btn small ghost" data-copypay="ath">Copiar ATH ${escapeHtml(maskDest(cfg.ath || ATH_DEST, "ath") || "del estudio")}</button>
+      <button type="button" class="btn small ghost" data-copypay="paypal">Copiar PayPal ${escapeHtml(maskDest(cfg.paypal || PAYPAL_DEST, "paypal") || "del estudio")}</button>
     </div>`;
 }
 function recordPay(planLabel, method, status) {
@@ -13424,8 +13431,8 @@ function recentInbox() {
 function notifyPay(planLabel, method) {
   const info = planPriceOf(planLabel);
   const who = state.profile.name || (state.health && state.health.name) || "Cliente";
-  const row = (state.payments || []).slice(-1)[0];
-  postPayNotice(row || { name: who, plan: planLabel, amount: info.amount, method, clientId: (selfClient() && selfClient().id) || "" }).catch(() => {});
+  const row = (state.payments || []).slice(-1)[0] || { name: who, plan: planLabel, amount: info.amount, method, clientId: (selfClient() && selfClient().id) || "" };
+  postPayNotice(row).catch(() => {});
   pingCoach("Pago NiuBision", who + " · " + (info.amount || "") + " USD · " + method);
 }
 function showPayReceipt(row) {
@@ -13433,29 +13440,43 @@ function showPayReceipt(row) {
   const phone = (state.profile && state.profile.phone) || "";
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = `<div class="sheet">
+  modal.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Recibo de pago">
     <div class="handle"></div>
     <p class="tagline">Recibo</p>
     <h2>Pago iniciado. Espere el código.</h2>
     <p><strong>${escapeHtml(row.amount || "—")} USD</strong> · ${escapeHtml(row.method)}</p>
-    <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}</p>
+    <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}${row.invoice ? "<br>Factura " + escapeHtml(row.invoice) : ""}</p>
     ${row.accessCode ? `<p class="ok">Código: ${escapeHtml(row.accessCode)}. Portada → Entrar → péguelo.</p>` : `<p>Miguel confirma el pago. El código de 6 dígitos llega por WhatsApp${phone ? " al " + escapeHtml(phone) : ""}. La app no se abre sola.</p><p class="muted">Cuando le llegue: Portada → Entrar → péguelo.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
-    <button class="btn primary" id="waPay">Avisar a Miguel por WhatsApp</button>
-    <button class="btn ghost" id="printRec">Imprimir recibo</button>
-    <button class="btn ghost" id="haveCodeNow">Ya tengo el código</button>
-    <button class="btn ghost" id="closeSheet">Volver a la portada</button>
+    <button class="btn primary" type="button" id="closeSheet">Entendido</button>
+    <button class="btn ghost" type="button" id="waPay">Avisar a Miguel por WhatsApp</button>
+    <button class="btn ghost" type="button" id="printRec">Imprimir recibo</button>
+    <button class="btn ghost" type="button" id="haveCodeNow">Ya tengo el código</button>
+    <button class="btn ghost" type="button" id="toCover">Volver a la portada</button>
   </div>`;
   document.body.appendChild(modal);
-  modal.querySelector("#closeSheet").onclick = () => {
-    modal.remove();
+  const dismiss = () => {
+    try { modal.remove(); } catch (e) {}
+    document.removeEventListener("keydown", onEsc);
+  };
+  const onEsc = (e) => { if (e.key === "Escape") { e.preventDefault(); dismiss(); } };
+  document.addEventListener("keydown", onEsc);
+  modal.addEventListener("click", (e) => { if (e.target === modal) dismiss(); });
+  const closeBtn = modal.querySelector("#closeSheet");
+  if (closeBtn) {
+    closeBtn.onclick = (e) => { e.preventDefault(); dismiss(); };
+    try { closeBtn.focus(); } catch (e2) {}
+  }
+  const toCover = modal.querySelector("#toCover");
+  if (toCover) toCover.onclick = () => {
+    dismiss();
     state.role = null;
     state.splash = true;
     persist();
     render();
   };
   const haveNow = modal.querySelector("#haveCodeNow");
-  if (haveNow) haveNow.onclick = () => { modal.remove(); openCodeEntry(); };
+  if (haveNow) haveNow.onclick = () => { dismiss(); openCodeEntry(); };
   const pr = modal.querySelector("#printRec");
   if (pr) pr.onclick = () => printReceipt(row);
   const wa = modal.querySelector("#waPay");
@@ -13493,7 +13514,6 @@ async function runPay(method, planLabel) {
     const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + "&note=" + encodeURIComponent(ref);
     if (num) {
       await copyText(clip);
-      toast("ATH " + num + (amt ? " · " + amt + " USD" : "") + " copiado. Ábralo en ATH Móvil.");
       try {
         const a = document.createElement("a");
         a.href = deep;
@@ -13503,6 +13523,7 @@ async function runPay(method, planLabel) {
         a.click();
         setTimeout(() => { try { a.remove(); } catch (e3) {} }, 800);
       } catch (e) {}
+      toast("Copiado (" + maskDest(num, "ath") + (amt ? " · " + amt + " USD" : "") + "). Si ATH Móvil no abrió, péguelo en la app.");
     } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
@@ -13555,8 +13576,10 @@ function openPaySheet(planLabel) {
   });
   $$("[data-copypay]", modal).forEach((b) => b.onclick = () => {
     const cfg = payCfg();
-    const v = b.dataset.copypay === "paypal" ? (cfg.paypal || PAYPAL_DEST) : (cfg.ath || ATH_DEST);
-    copyText(v).then((ok) => toast(ok ? ("Copiado: " + v) : v));
+    const kind = b.dataset.copypay === "paypal" ? "paypal" : "ath";
+    const v = kind === "paypal" ? (cfg.paypal || PAYPAL_DEST) : (cfg.ath || ATH_DEST);
+    const shown = maskDest(v, kind) || "destino";
+    copyText(v).then((ok) => toast(ok ? ("Copiado · " + shown) : shown));
   });
 }
 
@@ -15509,7 +15532,7 @@ function termsView() {
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Términos y cancelación</h2>
     <p>NiuBision es entrenamiento personal y coaching en línea en Puerto Rico, dirigido por Miguel Morales. No es un gimnasio con sede ni una tienda de ropa.</p>
     <h3>Pago</h3>
-    <p>Precio final, sin IVU. PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038). El cobro lo confirman ellos. NiuBision no guarda tarjetas. El código de 6 dígitos se envía cuando Miguel confirma el pago, no al pulsar “Ya pagué”.</p>
+    <p>Precio final, sin IVU. PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038). El cobro lo confirman ellos. NiuBision no guarda tarjetas. El código de 6 dígitos se envía cuando Miguel pulse «Confirmar pago» o «Pago recibido · dar código», no al pulsar «Pagar con…».</p>
     <h3>Mes en curso</h3>
     <p>El mes que ya pagó no se reembolsa. Si cancela, avise por WhatsApp. No se cobra el mes siguiente. No hay prorrateo a mitad de mes.</p>
     <h3>12 semanas</h3>
@@ -15883,11 +15906,21 @@ function confirmClientPaid(c, method) {
   stashReceipt(c, p);
   p.email = c.email || p.email || "";
   p.accessCode = code;
-  emailReceipt(p);
   postPaid(c, p).catch(() => {});
   cloudPush().catch(() => {});
   deliverReceipt(c, p);
   return { client: c, payment: p, code };
+}
+function payMethodOfClient(c) {
+  if (!c) return "ATH Móvil";
+  const pays = state.payments || [];
+  const hit = pays.find((x) => x.clientId === c.id && x.status !== "recibido")
+    || pays.find((x) => x.name && cleanName(x.name) === cleanName(c.name) && x.status !== "recibido")
+    || pays.slice().reverse().find((x) => (x.clientId && x.clientId === c.id) || (x.name && cleanName(x.name) === cleanName(c.name)));
+  if (hit && hit.method) return hit.method;
+  const note = (state.inbox || []).slice().reverse().find((n) => n && n.type === "pay" && ((n.clientId && n.clientId === c.id) || (n.name && cleanName(n.name) === cleanName(c.name))));
+  if (note && note.method) return note.method;
+  return "ATH Móvil";
 }
 function stashReceipt(c, p) {
   if (!c || !p) return;
@@ -16926,7 +16959,7 @@ function bindChrome() {
     if (b.dataset.needk === "confirm") {
       const c = state.clients.find((x) => x.id === b.dataset.cid);
       if (c && !c.accessCode && clientHasLegal(c)) {
-        const done = confirmClientPaid(c, "ATH Móvil");
+        const done = confirmClientPaid(c, payMethodOfClient(c));
         if (done && done.client && done.code) {
           showShare(done.client);
           if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
@@ -17704,7 +17737,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=40", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=41", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
