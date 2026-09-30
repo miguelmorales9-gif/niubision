@@ -18183,8 +18183,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "46") {
-        store.set("nb_sw", "46");
+      if (store.get("nb_sw") !== "48") {
+        store.set("nb_sw", "48");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -18197,7 +18197,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=47", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=48", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
