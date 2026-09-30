@@ -11561,14 +11561,9 @@ function clearResolvedPayInbox(c) {
 function offerCodeWhatsApp(c, opts) {
   opts = opts || {};
   if (!c || !c.accessCode) return;
-  const msg = codeWaText(c, opts.routine);
-  const dig = clientPhoneDigits(c);
-  if (!dig) {
-    copyText(msg).then((ok) => toast(ok ? "Código copiado · sin teléfono en la ficha" : "Código " + c.accessCode + " · copie y envíe"));
-    if (!opts.silentShare) showShare(c);
-    return;
-  }
-  if (opts.open !== false) window.open(waClientLink(c, msg), "_blank");
+  // Never auto-open WhatsApp — coach must tap an explicit WhatsApp button.
+  if (!opts.silentShare) showShare(c);
+  else toast("Código " + c.accessCode + " listo. Toque WhatsApp en la ficha para avisar.");
 }
 function nbEmpty(opts) {
   opts = opts || {};
@@ -12934,7 +12929,7 @@ function bindStudioOps() {
     window.open(waLink(msg), "_blank");
   });
   $$("[data-gotpay]").forEach((b) => {
-    b.onclick = () => {
+    b.onclick = async () => {
       const p = (state.payments || []).find((x) => x.id === b.dataset.gotpay);
       if (!p) return;
       if (/rutina con ia/i.test(p.plan || "")) {
@@ -12951,13 +12946,12 @@ function bindStudioOps() {
         cl = { id: p.clientId || ("c" + Date.now()), name: p.name, plan: p.plan || "Estándar", routine: "full-inicio", unpaid: true };
         state.clients.push(cl);
       }
-      const done = confirmClientPaid(cl, p.method);
+      const done = await confirmClientPaid(cl, p.method);
       if (!done) { render(); return; }
       toast(done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
       render();
       if (done.client && done.code) {
         showShare(done.client);
-        if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
       } else openReceipt(p);
     };
   });
@@ -13003,10 +12997,14 @@ function dayIndex(rt) {
     return ((Number(jump.i) % n) + n) % n;
   }
   const n = (rt.daysPlan && rt.daysPlan.length) || 1;
+  const stored = store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, null));
+  // Fresh redeem / never picked a day: start at slot 0 (Lunes / Día 1 content).
+  // Week-strip "today" highlight still uses mondayWeekIndex elsewhere.
+  if (stored == null || stored === "") return 0;
   const monIdx = mondayWeekIndex();
-  // Calendar: Mon→Día 1 …; beyond plan length = rest → keep last stored slot for jump UI
+  // After first session/choice: calendar Mon→slot 0 …; beyond plan length = rest → stored slot
   if (monIdx < n) return monIdx;
-  return store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, Math.max(0, n - 1)));
+  return ((Number(stored) % n) + n) % n;
 }
 function setDayIndex(rt, n) {
   const who = dayWhoKey();
@@ -13734,7 +13732,7 @@ function showPayReceipt(row) {
     ${row.accessCode ? `<p class="ok">Código: ${escapeHtml(row.accessCode)}. Portada → Entrar → péguelo.</p>` : `<p>Miguel confirma el pago. El código de 6 dígitos llega por WhatsApp${phone ? " al " + escapeHtml(phone) : ""}. La app no se abre sola.</p><p class="muted">Cuando le llegue: Portada → Entrar → péguelo.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
     <button class="btn primary" type="button" data-receipt-close="1">Entendido</button>
-    ${ath ? `<button class="btn ghost" type="button" id="openAth">Abrir ATH Móvil</button>` : ""}
+    ${ath ? `<button class="btn ghost" type="button" id="openAth">Abrir ATH Móvil</button><button class="btn ghost" type="button" id="copyAth">Copiar datos ATH</button>` : ""}
     <button class="btn ghost" type="button" id="waPay">Avisar a Miguel por WhatsApp</button>
     <button class="btn ghost" type="button" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" type="button" id="haveCodeNow">Ya tengo el código</button>
@@ -13791,7 +13789,19 @@ function showPayReceipt(row) {
     const ref = row.ref || row.invoice || row.id || "";
     if (!num) return toast("Falta el número de ATH Móvil del estudio");
     const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + (ref ? "&note=" + encodeURIComponent(ref) : "");
-    if (!openAthMovil(deep)) toast("Si ATH Móvil no abrió, péguelo en la app.");
+    if (!openAthMovil(deep)) toast("Si ATH Móvil no abrió, péguelo en la app o use Copiar datos ATH.");
+  };
+  const copyAth = modal.querySelector("#copyAth");
+  if (copyAth) copyAth.onclick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cfg = payCfg();
+    const num = String((cfg && cfg.ath) || "").replace(/\D/g, "");
+    const amt = row.amount || "";
+    const ref = row.ref || row.invoice || row.id || "";
+    const clip = [num, amt ? amt + " USD" : "", ref ? "ref " + ref : ""].filter(Boolean).join(" · ");
+    const ok = await copyText(clip);
+    toast(ok ? "Datos ATH copiados" : "No se pudo copiar");
   };
   const toCover = modal.querySelector("#toCover");
   if (toCover) toCover.onclick = (e) => {
@@ -13839,14 +13849,13 @@ async function runPay(method, planLabel) {
     const amt = info.amount || "";
     const ref = row.ref || row.id;
     const clip = [num, amt ? amt + " USD" : "", "ref " + ref].filter(Boolean).join(" · ");
-    const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + "&note=" + encodeURIComponent(ref);
-    if (num) {
-      const opened = openAthMovil(deep);
-      await copyText(clip);
-      toast("Copiado (" + maskDest(num, "ath") + (amt ? " · " + amt + " USD" : "") + ")." + (opened ? "" : " Si ATH Móvil no abrió, use el botón del recibo."));
-    } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
+    // Receipt first — never gate UI on deep-link / xdg-open success.
     showPayReceipt(row);
+    if (num) {
+      await copyText(clip);
+      toast("Copiado (" + maskDest(num, "ath") + (amt ? " · " + amt + " USD" : "") + "). Use Abrir ATH Móvil en el recibo.");
+    } else toast("Falta el número de ATH Móvil del estudio");
     return;
   }
 }
@@ -14681,9 +14690,9 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Código al confirmar pago</h3>
-      <p class="muted">Al confirmar pago se crea el código. Con esto activo, también se ofrece WhatsApp.</p>
+      <p class="muted">Al confirmar pago se crea el código y se muestra la ficha. WhatsApp solo se abre si usted toca el botón WhatsApp.</p>
       <label class="list-row" style="cursor:pointer;border:0;padding:8px 0">
-        <span>Ofrecer WhatsApp al confirmar pago</span>
+        <span>Mostrar ficha del código al confirmar</span>
         <input type="checkbox" id="autoCodeToggle" ${autoCodeOn() ? "checked" : ""}>
       </label>
       <button class="btn primary" id="saveAutoCode">Guardar</button>
@@ -16174,11 +16183,13 @@ function openCheckin() {
     <label class="muted">¿Hay molestia?</label>
     <select id="ckPain"><option>no</option><option>sí</option></select>
     <textarea id="ckNote" placeholder="Una frase. Ejemplo: la rodilla derecha al bajar."></textarea>
-    <button class="btn primary" id="sendCk">Guardar y avisar</button>
+    <button class="btn primary" id="sendCk">Guardar</button>
+    <button class="btn ghost" id="waCk" type="button" hidden>Abrir WhatsApp</button>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  let ckMsg = "";
   modal.querySelector("#sendCk").onclick = () => {
     const who = selfClient() || currentClient();
     const row = {
@@ -16196,9 +16207,15 @@ function openCheckin() {
       who.checkins.push(row);
     }
     persist();
-    const text = `Check-in NiuBision — ${row.name}\nDías: ${row.days}\nEnergía: ${row.energy}/5\nMolestia: ${row.pain}\n${row.note}`;
-    window.open(waLink(text), "_blank");
-    modal.remove(); toast("Check-in guardado");
+    ckMsg = "Check-in NiuBision — " + row.name + "\nDías: " + row.days + "\nEnergía: " + row.energy + "/5\nMolestia: " + row.pain + "\n" + (row.note || "");
+    toast("Check-in guardado. Toque Abrir WhatsApp si quiere avisar.");
+    const waBtn = modal.querySelector("#waCk");
+    if (waBtn) {
+      waBtn.hidden = false;
+      waBtn.onclick = () => window.open(waLink(ckMsg), "_blank");
+    }
+    const send = modal.querySelector("#sendCk");
+    if (send) { send.textContent = "Guardado"; send.disabled = true; }
   };
 }
 
@@ -16217,7 +16234,7 @@ function ensureAccessCode(c) {
   if (!/^\d{6}$/.test(String(c.accessCode || "")) || isRevoked(c.accessCode, c.id)) c.accessCode = newAccessCode();
   return String(c.accessCode);
 }
-function confirmClientPaid(c, method) {
+async function confirmClientPaid(c, method) {
   if (!c) return null;
   state.clients = foldStudioClients(state.clients || []);
   c = (state.clients || []).find((x) => x.id === c.id)
@@ -16229,7 +16246,9 @@ function confirmClientPaid(c, method) {
     return null;
   }
   const hadCode = /^\d{6}$/.test(String(c.accessCode || "")) && !isRevoked(c.accessCode, c.id);
+  // Single source of truth: lock one code before cloud round-trip; never regenerate in this confirm.
   const code = ensureAccessCode(c);
+  c.accessCode = code;
   if (!hadCode) {
     c.codeIssuedAt = Date.now();
     pushInboxNote({ type: "code", name: c.name, plan: c.plan, clientId: c.id, accessCode: code });
@@ -16271,16 +16290,39 @@ function confirmClientPaid(c, method) {
   if (!Array.isArray(state.clients)) state.clients = [];
   if (!state.clients.some((x) => x.id === c.id)) state.clients.push(c);
   state.clients = foldStudioClients(state.clients);
+  const folded = (state.clients || []).find((x) => x.id === c.id)
+    || (state.clients || []).find((x) => cleanName(x.name) === cleanName(c.name));
+  if (folded) {
+    folded.accessCode = code;
+    folded.unpaid = false;
+    c = folded;
+  } else {
+    c.accessCode = code;
+  }
+  p.accessCode = code;
+  p.clientId = c.id;
   persistClients();
   persist();
   stashReceipt(c, p);
   p.email = c.email || p.email || "";
   p.accessCode = code;
-  postPaid(c, p).catch(() => {});
+  try {
+    const remote = await postPaid(c, p);
+    if (remote && remote.ok && remote.accessCode && String(remote.accessCode) !== String(code)) {
+      c.accessCode = code;
+      p.accessCode = code;
+      await postPaid(c, p).catch(() => {});
+    }
+  } catch (e) {}
+  c.accessCode = code;
+  p.accessCode = code;
+  persistClients();
+  persist();
   cloudPush().catch(() => {});
   deliverReceipt(c, p);
-  return { client: c, payment: p, code };
+  return { client: c, payment: p, code: String(c.accessCode || code) };
 }
+
 function payMethodOfClient(c) {
   if (!c) return "ATH Móvil";
   const pays = state.payments || [];
@@ -16586,6 +16628,17 @@ function applyClientAssign(a) {
   }
   state.profile.unlocked = true;
   state.view = "work";
+  try {
+    const rt0 = typeof activeRoutine === "function" ? activeRoutine() : null;
+    if (rt0 && rt0.id) {
+      const who = "self";
+      const key = "nb_day_" + who + "_" + rt0.id;
+      if (store.get(key, null) == null && store.get("nb_day_" + rt0.id, null) == null) {
+        store.set(key, 0);
+        store.set("nb_day_jump_" + who + "_" + rt0.id, { date: todayKey(), i: 0 });
+      }
+    }
+  } catch (e) {}
   persist();
   if (a.accessCode) authLogin("client", a.accessCode).catch(() => {});
   return true;
@@ -16662,7 +16715,10 @@ function bindSigPad(canvas) {
   };
 }
 function showShare(c) {
-  const code = ensureAccessCode(c);
+  const code = (/^\d{6}$/.test(String(c && c.accessCode || "")) && !isRevoked(c.accessCode, c.id))
+    ? String(c.accessCode)
+    : ensureAccessCode(c);
+  if (c) c.accessCode = code;
   persist();
   const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra niubision.com, mantenga el logo, toque Entrar y pegue esos 6 dígitos.`;
   const modal = document.createElement("div");
@@ -17339,7 +17395,7 @@ function bindChrome() {
     if (state.role === "coach" && state.view === "home") state.view = "work";
     render();
   });
-  $$("[data-needk]").forEach((b) => b.onclick = () => {
+  $$("[data-needk]").forEach((b) => b.onclick = async () => {
     if (b.dataset.cid) state.settings.clientId = b.dataset.cid;
     persist();
     if (b.dataset.needk === "vid") {
@@ -17360,10 +17416,9 @@ function bindChrome() {
     if (b.dataset.needk === "confirm") {
       const c = state.clients.find((x) => x.id === b.dataset.cid);
       if (c && clientAwaitingCode(c)) {
-        const done = confirmClientPaid(c, payMethodOfClient(c));
+        const done = await confirmClientPaid(c, payMethodOfClient(c));
         if (done && done.client && done.code) {
           showShare(done.client);
-          if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
         } else { state.view = "inbox"; render(); }
         return;
       }
@@ -17508,16 +17563,15 @@ function bindChrome() {
     toast("Aviso quitado. El cliente sigue en Gente.");
     render();
   });
-  $$("[data-paid]").forEach((b) => b.onclick = () => {
+  $$("[data-paid]").forEach((b) => b.onclick = async () => {
     const c = state.clients.find((x) => x.id === b.dataset.paid);
     if (!c) return;
-    const done = confirmClientPaid(c);
+    const done = await confirmClientPaid(c);
     if (!done) { render(); return; }
     toast(done.code ? ("Código listo: " + done.code) : "Pago recibido");
     render();
     if (done.client && done.code) {
       showShare(done.client);
-      if (autoCodeOn()) offerCodeWhatsApp(done.client, { silentShare: true, open: true });
     }
     if (done.payment) setTimeout(() => openReceipt(done.payment), 500);
   });
@@ -18129,8 +18183,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "45") {
-        store.set("nb_sw", "45");
+      if (store.get("nb_sw") !== "46") {
+        store.set("nb_sw", "46");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -18143,7 +18197,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=46", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=47", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}

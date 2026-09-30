@@ -31,29 +31,62 @@ function mergeStudio(prev, next) {
     const payHit = (a.payments || []).find((p) => invoice && (p.id === invoice || p.invoice === invoice));
     const clientId = String(b.clientId || (payHit && payHit.clientId) || "");
     const phone = String(b.phone || "").replace(/\D/g, "");
+    const wantCode = String(b.accessCode || "").replace(/\D/g, "").slice(0, 6);
     const payments = (a.payments || []).map((p) => {
       if ((invoice && (p.id === invoice || p.invoice === invoice)) || (clientId && p.clientId === clientId && p.status !== "recibido")) {
-        return Object.assign({}, p, { status: "recibido", method: b.method || p.method, amount: b.amount || p.amount });
+        return Object.assign({}, p, {
+          status: "recibido",
+          method: b.method || p.method,
+          amount: b.amount || p.amount,
+          accessCode: (/^\d{6}$/.test(wantCode) ? wantCode : (p.accessCode || ""))
+        });
       }
       return p;
     });
     const used = new Set((a.clients || []).map((x) => String(x.accessCode || "")).filter(Boolean));
     const gen = () => String(100000 + Math.floor(Math.random() * 900000));
-    const clients = (a.clients || []).map((c) => {
+    let matched = false;
+    let clients = (a.clients || []).map((c) => {
       const hit = (clientId && c.id === clientId)
         || (phone.length >= 10 && String(c.phone || "").replace(/\D/g, "") === phone)
         || (invoice && (c.id === invoice || c.accessCode === invoice));
       if (!hit) return c;
+      matched = true;
       let code = String(c.accessCode || "");
       const taken = new Set(used);
       taken.delete(code);
-      if (!/^\d{6}$/.test(code) || taken.has(code)) {
+      // Coach-issued code is source of truth for redeem.
+      if (/^\d{6}$/.test(wantCode)) {
+        code = wantCode;
+      } else if (!/^\d{6}$/.test(code) || taken.has(code)) {
         do { code = gen(); } while (taken.has(code) || used.has(code));
-        used.add(code);
       }
-      return Object.assign({}, c, { unpaid: false, accessCode: code });
+      used.add(code);
+      return Object.assign({}, c, {
+        unpaid: false,
+        accessCode: code,
+        name: b.name || c.name,
+        plan: b.plan || c.plan,
+        phone: b.phone || c.phone
+      });
     });
+    if (!matched && (clientId || b.name)) {
+      let code = /^\d{6}$/.test(wantCode) ? wantCode : gen();
+      while (used.has(code)) code = gen();
+      used.add(code);
+      clients = clients.concat([{
+        id: clientId || ("c" + Date.now()),
+        name: b.name || "",
+        phone: b.phone || "",
+        plan: b.plan || "",
+        unpaid: false,
+        accessCode: code,
+        routine: "full-inicio"
+      }]);
+    }
     let paymentsOut = payments;
+    const codeForPay = (clients.find((c) => (clientId && c.id === clientId) || (b.name && String(c.name || "").toLowerCase() === String(b.name || "").toLowerCase())) || {}).accessCode
+      || (/^\d{6}$/.test(wantCode) ? wantCode : "");
     if (clientId && !paymentsOut.some((p) => p.clientId === clientId && p.status === "recibido")) {
       paymentsOut = paymentsOut.concat([{
         id: invoice || ("p" + Date.now()),
@@ -64,7 +97,7 @@ function mergeStudio(prev, next) {
         status: "recibido",
         name: b.name || "",
         clientId,
-        accessCode: (clients.find((c) => c.id === clientId) || {}).accessCode || ""
+        accessCode: codeForPay
       }]);
     }
     return Object.assign({}, a, { clients, payments: paymentsOut, revoked, updatedAt: Date.now() });
@@ -665,7 +698,8 @@ async function handle(req, env) {
       amount: body.amount || "",
       name: body.name || "",
       phone: body.phone || "",
-      plan: body.plan || ""
+      plan: body.plan || "",
+      accessCode: String(body.accessCode || "").replace(/\D/g, "").slice(0, 6)
     });
     const phone = String(body.phone || "").replace(/\D/g, "");
     const hit = ((row.state && row.state.clients) || []).find((c) =>
