@@ -31,11 +31,20 @@ Cloud payload always includes **pending + recently approved** `programRequests`.
 - Cloud: Ajustes → **Descargar de la nube** hits `GET /api/export?pin=…` when auth/pin allows.
 
 ## Push / notifications
-- **Shipped (PWA-usable):** Service Worker `push` + `notificationclick` (deep link to `/`, bandeja, or hoy). Local `reg.showNotification` after permission. Coach ntfy topic (existing `ntfyTopic()` / `pingCoach`) on Pedir and payment-style events. Permission UX in coach Ajustes and client Plan card.
-- **Follow-up — Web Push VAPID:** not deployed from this box (needs CF Worker env + wrangler secrets). When ready: generate VAPID once, store public key in app and private in worker env, subscribe in Ajustes, document rotate procedure here. Until then SW + local + ntfy is the production path.
+- **Web Push (VAPID) — preferred:** Worker secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, optional `VAPID_SUBJECT` (`mailto:…`). Public key is **never** committed as a private secret; client fetches it from `GET /api/push/vapid`. Subscribe via Ajustes / Plan → Activar avisos → `pushManager.subscribe` → `POST /api/push/subscribe` (coach session/PIN or client code). SW already handles `push` + `notificationclick`.
+- **Server sends** short Spanish payloads on Pedir (`/api/program-request`), pay/lead notices, código issued (`/api/paid` / PayPal IPN), and Pedir approved (coach `PUT /api/state` when a request flips to `approved`).
+- **ntfy:** quiet optional fallback when this device has no `nb_webpush` flag (no VAPID subscription saved). Prefer Web Push when a subscription exists on the Worker.
+- **Rotate VAPID:** generate a new pair (`npx web-push generate-vapid-keys`), `wrangler secret put` both keys, redeploy Worker. Clients re-subscribe on next Activar avisos / boot (permission already granted). Never paste the private key into a PR or commit.
+- **Before first deploy:** from `cloud/`:
+  ```bash
+  npx web-push generate-vapid-keys
+  wrangler secret put VAPID_PUBLIC_KEY
+  wrangler secret put VAPID_PRIVATE_KEY
+  wrangler secret put VAPID_SUBJECT   # e.g. mailto:miguel.morales9@gmail.com
+  ```
 
 ## Deferred by design
 - **4.3 English UI** — do not dilute ES-PR. Keep copy Spanish.
 - **4.4 Store wrappers** — no Capacitor / App Store / Play binaries until Phase 2 metrics justify them. PWA manifest may be polished only.
 
-Last updated: 2026-09-23
+Last updated: 2026-09-30

@@ -10266,7 +10266,10 @@ function pingCoach(title, text) {
   const now = Date.now();
   if (!pingCoach._at || now - pingCoach._at > 20000) {
     pingCoach._at = now;
-    ntfyPost(ntfyTopic(), text, { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" });
+    /* Prefer server Web Push when this device (or coach) subscribed; ntfy stays quiet optional fallback. */
+    if (!store.get("nb_webpush")) {
+      ntfyPost(ntfyTopic(), text, { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" });
+    }
   }
   try {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return line;
@@ -11771,6 +11774,97 @@ async function ensureNotifyPermission() {
     return p === "granted";
   } catch (e) { return false; }
 }
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (String(base64String).length % 4)) % 4);
+  const base64 = (String(base64String) + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+async function fetchVapidPublicKey() {
+  if (!isOnline()) return "";
+  const bases = apiBases();
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/push/vapid", { method: "GET", headers: { Accept: "application/json" } });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j && j.publicKey) return String(j.publicKey);
+    } catch (e) {}
+  }
+  return "";
+}
+function pushSubJson(sub) {
+  if (!sub) return null;
+  const j = sub.toJSON ? sub.toJSON() : sub;
+  if (!j || !j.endpoint || !j.keys) return null;
+  return { endpoint: j.endpoint, expirationTime: j.expirationTime || null, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
+}
+async function postPushSubscription(sub) {
+  const payload = pushSubJson(sub);
+  if (!payload) return { ok: false };
+  const body = {
+    subscription: payload,
+    role: state.role === "coach" ? "coach" : "client",
+    clientId: state.role === "client"
+      ? String((state.profile && state.profile.id) || (state.settings && state.settings.clientId) || "")
+      : "",
+    accessCode: state.role === "client"
+      ? String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "").slice(0, 6)
+      : "",
+    pin: state.role === "coach" ? studioPin() : undefined
+  };
+  const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  const tok = authHeader();
+  if (tok) headers.Authorization = "Bearer " + tok;
+  if (state.role === "coach" && studioPin()) headers["X-Nb-Pin"] = studioPin();
+  const bases = apiBases();
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + "/push/subscribe", { method: "POST", headers, body: JSON.stringify(body) });
+      if (res.ok) {
+        store.set("nb_webpush", 1);
+        return { ok: true };
+      }
+    } catch (e) {}
+  }
+  return { ok: false };
+}
+async function subscribeWebPush() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return { ok: false, reason: "unsupported" };
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return { ok: false, reason: "permission" };
+    const key = await fetchVapidPublicKey();
+    if (!key) return { ok: false, reason: "novapid" };
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      try {
+        const existing = sub.options && sub.options.applicationServerKey;
+        // If key rotated, drop and resubscribe
+        if (existing) {
+          const cur = btoa(String.fromCharCode.apply(null, new Uint8Array(existing))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          if (cur && key && cur !== key.replace(/=+$/, "")) {
+            await sub.unsubscribe().catch(() => {});
+            sub = null;
+          }
+        }
+      } catch (e) {}
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key)
+      });
+    }
+    const posted = await postPushSubscription(sub);
+    return posted.ok ? { ok: true, subscription: sub } : { ok: false, reason: "post" };
+  } catch (e) {
+    return { ok: false, reason: "error" };
+  }
+}
+
 async function postProgramRequest(row) {
   if (!row || !row.id) return { ok: false };
   const codeGate = String((row && row.accessCode) || "").replace(/\D/g, "");
@@ -12903,7 +12997,7 @@ function clientOpsCards() {
     </div>
     <div class="card">
       <h3>Avisos y nube</h3>
-      <p class="muted">Última sync: ${escapeHtml(lastSyncLabel())}. Permiso: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "activado" : "apagado"}.</p>
+      <p class="muted">Última sync: ${escapeHtml(lastSyncLabel())}. Permiso: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "activado" : "apagado"}${store.get("nb_webpush") ? " · Web Push" : ""}.</p>
       <button class="btn ghost" id="enableClientAlerts" type="button">Activar avisos</button>
       <button class="btn ghost" id="clientSyncNow" type="button">Sincronizar ahora</button>
     </div>`;
@@ -12914,8 +13008,19 @@ function bindStudioOps() {
   const eca = $("#enableClientAlerts");
   if (eca) eca.onclick = async () => {
     const ok = await ensureNotifyPermission();
-    toast(ok ? "Avisos activos en este teléfono" : "Permita las notificaciones del navegador");
-    if (ok) notifyLocal("NiuBision", "Avisos listos. Cuando Miguel apruebe un programa, se lo avisamos.", "/?view=work");
+    if (!ok) {
+      toast("Permita las notificaciones del navegador");
+      render();
+      return;
+    }
+    const push = await subscribeWebPush().catch(() => ({ ok: false }));
+    if (push && push.ok) {
+      notifyLocal("NiuBision", "Web Push listo. Cuando Miguel apruebe un programa, se lo avisamos.", "/?view=work");
+      toast("Avisos Web Push activos");
+    } else {
+      notifyLocal("NiuBision", "Avisos listos. Cuando Miguel apruebe un programa, se lo avisamos.", "/?view=work");
+      toast(push && push.reason === "novapid" ? "Avisos locales (VAPID pendiente en el servidor)" : "Avisos activos en este teléfono");
+    }
     render();
   };
   const csn = $("#clientSyncNow");
@@ -14810,10 +14915,10 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Avisos en este teléfono</h3>
-      <p class="muted">Permiso del navegador + canal ntfy del estudio. Pulse activar una vez en este teléfono.</p>
-      <p class="muted">Estado: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "<span class='ok'>permitidas</span>" : (typeof Notification !== "undefined" && Notification.permission === "denied" ? "<span class='warn'>bloqueadas</span>" : "sin pedir")}</p>
+      <p class="muted">Web Push (VAPID) preferido. ntfy queda como respaldo opcional si aún no hay suscripción.</p>
+      <p class="muted">Estado: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "<span class='ok'>permitidas</span>" : (typeof Notification !== "undefined" && Notification.permission === "denied" ? "<span class='warn'>bloqueadas</span>" : "sin pedir")}${store.get("nb_webpush") ? " · <span class='ok'>Web Push</span>" : ""}</p>
       <button class="btn primary" id="enableAlerts">Activar avisos</button>
-      <button class="btn ghost" id="copyAlerts" type="button">Copiar canal privado</button>
+      <button class="btn ghost" id="copyAlerts" type="button">Copiar canal ntfy</button>
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
@@ -14861,10 +14966,16 @@ function openStudioSettings() {
       const ok = await ensureNotifyPermission();
       if (!ok) return toast("Permita las notificaciones del navegador");
       store.set("nb_alerts", 1);
-      listenPayAlerts();
-      pingCoach("NiuBision", "Avisos activos en este teléfono");
-      notifyLocal("Avisos activos", "Este teléfono recibirá avisos del estudio.", "/?view=inbox");
-      toast("Avisos activos");
+      const push = await subscribeWebPush().catch(() => ({ ok: false }));
+      if (push && push.ok) {
+        notifyLocal("Avisos activos", "Web Push listo en este teléfono.", "/?view=inbox");
+        toast("Avisos Web Push activos");
+      } else {
+        listenPayAlerts();
+        pingCoach("NiuBision", "Avisos activos en este teléfono");
+        notifyLocal("Avisos activos", "Este teléfono recibirá avisos del estudio.", "/?view=inbox");
+        toast(push && push.reason === "novapid" ? "Avisos locales + ntfy (VAPID pendiente en el servidor)" : "Avisos activos");
+      }
       modal.remove();
       openStudioSettings();
     } catch (e) { toast("No se pudieron activar"); }
@@ -18299,8 +18410,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "49") {
-        store.set("nb_sw", "49");
+      if (store.get("nb_sw") !== "50") {
+        store.set("nb_sw", "50");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -18313,9 +18424,12 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=49", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=50", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
+        if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
+          subscribeWebPush().catch(() => {});
+        }
       } catch (e) {}
     };
     bootSw();
@@ -18349,7 +18463,7 @@ async function boot() {
     }
   })();
   if (state.role === "coach") {
-    if (store.get("nb_alerts")) listenPayAlerts();
+    if (store.get("nb_alerts") && !store.get("nb_webpush")) listenPayAlerts();
     ensureRenewals();
   }
 }

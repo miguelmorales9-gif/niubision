@@ -5,3 +5,9 @@ compatibility_date = "2026-01-01"
 [[kv_namespaces]]
 binding = "STUDIO"
 id = "ced5c36d5b1b4d35a8d522a78d9e448e"
+
+# Secrets (set via wrangler secret put — never commit values):
+#   VAPID_PUBLIC_KEY
+#   VAPID_PRIVATE_KEY
+#   VAPID_SUBJECT   (optional, mailto:…)
+#   COACH_PIN

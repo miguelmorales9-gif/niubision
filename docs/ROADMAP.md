@@ -69,7 +69,7 @@
 | ID | Work | Status |
 |----|------|--------|
 | 4.1 | Real backend auth + backups + multi-device | **done** (this PR) |
-| 4.2 | Push notifications (SW + local + ntfy; VAPID follow-up) | **done** (this PR) |
+| 4.2 | Push notifications (SW + local + ntfy + VAPID Web Push) | **done** (VAPID in eng/vapid-push) |
 | 4.3 | English later — do not dilute ES-PR first | **deferred** (intentional hold) |
 | 4.4 | Store wrappers only after Phase 2 metrics | **deferred** (intentional hold) |
 | 4.5 | Motion / empty-state visual system | **done** (this PR) |
@@ -82,4 +82,4 @@ See `docs/PLATFORM.md` for auth, sync, backup, and push notes.
 - Prefer small PRs; keep shell `index.html` + `sw.js` + `app/` canonical; `npm run sync:html` mirrors to `public/`.
 - Edit flow: change `app/styles.css` / `app/app.js` / shell `index.html`, then `npm run sync:html` (or `npm run build`).
 
-Last updated: 2026-09-23
+Last updated: 2026-09-30
