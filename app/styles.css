@@ -539,7 +539,7 @@ img { background: transparent; }
 .inbox-bucket h3 { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
 .inbox-bucket .muted { font-weight:400; }
 .inbox-row { align-items:flex-start; }
-.inbox-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; max-width:52%; }
+.inbox-actions { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; max-width:62%; min-width:140px; }
 .timeline-row .st-chip { text-transform:none; letter-spacing:.04em; font-size:10px; }
 .nav.slim button { font-size:11px; }
 

@@ -9614,6 +9614,12 @@ function toast(msg, ms) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove("show"), Math.max(800, Number(ms) || 2200));
 }
+function clearToast() {
+  const t = $("#toast");
+  if (!t) return;
+  t.classList.remove("show");
+  clearTimeout(toast._t);
+}
 function closeModals() {
   document.querySelectorAll(".modal").forEach((m) => { try { m.remove(); } catch (e) {} });
 }
@@ -11132,7 +11138,21 @@ function allRoutines() {
   return stock.concat(state.customRoutines || []);
 }
 function findRoutine(id) {
-  return allRoutines().find((r) => r.id === id) || null;
+  if (id == null || id === "") return null;
+  const sid = String(id);
+  return allRoutines().find((r) => r.id === sid) || null;
+}
+function resolveRoutine(idOrName) {
+  let r = findRoutine(idOrName);
+  if (r) return r;
+  const q = cleanName(String(idOrName || ""));
+  if (!q) return null;
+  return allRoutines().find((x) => {
+    const id = cleanName(x.id || "");
+    const sn = cleanName(shortName(x) || "");
+    const nm = cleanName(x.name || "");
+    return id === q || sn === q || nm === q;
+  }) || null;
 }
 function bandOf(r) {
   const l = String((r && r.level) || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -11497,10 +11517,25 @@ function noteClient(n) {
   const nm = cleanName(n.name || "");
   return (state.clients || []).find((c) => (id && c.id === id) || (nm && cleanName(c.name) === nm)) || null;
 }
+function clientHasValidCode(c) {
+  return !!(c && /^\d{6}$/.test(String(c.accessCode || "")) && !isRevoked(c.accessCode, c.id));
+}
+function clientAwaitingCode(c) {
+  if (!c || clientHasValidCode(c)) return false;
+  return !!clientHasLegal(c);
+}
 function payNoticeDone(n) {
   if (!n || (n.type !== "pay" && n.type !== "lead")) return false;
   const cl = noteClient(n);
-  return !!(cl && /^\d{6}$/.test(String(cl.accessCode || "")) && !isRevoked(cl.accessCode, cl.id));
+  if (clientHasValidCode(cl)) return true;
+  const id = n.clientId || "";
+  const nm = cleanName(n.name || "");
+  const pays = state.payments || [];
+  const hit = pays.find((p) => p && p.status === "recibido" && (
+    (id && p.clientId === id) || (nm && cleanName(p.name || "") === nm)
+  ) && /^\d{6}$/.test(String(p.accessCode || "")));
+  if (hit) return true;
+  return false;
 }
 function inboxNoteHidden(n) {
   if (!n) return true;
@@ -11867,7 +11902,7 @@ function clearProgramReqInbox(reqId) {
 function approveProgramRequest(reqId) {
   const req = (state.programRequests || []).find((x) => x.id === reqId);
   if (!req || req.status !== "pending") { toast("Pedido no encontrado"); return false; }
-  const r = findRoutine(req.routineId);
+  const r = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
   if (!r) {
     req.status = "ignored";
     req.ignoredAt = Date.now();
@@ -12165,9 +12200,10 @@ function bindProgramas() {
 }
 function inboxBuckets() {
   const clients = (state.clients || []).map(attachLegalToClient);
-  const paidNoCode = clients.filter((c) => !c.accessCode && clientHasLegal(c));
-  const codedIds = new Set(clients.filter((c) => c.accessCode).map((c) => c.id));
-  const codedNames = new Set(clients.filter((c) => c.accessCode).map((c) => cleanName(c.name)));
+  // Firmas listas + sin código válido → coach confirma pago a mano (nunca auto-código).
+  const paidNoCode = clients.filter((c) => clientAwaitingCode(c));
+  const codedIds = new Set(clients.filter((c) => clientHasValidCode(c)).map((c) => c.id));
+  const codedNames = new Set(clients.filter((c) => clientHasValidCode(c)).map((c) => cleanName(c.name)));
   const waiting = [];
   const seenWait = {};
   (state.inbox || []).slice().reverse().forEach((n) => {
@@ -12178,14 +12214,15 @@ function inboxBuckets() {
     if (id && codedIds.has(id)) return;
     if (nm && codedNames.has(nm)) return;
     const cl = clients.find((c) => (id && c.id === id) || (nm && cleanName(c.name) === nm));
-    if (cl && cl.accessCode) return;
+    if (clientHasValidCode(cl)) return;
     if (cl && paidNoCode.some((x) => x.id === cl.id)) return;
     const k = id || nm || n.id;
     if (!k || seenWait[k]) return;
     seenWait[k] = 1;
     waiting.push(Object.assign({}, n, { _client: cl || null }));
   });
-  const legalPend = clients.filter((c) => !clientHasLegal(c));
+  // Solo quien aún no tiene código: si ya entró, firmas pendientes son sync, no bandeja.
+  const legalPend = clients.filter((c) => !clientHasLegal(c) && !clientHasValidCode(c));
   const silent = silentClients();
   const programReqs = pendingProgramRequests();
   return { paidNoCode, waiting, legalPend, silent, programReqs };
@@ -12379,30 +12416,38 @@ function inboxView() {
     <div class="card inbox-bucket nb-fade">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
-        const missing = !findRoutine(req.routineId);
+        const hit = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
+        const missing = !hit;
         const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
-        const hint = missing ? "Programa ya no está en la biblioteca" : "Plantilla · espera su ok";
-        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}${missing ? " · se cierra al aprobar" : ""}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">${missing ? "Cerrar" : "Aprobar"}</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
+        const hint = missing ? "Programa no está en la biblioteca · Aprobar lo cierra" : "Plantilla · espera su ok";
+        return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : `<p class="muted">0 pedidos. Nadie ha pedido un programa.</p>`}
     </div>
     <div class="card inbox-bucket">
-      <h3>Pagó · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
-      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">Confirmar+código</button>`)).join("") : "<p class='muted'>0 en esta cola. Nadie pagó sin código.</p>"}
+      <h3>Firmas listas · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
+      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">Confirmar+código</button>`)).join("") + `<p class="muted">Confirme el pago a mano. No se emite código solo.</p>` : "<p class='muted'>0 en esta cola. Nadie con firmas listas sin código.</p>"}
     </div>
     <div class="card inbox-bucket">
-      <h3>Esperando código <span class="muted">${b.waiting.length}</span></h3>
+      <h3>Avisos de pago / lead <span class="muted">${b.waiting.length}</span></h3>
       ${b.waiting.length ? b.waiting.map((n) => {
-        const cid = (n._client && n._client.id) || n.clientId || "";
-        const act = cid
-          ? `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir cliente</button>`
-          : `<button class="btn small ghost" type="button" data-view="people">Gente</button>`;
+        const cl = n._client || null;
+        const cid = (cl && cl.id) || n.clientId || "";
+        let act = "";
+        if (cl && clientAwaitingCode(cl)) {
+          act = `<button class="btn small primary" type="button" data-paid="${escAttr(cl.id)}">Confirmar+código</button>`;
+        } else if (cid) {
+          act = `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir cliente</button>`;
+        } else {
+          act = `<button class="btn small ghost" type="button" data-view="people">Gente</button>`;
+        }
         return rowNotice(n, act + `<button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`);
-      }).join("") : "<p class='muted'>0 avisos. Nada esperando código.</p>"}
+      }).join("") : "<p class='muted'>0 avisos. Nada pendiente de pago o lead sin código.</p>"}
     </div>
     <div class="card inbox-bucket">
       <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
-      ${b.legalPend.length ? b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir cliente</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button>`)).join("") : "<p class='muted'>0 pendientes. Relevo, salud y contrato al día.</p>"}
-      ${b.legalPend.length ? `<p class="muted">Falta lo que firma el cliente en la app (relevo, PAR-Q, contrato).</p>` : ""}
+      ${b.legalPend.length
+        ? (b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir cliente</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button>`)).join("") + `<p class="muted">Falta lo que firma el cliente en la app (relevo, PAR-Q, contrato).</p>`)
+        : "<p class='muted'>0 pendientes. Nadie debe firmar hoy — relevo, salud y contrato al día.</p>"}
     </div>
     <div class="card inbox-bucket">
       <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
@@ -14093,10 +14138,12 @@ function openCoachGate() {
         if (!pinLocked() && (store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
         return;
       }
+      clearToast();
     } catch (e) {
       toast("No se pudo validar. Intente de nuevo.");
       return;
     }
+    clearToast();
     modal.remove();
     state.role = "coach"; state.view = "home"; persist();
     ensureCloud().finally(() => render());
@@ -14817,7 +14864,7 @@ function homeView() {
     const vids = pendingVideos();
     const silent = silentClients();
     const today = todayAppts();
-    const waitPay = (state.clients || []).filter((c) => !c.accessCode && clientHasLegal(c));
+    const waitPay = (state.clients || []).filter((c) => clientAwaitingCode(c));
     const need = [
       waitPay[0] ? { k: "confirm", id: waitPay[0].id, t: "Confirmar pago", n: waitPay[0].name || "Cliente", d: (waitPay[0].plan || "") + " · toque para dar código", extra: waitPay.length > 1 ? "+" + (waitPay.length - 1) : "" } : null,
       (function () {
@@ -14835,7 +14882,7 @@ function homeView() {
       <p class="tagline">Estudio</p>
       <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
       ${floorLine()}
-      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · pagó sin código · avisos · PAR-Q · sin sesión" : "0 pendientes. Nada que tocar hoy."}</p></div>
+      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · firmas sin código · avisos · PAR-Q · sin sesión" : "0 pendientes. Nada que tocar hoy."}</p></div>
       ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">0 urgencias. El piso está tranquilo.</p></div>`}
       ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
         normalizeClient(c);
@@ -15943,7 +15990,19 @@ function peopleView() {
       <button class="btn primary" id="ingestLead" type="button">Añadir desde el aviso</button>
     </div>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
-    ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${p.status === "recibido" ? `<span class="ok">recibido</span>` : ((state.clients || []).some((c) => !c.accessCode && ((p.clientId && c.id === p.clientId) || (p.name && cleanName(c.name) === cleanName(p.name)))) ? `<span class="muted">confirme en la ficha</span>` : `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`)}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`).join("")}</div>` : ""}
+    ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => {
+      const clPay = (state.clients || []).find((c) => (p.clientId && c.id === p.clientId) || (p.name && cleanName(c.name) === cleanName(p.name)));
+      const coded = clientHasValidCode(clPay) || /^\d{6}$/.test(String(p.accessCode || ""));
+      let payAct = "";
+      if (p.status === "recibido" || coded) {
+        payAct = `<span class="ok">${coded && p.status !== "recibido" ? "código listo" : "recibido"}</span>`;
+      } else if (clPay && clientAwaitingCode(clPay)) {
+        payAct = `<button class="btn small primary" type="button" data-paid="${escAttr(clPay.id)}">Confirmar+código</button>`;
+      } else {
+        payAct = `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`;
+      }
+      return `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}${coded && clPay && clPay.accessCode ? " · " + escapeHtml(String(clPay.accessCode)) : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${payAct}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`;
+    }).join("")}</div>` : ""}
     ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" }) : (state.clients || []).slice().sort((a, b) => {
       const au = !a.accessCode ? 0 : (clientStatus(a) === "por vencer" || clientStatus(a) === "vencido" ? 1 : 2);
       const bu = !b.accessCode ? 0 : (clientStatus(b) === "por vencer" || clientStatus(b) === "vencido" ? 1 : 2);
@@ -15962,10 +16021,10 @@ function peopleView() {
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
-        ${c.accessCode ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientHasLegal(c) ? `<p class="muted" style="margin:6px 0">Sin código hasta confirmar el pago</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
+        ${clientHasValidCode(c) ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientAwaitingCode(c) ? `<p class="muted" style="margin:6px 0">Firmas listas · confirme el pago para dar código</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
-        ${c.accessCode ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientHasLegal(c) ? `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
+        ${clientHasValidCode(c) ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientAwaitingCode(c) ? `<button class="btn small primary" data-paid="${c.id}">Confirmar+código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
         <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
         <button class="btn small ghost" data-timeline="${c.id}">Línea de tiempo</button>
@@ -16877,8 +16936,10 @@ function openCodeEntry() {
       const day0 = rt0 && rt0.daysPlan && rt0.daysPlan.length
         ? rt0.daysPlan[dayIndex(rt0) % rt0.daysPlan.length]
         : null;
-      if (day0) toast("Hoy toca " + day0.title + " · empecemos");
-      else toast("Bienvenido. Miguel te asigna pronto.");
+      if (day0) {
+        const di0 = dayIndex(rt0) % rt0.daysPlan.length;
+        toast("Hoy toca " + programDayLabel(di0, day0) + " · empecemos");
+      } else toast("Bienvenido. Miguel te asigna pronto.");
     })();
     setTimeout(() => showDay1IfNeeded(), 350);
     } finally {
@@ -17298,7 +17359,7 @@ function bindChrome() {
     }
     if (b.dataset.needk === "confirm") {
       const c = state.clients.find((x) => x.id === b.dataset.cid);
-      if (c && !c.accessCode && clientHasLegal(c)) {
+      if (c && clientAwaitingCode(c)) {
         const done = confirmClientPaid(c, payMethodOfClient(c));
         if (done && done.client && done.code) {
           showShare(done.client);
@@ -18068,8 +18129,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "42") {
-        store.set("nb_sw", "42");
+      if (store.get("nb_sw") !== "45") {
+        store.set("nb_sw", "45");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -18082,7 +18143,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=45", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=46", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
