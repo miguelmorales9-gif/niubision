@@ -100,7 +100,16 @@ function mergeStudio(prev, next) {
         accessCode: codeForPay
       }]);
     }
-    return Object.assign({}, a, { clients, payments: paymentsOut, revoked, updatedAt: Date.now() });
+    const phoneD = phone.replace(/\D/g, "");
+    const inboxCleared = (a.inbox || []).filter((n) => {
+      if (!n || (n.type !== "pay" && n.type !== "lead")) return true;
+      if (clientId && n.clientId === clientId) return false;
+      if (phoneD.length >= 10 && String(n.phone || "").replace(/\D/g, "") === phoneD) return false;
+      if (b.name && String(n.name || "").toLowerCase() === String(b.name || "").toLowerCase()) return false;
+      if (invoice && (n.invoice === invoice || n.ref === invoice || n.id === invoice)) return false;
+      return true;
+    });
+    return Object.assign({}, a, { clients, payments: paymentsOut, inbox: inboxCleared, revoked, updatedAt: Date.now() });
   }
   if (op === "revoke") {
     return Object.assign({}, a, {
@@ -306,11 +315,12 @@ function rateBlocked(row, key) {
   return !!(f && f.until && Date.now() < f.until);
 }
 
-function rateHit(row, key) {
+function rateHit(row, key, limit) {
   row.fails = row.fails || {};
   const f = row.fails[key] || { n: 0, until: 0 };
   f.n += 1;
-  if (f.n >= 8) {
+  const cap = Number(limit) > 0 ? Number(limit) : 8;
+  if (f.n >= cap) {
     f.until = Date.now() + 15 * 60 * 1000;
     f.n = 0;
   }
@@ -405,7 +415,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 29 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 30 });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -556,7 +566,7 @@ async function handle(req, env) {
     if (rateBlocked(row, leadKey)) {
       return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
     }
-    rateHit(row, leadKey);
+    rateHit(row, leadKey, 30);
     const revoked = (row.state && row.state.revoked) || [];
     const deadIds = new Set(revoked.map((r) => String(r.clientId || "")).filter(Boolean));
     let cid = String(c.id || "c" + Date.now());
@@ -594,8 +604,9 @@ async function handle(req, env) {
     if (rateBlocked(row, payKey)) {
       return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
     }
-    rateHit(row, payKey);
+    rateHit(row, payKey, 30);
     const invoice = String(body.invoice || body.id || ("p" + Date.now()));
+    const payPhone = String(body.phone || "");
     const payment = {
       id: invoice,
       invoice,
@@ -607,14 +618,20 @@ async function handle(req, env) {
       status: "iniciado",
       name: body.name || "Cliente",
       clientId: body.clientId || "",
+      phone: payPhone,
       email: body.email || ""
     };
     const inbox = (row.state && row.state.inbox) || [];
-    const dupPay = inbox.some((n) => n && n.type === "pay" && n.clientId === payment.clientId && String(n.amount || "") === String(payment.amount || "") && (Date.now() - (n.at || 0) < 30 * 60 * 1000));
+    const phoneDigits = payPhone.replace(/\D/g, "");
+    const dupPay = inbox.some((n) => n && n.type === "pay" && (
+      (payment.clientId && n.clientId === payment.clientId)
+      || (phoneDigits.length >= 10 && String(n.phone || "").replace(/\D/g, "") === phoneDigits)
+      || (payment.name && String(n.name || "").toLowerCase() === String(payment.name).toLowerCase())
+    ) && String(n.amount || "") === String(payment.amount || "") && (Date.now() - (n.at || 0) < 30 * 60 * 1000));
     row.state = mergeStudio(row.state || {}, {
       _op: "pay",
       payments: [payment],
-      inbox: dupPay ? [] : [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, amount: payment.amount, method: payment.method, invoice: payment.invoice, ref: payment.ref }]
+      inbox: dupPay ? [] : [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, phone: payPhone, amount: payment.amount, method: payment.method, invoice: payment.invoice, ref: payment.ref }]
     });
     await putRow(env, row);
     return json({ ok: true });
