@@ -10200,18 +10200,37 @@ function scrubCloudState(st) {
 async function mirrorPublic() {
   return false;
 }
+function ntfyHeader(v) {
+  return String(v || "").replace(/[^\u0000-\u00ff]/g, "");
+}
+function ntfyPost(topic, body, headers) {
+  ntfyPost._dead = ntfyPost._dead || {};
+  if (ntfyPost._dead[topic]) return;
+  const safe = {};
+  Object.keys(headers || {}).forEach((k) => { safe[k] = ntfyHeader(headers[k]).slice(0, 180); });
+  let resP;
+  try {
+    resP = fetch("https://ntfy.sh/" + topic, { method: "POST", headers: safe, body: String(body || "") });
+  } catch (e) {
+    ntfyPost._dead[topic] = true;
+    return;
+  }
+  resP.then((res) => {
+    if (res && (res.status === 400 || res.status === 403 || res.status === 404)) {
+      ntfyPost._dead[topic] = true;
+      if (!ntfyPost._logged) {
+        ntfyPost._logged = true;
+        try { console.info("ntfy no configurado (" + res.status + "). No es un fallo del cliente."); } catch (e2) {}
+      }
+    }
+  }).catch(() => {});
+}
 function pingCoach(title, text) {
   const line = String(title || "NiuBision") + " — " + String(text || "");
   const now = Date.now();
   if (!pingCoach._at || now - pingCoach._at > 20000) {
     pingCoach._at = now;
-    try {
-      fetch("https://ntfy.sh/" + ntfyTopic(), {
-        method: "POST",
-        headers: { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" },
-        body: String(text || "")
-      }).catch(() => {});
-    } catch (e) {}
+    ntfyPost(ntfyTopic(), text, { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" });
   }
   try {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return line;
@@ -10421,7 +10440,8 @@ function applyCloud(d) {
   }
   if (Array.isArray(d.inbox)) {
     const idx = livingClientIndex();
-    state.inbox = mergeRows(state.inbox || [], d.inbox).filter((n) => n && docBelongsToLiving(n, idx) && !isRevoked(n.accessCode, n.clientId));
+    const hide = inboxHideMap();
+    state.inbox = mergeRows(state.inbox || [], d.inbox).filter((n) => n && !hide[n.id] && !payNoticeDone(n) && docBelongsToLiving(n, idx) && !isRevoked(n.accessCode, n.clientId));
     try { store.set("nb_inbox", state.inbox); } catch (e) {}
   }
   if (Array.isArray(d.programRequests)) {
@@ -10630,8 +10650,25 @@ async function cloudPushClient() {
   return { ok: false };
 }
 let leadTimer = null;
+function noteRateLimit(res) {
+  if (!res || res.status !== 429) return false;
+  let wait = 15 * 60 * 1000;
+  try {
+    const ra = res.headers && res.headers.get && res.headers.get("retry-after");
+    if (ra && /^\d+$/.test(String(ra))) wait = Math.min(wait, parseInt(ra, 10) * 1000);
+  } catch (e) {}
+  noteRateLimit.until = Math.max(noteRateLimit.until || 0, Date.now() + wait);
+  if (!noteRateLimit._toast || Date.now() - noteRateLimit._toast > 30000) {
+    noteRateLimit._toast = Date.now();
+    toast("Demasiados intentos. Espere unos minutos y vuelva a intentar.");
+  }
+  return true;
+}
+function rateLimitedNow() {
+  return !!(noteRateLimit.until && Date.now() < noteRateLimit.until);
+}
 function scheduleLeadPush() {
-  if (!isOnline()) return;
+  if (!isOnline() || rateLimitedNow()) return;
   clearTimeout(leadTimer);
   leadTimer = setTimeout(() => postLead().catch(() => {}), 600);
 }
@@ -10648,6 +10685,7 @@ async function postLead(c) {
   postLead._last = stamp;
   postLead._at = Date.now();
   if (slim.waiver || slim.health || slim.contract) postLead._legal[who.id] = 1;
+  if (rateLimitedNow()) return { ok: false, limited: true };
   const bases = apiBases();
   const body = JSON.stringify({ studioKey: "NIUBI", client: slim });
   let ok = false;
@@ -10658,7 +10696,8 @@ async function postLead(c) {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body
       });
-      if (res.ok) ok = true;
+      if (noteRateLimit(res)) return { ok: false, limited: true };
+      if (res.ok) { ok = true; break; }
     } catch (e) {}
   }
   const inbox = [{ id: "in" + Date.now(), type: "lead", name: who.name, plan: who.plan, at: Date.now(), clientId: who.id }];
@@ -10689,6 +10728,7 @@ async function postPayNotice(row) {
     invoice,
     ref
   };
+  if (rateLimitedNow()) return { ok: false, limited: true };
   let ok = false;
   for (let i = 0; i < bases.length; i++) {
     try {
@@ -10697,7 +10737,8 @@ async function postPayNotice(row) {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(payload)
       });
-      if (res.ok) ok = true;
+      if (noteRateLimit(res)) return { ok: false, limited: true };
+      if (res.ok) { ok = true; break; }
     } catch (e) {}
   }
   const inbox = [{ id: "in" + Date.now(), type: "pay", name: row.name, plan: row.plan, at: Date.now(), clientId: row.clientId, amount: row.amount, method: row.method, invoice, ref }];
@@ -11436,6 +11477,51 @@ function pushInboxNote(row) {
   state.inbox = state.inbox.slice(0, 80);
   try { store.set("nb_inbox", state.inbox); } catch (e) {}
 }
+function inboxHideMap() {
+  const m = store.get("nb_inbox_hide", {});
+  return m && typeof m === "object" ? m : {};
+}
+function hideInboxNote(id) {
+  const sid = String(id || "");
+  if (!sid) return;
+  const m = inboxHideMap();
+  m[sid] = Date.now();
+  store.set("nb_inbox_hide", m);
+  state.inbox = (state.inbox || []).filter((n) => n && String(n.id) !== sid);
+  try { store.set("nb_inbox", state.inbox); } catch (e) {}
+}
+function noteClient(n) {
+  if (!n) return null;
+  const id = n.clientId || "";
+  const nm = cleanName(n.name || "");
+  return (state.clients || []).find((c) => (id && c.id === id) || (nm && cleanName(c.name) === nm)) || null;
+}
+function payNoticeDone(n) {
+  if (!n || (n.type !== "pay" && n.type !== "lead")) return false;
+  const cl = noteClient(n);
+  return !!(cl && /^\d{6}$/.test(String(cl.accessCode || "")) && !isRevoked(cl.accessCode, cl.id));
+}
+function inboxNoteHidden(n) {
+  if (!n) return true;
+  if (n.id && inboxHideMap()[n.id]) return true;
+  if (payNoticeDone(n)) return true;
+  return false;
+}
+function clearResolvedPayInbox(c) {
+  if (!c) return;
+  const id = c.id || "";
+  const nm = cleanName(c.name || "");
+  const m = inboxHideMap();
+  state.inbox = (state.inbox || []).filter((n) => {
+    if (!n || (n.type !== "pay" && n.type !== "lead")) return true;
+    const hit = (id && n.clientId === id) || (nm && cleanName(n.name || "") === nm);
+    if (!hit) return true;
+    if (n.id) m[n.id] = Date.now();
+    return false;
+  });
+  store.set("nb_inbox_hide", m);
+  try { store.set("nb_inbox", state.inbox); } catch (e) {}
+}
 function offerCodeWhatsApp(c, opts) {
   opts = opts || {};
   if (!c || !c.accessCode) return;
@@ -11521,6 +11607,8 @@ async function ensureNotifyPermission() {
 }
 async function postProgramRequest(row) {
   if (!row || !row.id) return { ok: false };
+  const codeGate = String((row && row.accessCode) || "").replace(/\D/g, "");
+  if (!/^\d{6}$/.test(codeGate)) return { ok: false, locked: true };
   if (!isOnline()) return { ok: false, offline: true };
   const bases = apiBases();
   const body = JSON.stringify({ request: row });
@@ -11831,7 +11919,10 @@ function programaCardHtml(r) {
   const meta = `${r.days || "?"} días · ${r.minutes || "?"} min · ${escapeHtml(r.level || "")} · ${escapeHtml(kindLabel(kindOf(r)))}`;
   let actions = `<button class="btn small ghost" type="button" data-prog-ver="${escAttr(r.id)}">Ver</button>`;
   if (state.role === "client") {
-    actions += `<button class="btn small primary" type="button" data-prog-pedir="${escAttr(r.id)}">Pedir a Miguel</button>`;
+    const codeOk = /^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""));
+    actions += codeOk
+      ? `<button class="btn small primary" type="button" data-prog-pedir="${escAttr(r.id)}">Pedir a Miguel</button>`
+      : `<span class="muted">Entre con su código para pedir</span>`;
   } else if (state.role === "coach") {
     actions += `<button class="btn small primary" type="button" data-prog-asignar="${escAttr(r.id)}">Asignar</button>`;
     actions += `<button class="btn small ghost" type="button" data-prog-asignarwa="${escAttr(r.id)}">Asignar + WA</button>`;
@@ -11982,6 +12073,7 @@ function inboxBuckets() {
   const seenWait = {};
   (state.inbox || []).slice().reverse().forEach((n) => {
     if (!n || (n.type !== "pay" && n.type !== "lead")) return;
+    if (inboxNoteHidden(n)) return;
     const id = n.clientId || "";
     const nm = cleanName(n.name || "");
     if (id && codedIds.has(id)) return;
@@ -12183,8 +12275,8 @@ function inboxView() {
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
-    <p class="muted">${total ? total + " cosas que necesitan toque." : "Nadie urgente. El roster está en Gente."}</p>
-    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja vacía", hint: "Hoy no hay pagos, pedidos ni silencios. Eso también es trabajo limpio.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    <p class="muted">${total ? total + " cosas que necesitan toque." : "0 pendientes. Nada que tocar hoy."}</p>
+    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja vacía", hint: "0 pedidos, 0 pagos sin código y 0 silencios. Hoy no queda nada.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
     <div class="card inbox-bucket nb-fade">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
@@ -12192,11 +12284,11 @@ function inboxView() {
         const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
         const hint = missing ? "Programa ya no está en la biblioteca" : "Plantilla · espera su ok";
         return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}${missing ? " · se cierra al aprobar" : ""}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">${missing ? "Cerrar" : "Aprobar"}</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
-      }).join("") : nbEmpty({ icon: "◎", title: "Bandeja quieta", hint: "Cuando un cliente pida un programa en Programas, aparece aquí para aprobar.", cta: `<button class="btn ghost" type="button" data-view="programas">Ver Programas</button>` })}
+      }).join("") : `<p class="muted">0 pedidos. Nadie ha pedido un programa.</p>`}
     </div>
     <div class="card inbox-bucket">
       <h3>Pagó · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
-      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">Confirmar+código</button>`)).join("") : "<p class='muted'>Nadie en esta cola.</p>"}
+      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">Confirmar+código</button>`)).join("") : "<p class='muted'>0 en esta cola. Nadie pagó sin código.</p>"}
     </div>
     <div class="card inbox-bucket">
       <h3>Esperando código <span class="muted">${b.waiting.length}</span></h3>
@@ -12205,13 +12297,13 @@ function inboxView() {
         const act = cid
           ? `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir cliente</button>`
           : `<button class="btn small ghost" type="button" data-view="people">Gente</button>`;
-        return rowNotice(n, act);
-      }).join("") : "<p class='muted'>Sin avisos pendientes.</p>"}
+        return rowNotice(n, act + `<button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`);
+      }).join("") : "<p class='muted'>0 avisos. Nada esperando código.</p>"}
     </div>
     <div class="card inbox-bucket">
       <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
-      ${b.legalPend.length ? b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir cliente</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button>`)).join("") : "<p class='muted'>Todos con relevo, salud y contrato.</p>"}
-      <p class="muted">Falta lo que firma el cliente en la app (relevo, PAR-Q, contrato).</p>
+      ${b.legalPend.length ? b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir cliente</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button>`)).join("") : "<p class='muted'>0 pendientes. Relevo, salud y contrato al día.</p>"}
+      ${b.legalPend.length ? `<p class="muted">Falta lo que firma el cliente en la app (relevo, PAR-Q, contrato).</p>` : ""}
     </div>
     <div class="card inbox-bucket">
       <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
@@ -12219,7 +12311,7 @@ function inboxView() {
         const age = sessionAgeDays(c);
         const label = age >= 900 ? "Aún no cierra un día" : age + " días";
         return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")} · ${escapeHtml(label)}</div></div><span class="inbox-actions"><button class="btn small ghost" type="button" data-assignwa="${escAttr(c.id)}">Asignar + WhatsApp</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button></span></div>`;
-      }).join("") : "<p class='muted'>Nadie silencioso (7+ días).</p>"}
+      }).join("") : "<p class='muted'>0 silencios. Nadie lleva 7 días sin sesión.</p>"}
     </div>
     <div class="actions">
       <button class="btn ghost" data-view="people">Gente y códigos</button>
@@ -12340,17 +12432,9 @@ function emailReceipt(row) {
   }).catch(() => null);
   Promise.all(bases.slice(0, 2).map(send)).catch(() => {});
   const text = "Recibo NiuBision\n" + (payload.name || "") + " · " + (payload.plan || "") + " · " + (payload.amount || "") + " USD · " + (payload.method || "");
-  fetch("https://ntfy.sh/niubision-recibo", {
-    method: "POST",
-    headers: { Title: "Recibo NiuBision", Email: "miguel.morales9@gmail.com" },
-    body: text
-  }).catch(() => {});
+  ntfyPost("niubision-recibo", text, { Title: "Recibo NiuBision", Email: "miguel.morales9@gmail.com" });
   if (payload.email && payload.email !== "miguel.morales9@gmail.com") {
-    fetch("https://ntfy.sh/niubision-recibo", {
-      method: "POST",
-      headers: { Title: "Recibo NiuBision", Email: payload.email },
-      body: text
-    }).catch(() => {});
+    ntfyPost("niubision-recibo", text, { Title: "Recibo NiuBision", Email: payload.email });
   }
 }
 function printReceipt(row) {
@@ -13420,6 +13504,7 @@ function recentInbox() {
     if (!n) return;
     if (n.at && n.at < cut) return;
     if (isRevoked(n.accessCode, n.clientId)) return;
+    if (n.type === "code" || inboxNoteHidden(n)) return;
     if (!docBelongsToLiving(n, idx)) return;
     const k = (n.type || "n") + ":" + (n.clientId || cleanName(n.name || "") || n.id);
     if (seen[k]) return;
@@ -13435,11 +13520,24 @@ function notifyPay(planLabel, method) {
   postPayNotice(row).catch(() => {});
   pingCoach("Pago NiuBision", who + " · " + (info.amount || "") + " USD · " + method);
 }
+function releaseClickTraps() {
+  document.querySelectorAll(".intro-play").forEach((el) => { try { el.remove(); } catch (e) {} });
+  document.querySelectorAll('a[href^="athmovil:"]').forEach((a) => { try { a.remove(); } catch (e) {} });
+}
+function openAthMovil(url) {
+  try {
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    return !!w;
+  } catch (e) { return false; }
+}
 function showPayReceipt(row) {
   closeModals();
+  releaseClickTraps();
   const phone = (state.profile && state.profile.phone) || "";
   const modal = document.createElement("div");
-  modal.className = "modal";
+  modal.className = "modal pay-receipt";
+  modal.setAttribute("data-pay-receipt", "1");
+  const ath = /ath/i.test(String(row.method || ""));
   modal.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Recibo de pago">
     <div class="handle"></div>
     <p class="tagline">Recibo</p>
@@ -13448,27 +13546,69 @@ function showPayReceipt(row) {
     <p class="muted">${escapeHtml(row.plan)}<br>${escapeHtml(row.date)} · ${escapeHtml(row.name || "Cliente")}${row.ref ? "<br>Ref " + escapeHtml(row.ref) : ""}${row.invoice ? "<br>Factura " + escapeHtml(row.invoice) : ""}</p>
     ${row.accessCode ? `<p class="ok">Código: ${escapeHtml(row.accessCode)}. Portada → Entrar → péguelo.</p>` : `<p>Miguel confirma el pago. El código de 6 dígitos llega por WhatsApp${phone ? " al " + escapeHtml(phone) : ""}. La app no se abre sola.</p><p class="muted">Cuando le llegue: Portada → Entrar → péguelo.</p>`}
     ${/rutina con ia/i.test(row.plan || "") ? `<p class="muted">La rutina con IA se abre cuando el entrenador marca este pago como recibido.</p>` : ""}
-    <button class="btn primary" type="button" id="closeSheet">Entendido</button>
+    <button class="btn primary" type="button" data-receipt-close="1">Entendido</button>
+    ${ath ? `<button class="btn ghost" type="button" id="openAth">Abrir ATH Móvil</button>` : ""}
     <button class="btn ghost" type="button" id="waPay">Avisar a Miguel por WhatsApp</button>
     <button class="btn ghost" type="button" id="printRec">Imprimir recibo</button>
     <button class="btn ghost" type="button" id="haveCodeNow">Ya tengo el código</button>
     <button class="btn ghost" type="button" id="toCover">Volver a la portada</button>
   </div>`;
   document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  let closed = false;
   const dismiss = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey, true);
+    document.body.classList.remove("modal-open");
+    releaseClickTraps();
     try { modal.remove(); } catch (e) {}
-    document.removeEventListener("keydown", onEsc);
   };
-  const onEsc = (e) => { if (e.key === "Escape") { e.preventDefault(); dismiss(); } };
-  document.addEventListener("keydown", onEsc);
-  modal.addEventListener("click", (e) => { if (e.target === modal) dismiss(); });
-  const closeBtn = modal.querySelector("#closeSheet");
+  const onKey = (e) => {
+    if (e.key !== "Escape" && e.key !== "Esc") return;
+    e.preventDefault();
+    e.stopPropagation();
+    dismiss();
+  };
+  const wantsClose = (e) => {
+    const t = e.target;
+    if (!t) return false;
+    if (t === modal) return true;
+    return !!(t.closest && t.closest("[data-receipt-close]"));
+  };
+  document.addEventListener("keydown", onKey, true);
+  modal.addEventListener("click", (e) => {
+    if (!wantsClose(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dismiss();
+  });
+  modal.addEventListener("pointerup", (e) => {
+    if (!wantsClose(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dismiss();
+  });
+  const closeBtn = modal.querySelector("[data-receipt-close]");
   if (closeBtn) {
-    closeBtn.onclick = (e) => { e.preventDefault(); dismiss(); };
+    closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); dismiss(); });
     try { closeBtn.focus(); } catch (e2) {}
   }
+  const athBtn = modal.querySelector("#openAth");
+  if (athBtn) athBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cfg = payCfg();
+    const num = String((cfg && cfg.ath) || "").replace(/\D/g, "");
+    const amt = row.amount || "";
+    const ref = row.ref || row.invoice || row.id || "";
+    if (!num) return toast("Falta el número de ATH Móvil del estudio");
+    const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + (ref ? "&note=" + encodeURIComponent(ref) : "");
+    if (!openAthMovil(deep)) toast("Si ATH Móvil no abrió, péguelo en la app.");
+  };
   const toCover = modal.querySelector("#toCover");
-  if (toCover) toCover.onclick = () => {
+  if (toCover) toCover.onclick = (e) => {
+    e.preventDefault();
     dismiss();
     state.role = null;
     state.splash = true;
@@ -13476,13 +13616,14 @@ function showPayReceipt(row) {
     render();
   };
   const haveNow = modal.querySelector("#haveCodeNow");
-  if (haveNow) haveNow.onclick = () => { dismiss(); openCodeEntry(); };
+  if (haveNow) haveNow.onclick = (e) => { e.preventDefault(); dismiss(); openCodeEntry(); };
   const pr = modal.querySelector("#printRec");
-  if (pr) pr.onclick = () => printReceipt(row);
+  if (pr) pr.onclick = (e) => { e.preventDefault(); printReceipt(row); };
   const wa = modal.querySelector("#waPay");
-  if (wa) wa.onclick = () => {
+  if (wa) wa.onclick = (e) => {
+    e.preventDefault();
     const line = waReady("pay", { name: row.name, plan: row.plan, method: row.method, amount: row.amount });
-    window.open(waLink(line + (state.profile.phone ? "\nTel: " + state.profile.phone : "")), "_blank");
+    window.open(waLink(line + (state.profile.phone ? "\nTel: " + state.profile.phone : "")), "_blank", "noopener,noreferrer");
   };
 }
 async function runPay(method, planLabel) {
@@ -13513,17 +13654,9 @@ async function runPay(method, planLabel) {
     const clip = [num, amt ? amt + " USD" : "", "ref " + ref].filter(Boolean).join(" · ");
     const deep = "athmovil://transfer?phone=" + encodeURIComponent(num) + (amt ? "&amount=" + encodeURIComponent(amt) : "") + "&note=" + encodeURIComponent(ref);
     if (num) {
+      const opened = openAthMovil(deep);
       await copyText(clip);
-      try {
-        const a = document.createElement("a");
-        a.href = deep;
-        a.rel = "noopener";
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { try { a.remove(); } catch (e3) {} }, 800);
-      } catch (e) {}
-      toast("Copiado (" + maskDest(num, "ath") + (amt ? " · " + amt + " USD" : "") + "). Si ATH Móvil no abrió, péguelo en la app.");
+      toast("Copiado (" + maskDest(num, "ath") + (amt ? " · " + amt + " USD" : "") + ")." + (opened ? "" : " Si ATH Móvil no abrió, use el botón del recibo."));
     } else toast("Falta el número de ATH Móvil del estudio");
     notifyPay(planLabel, "ATH Móvil");
     showPayReceipt(row);
@@ -13698,8 +13831,10 @@ function playIntro() {
       if (done) return;
       done = true;
       host.classList.add("out");
+      host.style.pointerEvents = "none";
       setTimeout(() => {
-        try { if (v.parentNode === host) host.removeChild(v); host.remove(); } catch (e2) {}
+        try { if (v.parentNode === host) host.removeChild(v); } catch (e2) {}
+        try { host.remove(); } catch (e3) {}
         resolve();
       }, 280);
     };
@@ -14543,7 +14678,11 @@ function homeView() {
     const waitPay = (state.clients || []).filter((c) => !c.accessCode && clientHasLegal(c));
     const need = [
       waitPay[0] ? { k: "confirm", id: waitPay[0].id, t: "Confirmar pago", n: waitPay[0].name || "Cliente", d: (waitPay[0].plan || "") + " · toque para dar código", extra: waitPay.length > 1 ? "+" + (waitPay.length - 1) : "" } : null,
-      (state.inbox && state.inbox[0]) ? { k: "inbox", id: state.inbox[0].clientId, t: state.inbox[0].type === "pay" ? "Pago en la nube" : "Lead nuevo", n: state.inbox[0].name || "Cliente", d: (state.inbox[0].plan || "") + (state.inbox[0].amount ? " · " + state.inbox[0].amount + " USD" : ""), extra: state.inbox.length > 1 ? "+" + (state.inbox.length - 1) : "" } : null,
+      (function () {
+        const notes = (state.inbox || []).filter((n) => n && (n.type === "pay" || n.type === "lead") && !inboxNoteHidden(n));
+        const n0 = notes[0];
+        return n0 ? { k: "inbox", id: n0.clientId, t: n0.type === "pay" ? "Pago en la nube" : "Lead nuevo", n: n0.name || "Cliente", d: (n0.plan || "") + (n0.amount ? " · " + n0.amount + " USD" : ""), extra: notes.length > 1 ? "+" + (notes.length - 1) : "" } : null;
+      })(),
       today[0] ? { k: "agenda", id: today[0].clientId, t: "Agenda hoy", n: today[0].name, d: (today[0].time || "") + " · " + (today[0].type || ""), extra: today.length > 1 ? "+" + (today.length - 1) : "" } : null,
       soon[0] ? { k: "soon", id: soon[0].id, t: "Por vencer", n: soon[0].name, d: vigencyHtml(soon[0]), extra: soon.length > 1 ? "+" + (soon.length - 1) : "" } : null,
       vids[0] ? { k: "vid", id: vids[0].clientId, t: "Video pendiente", n: vids[0].name, d: (vids[0].exercise || "") + " · " + (vids[0].date || ""), extra: vids.length > 1 ? "+" + (vids.length - 1) : "" } : null,
@@ -14554,8 +14693,8 @@ function homeView() {
       <p class="tagline">Estudio</p>
       <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
       ${floorLine()}
-      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : ""}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">Pedidos · pagó sin código · avisos · PAR-Q · sin sesión</p></div>
-      ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">Nadie urgente. El roster está abajo.</p></div>`}
+      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · pagó sin código · avisos · PAR-Q · sin sesión" : "0 pendientes. Nada que tocar hoy."}</p></div>
+      ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">0 urgencias. El piso está tranquilo.</p></div>`}
       ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
         normalizeClient(c);
         const stc = clientStatus(c);
@@ -15627,7 +15766,7 @@ function peopleView() {
     <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
     <button class="btn ghost" type="button" data-view="inbox" style="margin-bottom:10px">Abrir bandeja de hoy</button>
     <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
-    ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div></div>`).join("")}<p class="muted">Ya están en el roster si el aviso llegó. Marque el pago cuando el dinero esté en PayPal o ATH.</p></div>` : ""}
+    ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button></div>`).join("")}<p class="muted">Quitar aviso no borra al cliente. Si ya tiene código, el aviso no vuelve.</p></div>` : ""}
     <div class="card">
       <h3>Aviso del cliente</h3>
       <p class="muted">Si le escribió por WhatsApp, pegue el mensaje aquí. El cliente entra a Gente aunque no lo haya añadido a mano.</p>
@@ -15739,8 +15878,10 @@ function openRoutine(id) {
     ${r.evidence ? `<p class="muted" style="margin:8px 0 12px">${r.evidence}</p>` : ""}
     ${r.daysPlan.map((d) => `<div class="card"><h3>${d.title}</h3>${d.items.map((it) => `<div class="list-row"><span>${it.name}</span><span class="muted">${it.sets} × ${it.reps}</span></div>`).join("")}</div>`).join("")}
     <div class="actions">${state.role === "client"
-      ? `<button class="btn primary" id="pedirRt">Pedir a Miguel</button><button class="btn ghost" id="closeSheet">Cerrar</button>`
-      : `<button class="btn primary" id="useRt">Usar / asignar</button><button class="btn ghost" id="closeSheet">Cerrar</button>`}</div>
+      ? (/^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""))
+        ? `<button class="btn primary" type="button" id="pedirRt">Pedir a Miguel</button><button class="btn ghost" type="button" id="closeSheet">Cerrar</button>`
+        : `<p class="muted">Entre con su código de 6 dígitos para pedir. Sin código no se envía nada.</p><button class="btn ghost" type="button" id="closeSheet">Cerrar</button>`)
+      : `<button class="btn primary" type="button" id="useRt">Usar / asignar</button><button class="btn ghost" type="button" id="closeSheet">Cerrar</button>`}</div>
   </div>`;
   document.body.appendChild(modal);
   const close = () => modal.remove();
@@ -15865,6 +16006,7 @@ function confirmClientPaid(c, method) {
     c.codeIssuedAt = Date.now();
     pushInboxNote({ type: "code", name: c.name, plan: c.plan, clientId: c.id, accessCode: code });
   }
+  clearResolvedPayInbox(c);
   c.unpaid = false;
   c.startDate = c.startDate || todayKey();
   const meta = planMeta(c.plan);
@@ -17102,6 +17244,11 @@ function bindChrome() {
     const c = state.clients.find((x) => x.id === b.dataset.link);
     if (c) showShare(c);
   });
+  $$("[data-hide-in]").forEach((b) => b.onclick = () => {
+    hideInboxNote(b.dataset.hideIn);
+    toast("Aviso quitado. El cliente sigue en Gente.");
+    render();
+  });
   $$("[data-paid]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.paid);
     if (!c) return;
@@ -17723,8 +17870,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "40") {
-        store.set("nb_sw", "40");
+      if (store.get("nb_sw") !== "42") {
+        store.set("nb_sw", "42");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -17737,7 +17884,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=41", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=42", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
@@ -17765,9 +17912,13 @@ async function boot() {
       pendingProgramRequests().forEach((r) => { postProgramRequest(r).catch(() => {}); });
     }
   }
-  (state.clients || []).filter((c) => c && c.unpaid && (c.waiver || c.contract || c.health)).slice(0, 3).forEach((c) => {
-    postLead(c).catch(() => {});
-  });
+  (async () => {
+    const list = (state.clients || []).filter((c) => c && c.unpaid && (c.waiver || c.contract || c.health)).slice(0, 3);
+    for (let i = 0; i < list.length; i++) {
+      const r = await postLead(list[i]).catch(() => null);
+      if (!r || r.limited) break;
+    }
+  })();
   if (state.role === "coach") {
     if (store.get("nb_alerts")) listenPayAlerts();
     ensureRenewals();
