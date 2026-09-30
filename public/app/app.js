@@ -12208,7 +12208,7 @@ function weekRangeLocal() {
     d.setDate(mon.getDate() + i);
     days.push(fmt(d));
   }
-  return { start: fmt(mon), end: fmt(sun), days, labels: ["L", "M", "X", "J", "V", "S", "D"] };
+  return { start: fmt(mon), end: fmt(sun), days, labels: ["L", "M", "Mi", "J", "V", "S", "D"] };
 }
 function clientSessionsInWeek(c, days) {
   const set = new Set(days || []);
@@ -12927,7 +12927,7 @@ function activeRoutine() {
 }
 /** Week starts Monday: 0=Lunes … 6=Domingo (never JS Sunday-first). */
 const WEEKDAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-const WEEKDAYS_SHORT = ["L", "M", "X", "J", "V", "S", "D"];
+const WEEKDAYS_SHORT = ["L", "M", "Mi", "J", "V", "S", "D"];
 function mondayWeekIndex(d) {
   const x = d instanceof Date ? d : new Date();
   return (x.getDay() + 6) % 7;
@@ -18082,7 +18082,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=44", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=45", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
