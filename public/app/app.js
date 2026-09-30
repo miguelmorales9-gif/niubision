@@ -9407,9 +9407,17 @@ const state = {
   splash: true,
   pendingPlan: null
 };
-state.pin = store.get("nb_pin", "");
 state.pinHash = store.get("nb_pin_hash", "");
 state.pinSalt = store.get("nb_pin_salt", "");
+/* Raw nb_pin must not live in localStorage; keep memory-only after unlock. */
+state.pin = "";
+try {
+  const legacy = store.get("nb_pin", "");
+  if (legacy) {
+    state._legacyPin = String(legacy);
+    store.set("nb_pin", "");
+  }
+} catch (e) {}
 state.health = store.get("nb_health", null);
 state.contracts = store.get("nb_contracts", []);
 state.waiver = store.get("nb_waiver", null);
@@ -9638,7 +9646,8 @@ function persist() {
     store.set("nb_habits", state.habits);
     store.set("nb_routine_edits", state.routineEdits);
     store.set("nb_routines_custom", state.customRoutines);
-    store.set("nb_pin", state.pin || "");
+    /* Never persist raw PIN — hash/salt only; memory pin for this session. */
+    try { store.set("nb_pin", ""); } catch (e) {}
     store.set("nb_pin_hash", state.pinHash || "");
     store.set("nb_pin_salt", state.pinSalt || "");
     store.set("nb_health", state.health);
@@ -9851,17 +9860,22 @@ function latestByPerson(list) {
 function livingClientIndex() {
   const ids = {};
   const names = {};
+  const phones = {};
   (state.clients || []).forEach((c) => {
     if (!c || isRevoked(c.accessCode, c.id)) return;
     if (c.id) ids[c.id] = c;
-    if (c.name) names[cleanName(c.name)] = c;
+    if (c.name) names[cleanName(c.name).toLowerCase()] = c;
+    const ph = phoneNorm(c.phone);
+    if (ph.length >= 10) phones[ph] = c;
   });
-  return { ids, names };
+  return { ids, names, phones };
 }
 function docBelongsToLiving(row, idx) {
   if (!row) return false;
   if (row.clientId && idx.ids[row.clientId]) return true;
-  if (row.name && idx.names[cleanName(row.name)]) return true;
+  if (row.name && idx.names[cleanName(row.name).toLowerCase()]) return true;
+  const ph = phoneNorm(row.phone);
+  if (ph.length >= 10 && idx.phones && idx.phones[ph]) return true;
   return false;
 }
 function forgetPersonDocs(name, id) {
@@ -10212,25 +10226,40 @@ function ntfyHeader(v) {
 }
 function ntfyPost(topic, body, headers) {
   ntfyPost._dead = ntfyPost._dead || {};
+  ntfyPost._backoff = ntfyPost._backoff || {};
   if (ntfyPost._dead[topic]) return;
+  if (ntfyPost._backoff[topic] && Date.now() < ntfyPost._backoff[topic]) return;
   const safe = {};
   Object.keys(headers || {}).forEach((k) => { safe[k] = ntfyHeader(headers[k]).slice(0, 180); });
   let resP;
   try {
     resP = fetch("https://ntfy.sh/" + topic, { method: "POST", headers: safe, body: String(body || "") });
   } catch (e) {
-    ntfyPost._dead[topic] = true;
+    ntfyPost._backoff[topic] = Date.now() + 60 * 1000;
     return;
   }
   resP.then((res) => {
-    if (res && (res.status === 400 || res.status === 403 || res.status === 404)) {
+    if (!res) return;
+    if (res.status === 400 || res.status === 403 || res.status === 404) {
       ntfyPost._dead[topic] = true;
       if (!ntfyPost._logged) {
         ntfyPost._logged = true;
-        try { console.info("ntfy no configurado (" + res.status + "). No es un fallo del cliente."); } catch (e2) {}
+        try { console.info("ntfy no configurado (" + res.status + ")."); } catch (e2) {}
+      }
+      return;
+    }
+    if (res.status === 429 || res.status >= 500) {
+      const prev = ntfyPost._backoff[topic] || 0;
+      const wait = Math.min(15 * 60 * 1000, Math.max(60 * 1000, (prev && prev > Date.now() ? 2 : 1) * 60 * 1000));
+      ntfyPost._backoff[topic] = Date.now() + wait;
+      if (!ntfyPost._rateLogged) {
+        ntfyPost._rateLogged = true;
+        try { console.info("ntfy en pausa (" + res.status + ")."); } catch (e3) {}
       }
     }
-  }).catch(() => {});
+  }).catch(() => {
+    ntfyPost._backoff[topic] = Date.now() + 60 * 1000;
+  });
 }
 function pingCoach(title, text) {
   const line = String(title || "NiuBision") + " — " + String(text || "");
@@ -10267,6 +10296,15 @@ function listenPayAlerts() {
       if (!/pago|pay|invoice|NB-|lead|código|codigo|renov/i.test(msg)) return;
       toast(msg.slice(0, 90));
       cloudPull().then(() => { try { render(); } catch (e2) {} }).catch(() => {});
+    };
+    es.onerror = () => {
+      /* Quiet: ntfy SSE flaps must not block coach UI or spam toasts. */
+      try { es.close(); } catch (e) {}
+      listenPayAlerts._es = null;
+      if (!listenPayAlerts._retry || Date.now() - listenPayAlerts._retry > 120000) {
+        listenPayAlerts._retry = Date.now();
+        setTimeout(() => { try { listenPayAlerts(); } catch (e2) {} }, 60000);
+      }
     };
   } catch (e) {}
 }
@@ -10748,7 +10786,7 @@ async function postPayNotice(row) {
       if (res.ok) { ok = true; break; }
     } catch (e) {}
   }
-  const inbox = [{ id: "in" + Date.now(), type: "pay", name: row.name, plan: row.plan, at: Date.now(), clientId: row.clientId, amount: row.amount, method: row.method, invoice, ref }];
+  const inbox = [{ id: "in" + Date.now(), type: "pay", name: row.name, plan: row.plan, at: Date.now(), clientId: row.clientId, phone: payload.phone || row.phone || "", amount: row.amount, method: row.method, invoice, ref }];
   if (await mirrorPublic("pay", { payments: [row], inbox })) ok = true;
   pingCoach("Pago NiuBision", (row.name || "Cliente") + " · " + (row.amount || "") + " USD · " + (row.method || "") + " · " + invoice);
   return { ok };
@@ -11514,8 +11552,14 @@ function hideInboxNote(id) {
 function noteClient(n) {
   if (!n) return null;
   const id = n.clientId || "";
-  const nm = cleanName(n.name || "");
-  return (state.clients || []).find((c) => (id && c.id === id) || (nm && cleanName(c.name) === nm)) || null;
+  const nm = cleanName(n.name || "").toLowerCase();
+  const ph = phoneNorm(n.phone);
+  return (state.clients || []).find((c) => {
+    if (id && c.id === id) return true;
+    if (ph.length >= 10 && phoneNorm(c.phone) === ph) return true;
+    if (nm && cleanName(c.name).toLowerCase() === nm) return true;
+    return false;
+  }) || null;
 }
 function clientHasValidCode(c) {
   return !!(c && /^\d{6}$/.test(String(c.accessCode || "")) && !isRevoked(c.accessCode, c.id));
@@ -11529,11 +11573,19 @@ function payNoticeDone(n) {
   const cl = noteClient(n);
   if (clientHasValidCode(cl)) return true;
   const id = n.clientId || "";
-  const nm = cleanName(n.name || "");
+  const nm = cleanName(n.name || "").toLowerCase();
+  const ph = phoneNorm(n.phone);
+  const inv = String(n.invoice || n.ref || "");
   const pays = state.payments || [];
-  const hit = pays.find((p) => p && p.status === "recibido" && (
-    (id && p.clientId === id) || (nm && cleanName(p.name || "") === nm)
-  ) && /^\d{6}$/.test(String(p.accessCode || "")));
+  const hit = pays.find((p) => {
+    if (!p || p.status !== "recibido") return false;
+    const match = (id && p.clientId === id)
+      || (ph.length >= 10 && phoneNorm(p.phone) === ph)
+      || (nm && cleanName(p.name || "").toLowerCase() === nm)
+      || (inv && (String(p.invoice || "") === inv || String(p.ref || "") === inv || String(p.id || "") === inv));
+    if (!match) return false;
+    return /^\d{6}$/.test(String(p.accessCode || "")) || clientHasValidCode(noteClient(p));
+  });
   if (hit) return true;
   return false;
 }
@@ -11546,11 +11598,14 @@ function inboxNoteHidden(n) {
 function clearResolvedPayInbox(c) {
   if (!c) return;
   const id = c.id || "";
-  const nm = cleanName(c.name || "");
+  const nm = cleanName(c.name || "").toLowerCase();
+  const ph = phoneNorm(c.phone);
   const m = inboxHideMap();
   state.inbox = (state.inbox || []).filter((n) => {
     if (!n || (n.type !== "pay" && n.type !== "lead")) return true;
-    const hit = (id && n.clientId === id) || (nm && cleanName(n.name || "") === nm);
+    const hit = (id && n.clientId === id)
+      || (ph.length >= 10 && phoneNorm(n.phone) === ph)
+      || (nm && cleanName(n.name || "").toLowerCase() === nm);
     if (!hit) return true;
     if (n.id) m[n.id] = Date.now();
     return false;
@@ -12198,20 +12253,23 @@ function inboxBuckets() {
   // Firmas listas + sin código válido → coach confirma pago a mano (nunca auto-código).
   const paidNoCode = clients.filter((c) => clientAwaitingCode(c));
   const codedIds = new Set(clients.filter((c) => clientHasValidCode(c)).map((c) => c.id));
-  const codedNames = new Set(clients.filter((c) => clientHasValidCode(c)).map((c) => cleanName(c.name)));
+  const codedNames = new Set(clients.filter((c) => clientHasValidCode(c)).map((c) => cleanName(c.name).toLowerCase()));
+  const codedPhones = new Set(clients.filter((c) => clientHasValidCode(c)).map((c) => phoneNorm(c.phone)).filter((p) => p.length >= 10));
   const waiting = [];
   const seenWait = {};
   (state.inbox || []).slice().reverse().forEach((n) => {
     if (!n || (n.type !== "pay" && n.type !== "lead")) return;
     if (inboxNoteHidden(n)) return;
     const id = n.clientId || "";
-    const nm = cleanName(n.name || "");
+    const nm = cleanName(n.name || "").toLowerCase();
+    const ph = phoneNorm(n.phone);
     if (id && codedIds.has(id)) return;
     if (nm && codedNames.has(nm)) return;
-    const cl = clients.find((c) => (id && c.id === id) || (nm && cleanName(c.name) === nm));
+    if (ph.length >= 10 && codedPhones.has(ph)) return;
+    const cl = noteClient(n) || clients.find((c) => (id && c.id === id) || (nm && cleanName(c.name).toLowerCase() === nm) || (ph.length >= 10 && phoneNorm(c.phone) === ph));
     if (clientHasValidCode(cl)) return;
     if (cl && paidNoCode.some((x) => x.id === cl.id)) return;
-    const k = id || nm || n.id;
+    const k = id || (ph.length >= 10 ? ph : "") || nm || n.id;
     if (!k || seenWait[k]) return;
     seenWait[k] = 1;
     waiting.push(Object.assign({}, n, { _client: cl || null }));
@@ -13179,6 +13237,25 @@ function escapeHtml(s) {
 function cleanName(s) {
   return String(s || "").replace(/[<>]/g, "").replace(/\|/g, " ").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 80);
 }
+function phoneNorm(s) {
+  let d = String(s || "").replace(/\D/g, "");
+  if (d.length === 11 && d[0] === "1") d = d.slice(1);
+  return d.length >= 10 ? d.slice(-10) : d;
+}
+function samePerson(a, b) {
+  if (!a || !b) return false;
+  if (a.clientId && b.clientId && String(a.clientId) === String(b.clientId)) return true;
+  if (a.id && b.id && String(a.id) === String(b.id)) return true;
+  if (a.clientId && b.id && String(a.clientId) === String(b.id)) return true;
+  if (a.id && b.clientId && String(a.id) === String(b.clientId)) return true;
+  const pa = phoneNorm(a.phone), pb = phoneNorm(b.phone);
+  if (pa.length >= 10 && pa === pb) return true;
+  const na = cleanName(a.name || ""), nb = cleanName(b.name || "");
+  if (na && nb && na.toLowerCase() === nb.toLowerCase()) return true;
+  if (a.invoice && b.invoice && String(a.invoice) === String(b.invoice)) return true;
+  if (a.ref && b.ref && String(a.ref) === String(b.ref)) return true;
+  return false;
+}
 function originOk() {
   if (location.protocol === "https:") return true;
   const h = location.hostname;
@@ -13299,9 +13376,14 @@ async function checkPin(plain) {
   }
   const p = String(plain || "").trim();
   let ok = false;
-  if (state.pin && p === String(state.pin).trim()) ok = true;
-  if (!ok && state.pinHash && state.pinSalt && canHash()) {
+  if (state.pinHash && state.pinSalt && canHash()) {
     try { ok = (await sha256Hex(state.pinSalt + ":" + p)) === state.pinHash; } catch (e) {}
+  }
+  if (!ok && state.pin && p === String(state.pin).trim()) ok = true;
+  if (!ok && state._legacyPin && p === String(state._legacyPin).trim()) {
+    ok = true;
+    try { await setPin(p); } catch (e) {}
+    state._legacyPin = "";
   }
   if (!ok) {
     const n = (store.get("nb_pin_fails", 0) || 0) + 1;
@@ -13314,8 +13396,13 @@ async function checkPin(plain) {
   }
   store.set("nb_pin_fails", 0);
   store.set("nb_pin_lock", 0);
-  if (ok && p && p !== String(state.pin || "").trim()) state.pin = p;
-  persist();
+  state.pin = p;
+  try { store.set("nb_pin", ""); } catch (e) {}
+  if (!state.pinHash || !state.pinSalt) {
+    try { await setPin(p); } catch (e2) {}
+  } else {
+    persist();
+  }
   return true;
 }
 function resetStudioPin() {
@@ -13969,13 +14056,13 @@ function renderGate() {
       <div class="actions">
         <button class="btn primary" id="haveCode">Entrar</button>
         <button class="btn ghost" id="seePlans">Planes</button>
-        <button class="btn ghost" id="studioLock">Estudio</button>
       </div>
       <div class="quiet-links">
         <button type="button" id="seeAbout">Acerca de</button>
         <button type="button" id="seeCoach">Entrenador</button>
         <button type="button" id="seeSocial">Facebook</button>
         <button type="button" id="seePrivacy">Privacidad</button>
+        <button type="button" id="studioLock">Soy el coach</button>
       </div>
       ${guestTourHtml()}
       <p class="disclaimer">${APP_DISCLAIMER}</p>
@@ -13985,6 +14072,19 @@ function renderGate() {
     $("#logoPulse").classList.add("spin");
     setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
   };
+  /* Long-press logo (~1.2s) also opens coach PIN — quiet secondary path. */
+  (function bindCoachHold() {
+    const el = $("#logoPulse");
+    if (!el) return;
+    let t = 0, hold = null;
+    const clear = () => { if (hold) { clearTimeout(hold); hold = null; } };
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button && e.button !== 0) return;
+      clear();
+      hold = setTimeout(() => { hold = null; openCoachGate(); }, 1200);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => el.addEventListener(ev, clear));
+  })();
   const hc = $("#haveCode"); if (hc) hc.onclick = openCodeEntry;
   const sp = $("#seePlans"); if (sp) sp.onclick = () => { state.role = "guest"; state.view = "price"; persist(); render(); };
   const sa = $("#seeAbout"); if (sa) sa.onclick = () => { state.role = "guest"; state.view = "about"; persist(); render(); };
@@ -14140,8 +14240,11 @@ function openCoachGate() {
         const sess = await authLogin("coach", a);
         ok = !!(sess && sess.token);
         if (ok) await setPin(a);
-      } else {
+      } else if (state.pinHash || state.pin || state._legacyPin) {
         ok = await checkPin(a);
+      } else {
+        toast("Sin conexión. Entre en línea una vez para validar la clave.");
+        return;
       }
       if (!ok) {
         if (!pinLocked() && (store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
@@ -16000,7 +16103,11 @@ function peopleView() {
     </div>
     ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
     ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => {
-      const clPay = (state.clients || []).find((c) => (p.clientId && c.id === p.clientId) || (p.name && cleanName(c.name) === cleanName(p.name)));
+      const clPay = (state.clients || []).find((c) =>
+        (p.clientId && c.id === p.clientId)
+        || (phoneNorm(p.phone).length >= 10 && phoneNorm(c.phone) === phoneNorm(p.phone))
+        || (p.name && cleanName(c.name).toLowerCase() === cleanName(p.name).toLowerCase())
+      );
       const coded = clientHasValidCode(clPay) || /^\d{6}$/.test(String(p.accessCode || ""));
       let payAct = "";
       if (p.status === "recibido" || coded) {
@@ -18135,6 +18242,15 @@ async function boot() {
   } else {
     await ensureStudioPin();
   }
+  /* One-shot: hash any leftover plaintext PIN then wipe localStorage nb_pin. */
+  if (state._legacyPin && !state.pinHash) {
+    try { await setPin(state._legacyPin); } catch (e) {}
+    state._legacyPin = "";
+  } else if (state._legacyPin) {
+    state._legacyPin = "";
+  }
+  try { store.set("nb_pin", ""); } catch (e) {}
+  if (!store.get("nb_pin_hash_only_v49")) store.set("nb_pin_hash_only_v49", 1);
   if (!store.get("nb_pay_v2")) {
     state.settings.pay = { paypal: PAYPAL_DEST, ath: ATH_DEST };
     store.set("nb_pay_v2", 1);
@@ -18183,8 +18299,8 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) {
     const bootSw = async () => {
-      if (store.get("nb_sw") !== "48") {
-        store.set("nb_sw", "48");
+      if (store.get("nb_sw") !== "49") {
+        store.set("nb_sw", "49");
         try {
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
@@ -18197,7 +18313,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=48", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=49", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
