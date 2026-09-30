@@ -9607,11 +9607,12 @@ function todayKey() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
-function toast(msg) {
+function toast(msg, ms) {
   let t = $("#toast");
   if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
   t.textContent = msg; t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2200);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), Math.max(800, Number(ms) || 2200));
 }
 function closeModals() {
   document.querySelectorAll(".modal").forEach((m) => { try { m.remove(); } catch (e) {} });
@@ -11568,13 +11569,93 @@ function syncBannerHtml() {
   const online = isOnline();
   const line = lastSyncLabel();
   if (!online) {
-    return `<div class="sync-banner offline">Sin conexión · ${escapeHtml(line)}</div>`;
+    return `<div class="sync-banner offline">Sin conexión · el trabajo sigue aquí · ${escapeHtml(line)}</div>`;
   }
   if (state.role === "client" || state.role === "coach") {
-    return `<div class="sync-banner">Nube · ${escapeHtml(line)}</div>`;
+    return `<div class="sync-banner">Al día · ${escapeHtml(line)}</div>`;
   }
   return "";
 }
+
+function assignNoticeHtml() {
+  if (state.role !== "client") return "";
+  let n = null;
+  try { n = store.get("nb_assign_notice", null); } catch (e) { n = null; }
+  if (!n || !n.name) return "";
+  return `<div class="card assign-notice nb-fade" id="assignNotice">
+    <p class="tagline">Listo</p>
+    <h3>Miguel te asignó ${escapeHtml(String(n.name))}</h3>
+    <p class="muted">Ya está en Hoy. Toque Empezar cuando quiera entrenar.</p>
+    <button class="btn ghost" type="button" id="dismissAssignNotice">Entendido</button>
+  </div>`;
+}
+function bindAssignNotice() {
+  const b = $("#dismissAssignNotice");
+  if (!b) return;
+  b.onclick = () => {
+    try { store.set("nb_assign_notice", null); } catch (e) {}
+    const el = $("#assignNotice");
+    if (el) el.remove();
+  };
+}
+function dayOneWelcomeBannerHtml() {
+  if (state.role !== "client") return "";
+  const flag = store.get("nb_welcome_v43", null);
+  if (flag === 1 || flag === true) return "";
+  // Only after fresh unlock (armed to 0) — not for every existing client
+  if (flag !== 0) return "";
+  const rt = activeRoutine();
+  const has = rt && rt.daysPlan && rt.daysPlan.length;
+  if (has) {
+    const di = dayIndex(rt) % rt.daysPlan.length;
+    const day = rt.daysPlan[di];
+    const title = day ? programDayLabel(di, day) : "su sesión";
+    return `<div class="card welcome-dayone nb-fade" id="welcomeDayone">
+      <p class="tagline">Bienvenido</p>
+      <h3>Hoy toca ${escapeHtml(title)} · empecemos</h3>
+      <p class="muted">Un toque y entra al primer ejercicio. Series y reps claros; marque Listo al cerrar cada serie.</p>
+      <div class="actions">
+        <button class="btn primary" type="button" id="welcomeStartHoy">Empezar</button>
+        <button class="btn ghost" type="button" id="welcomeDismiss">Ahora no</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="card welcome-dayone nb-fade" id="welcomeDayone">
+    <p class="tagline">Bienvenido</p>
+    <h3>Miguel te asigna pronto</h3>
+    <p class="muted">Mientras, puede pedir un programa. Miguel lo ve en Bandeja — no se cambia solo.</p>
+    <div class="actions">
+      <button class="btn primary" type="button" id="welcomePedir">Pedir programa</button>
+      <button class="btn ghost" type="button" id="welcomeDismiss">Entendido</button>
+    </div>
+  </div>`;
+}
+function bindWelcomeDayone() {
+  const dismiss = () => {
+    store.set("nb_welcome_v43", 1);
+    const el = $("#welcomeDayone");
+    if (el) el.remove();
+  };
+  const d = $("#welcomeDismiss");
+  if (d) d.onclick = dismiss;
+  const go = $("#welcomeStartHoy");
+  if (go) go.onclick = () => {
+    dismiss();
+    state.view = "work";
+    persist();
+    render();
+    const btn = $("#goLive");
+    if (btn) btn.click();
+  };
+  const pedir = $("#welcomePedir");
+  if (pedir) pedir.onclick = () => {
+    dismiss();
+    state.view = "programas";
+    persist();
+    render();
+  };
+}
+
 function notifyLocal(title, body, url) {
   try {
     store.set("nb_notify", (typeof Notification !== "undefined" && Notification.permission === "granted") ? 1 : store.get("nb_notify", 0));
@@ -11642,8 +11723,13 @@ async function clientCloudRefresh() {
   });
   try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
   persist();
-  if (prevRoutine && hit.routine && hit.routine !== prevRoutine) {
-    notifyLocal("Programa listo", "Miguel aprobó su programa. Ábralo en Hoy.", "/?view=work");
+  if (hit.routine && hit.routine !== prevRoutine) {
+    const rt = findRoutine(hit.routine);
+    const label = (rt && (shortName(rt) || rt.name)) || hit.routine;
+    try {
+      store.set("nb_assign_notice", { name: label, at: Date.now(), routineId: hit.routine });
+    } catch (e) {}
+    notifyLocal("Programa listo", "Miguel te asignó " + label + ". Ábralo en Hoy.", "/?view=work");
   }
   return { ok: true, routine: hit.routine || "" };
 }
@@ -11727,7 +11813,7 @@ function requestProgram(routineId) {
   const dup = pendingProgramRequests().find((x) => x.routineId === r.id && (
     (clientId && x.clientId === clientId) || cleanName(x.name || "") === name
   ));
-  if (dup) { toast("Ya pidió este programa. Miguel lo ve en Bandeja."); return dup; }
+  if (dup) { toast("Ya está enviado a Miguel"); return dup; }
   const row = {
     id: "pr" + Date.now(),
     type: "program_req",
@@ -11763,8 +11849,8 @@ function requestProgram(routineId) {
   }).catch(() => {});
   scheduleClientPush();
   pingCoach("Pedido de programa", (row.name || "Cliente") + " pide " + (row.routineName || row.routineId || "programa"));
-  notifyLocal("Pedido enviado", "Miguel lo ve en Bandeja.", "/?view=programas");
-  toast("Pedido enviado. Miguel lo ve en Bandeja.");
+  notifyLocal("Enviado a Miguel", "Lo ve en Bandeja.", "/?view=programas");
+  toast("Enviado a Miguel");
   return row;
 }
 function clearProgramReqInbox(reqId) {
@@ -11920,9 +12006,14 @@ function programaCardHtml(r) {
   let actions = `<button class="btn small ghost" type="button" data-prog-ver="${escAttr(r.id)}">Ver</button>`;
   if (state.role === "client") {
     const codeOk = /^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""));
-    actions += codeOk
-      ? `<button class="btn small primary" type="button" data-prog-pedir="${escAttr(r.id)}">Pedir a Miguel</button>`
-      : `<span class="muted">Entre con su código para pedir</span>`;
+    const pending = pendingProgramRequests().some((x) => x.routineId === r.id);
+    if (pending) {
+      actions += `<span class="st-chip ok prog-badge pedir-sent">Enviado a Miguel</span>`;
+    } else if (codeOk) {
+      actions += `<button class="btn small primary" type="button" data-prog-pedir="${escAttr(r.id)}">Pedir a Miguel</button>`;
+    } else {
+      actions += `<span class="muted">Entre con su código para pedir</span>`;
+    }
   } else if (state.role === "coach") {
     actions += `<button class="btn small primary" type="button" data-prog-asignar="${escAttr(r.id)}">Asignar</button>`;
     actions += `<button class="btn small ghost" type="button" data-prog-asignarwa="${escAttr(r.id)}">Asignar + WA</button>`;
@@ -11947,7 +12038,7 @@ function programasView() {
         <button class="btn ghost" type="button" id="progOpenAi">Generar con IA</button>
         <button class="btn ghost" type="button" data-view="rutinas">Editor completo</button>
       </div>`
-    : `<p class="muted" style="margin-bottom:10px">Hoy muestra solo su programa activo. Aquí puede pedir otro a Miguel — no se cambia solo.</p>`;
+    : `<p class="muted" style="margin-bottom:10px">Hoy muestra solo su programa activo. Aquí pide otro a Miguel — él aprueba en Bandeja; no se cambia solo.</p>`;
   const shelves = {};
   list.forEach((r) => {
     const k = kindOf(r);
@@ -11983,7 +12074,15 @@ function bindProgramas() {
   $$("[data-prog-days]").forEach((b) => b.onclick = () => { state.progDays = b.dataset.progDays || ""; render(); });
   $$("[data-prog-kind]").forEach((b) => b.onclick = () => { state.progKind = b.dataset.progKind || ""; render(); });
   $$("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
-  $$("[data-prog-pedir]").forEach((b) => b.onclick = () => { requestProgram(b.dataset.progPedir); });
+  $$("[data-prog-pedir]").forEach((b) => b.onclick = () => {
+    const row = requestProgram(b.dataset.progPedir);
+    if (row) {
+      b.disabled = true;
+      b.textContent = "Enviado a Miguel";
+      b.classList.add("pedir-sent-btn");
+      render();
+    }
+  });
   $$("[data-prog-asignar]").forEach((b) => b.onclick = () => {
     const cur = currentClient();
     if (cur) {
@@ -12826,13 +12925,56 @@ function activeRoutine() {
     : state.profile.routine || "full-inicio";
   return findRoutine(id) || findRoutine("full-inicio");
 }
+/** Week starts Monday: 0=Lunes … 6=Domingo (never JS Sunday-first). */
+const WEEKDAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const WEEKDAYS_SHORT = ["L", "M", "X", "J", "V", "S", "D"];
+function mondayWeekIndex(d) {
+  const x = d instanceof Date ? d : new Date();
+  return (x.getDay() + 6) % 7;
+}
+/** Program Día 1 (slot 0) = Lunes, Día 2 = Martes, … Día 7 = Domingo. */
+function programWeekdayName(daySlot0) {
+  return WEEKDAYS_ES[((Number(daySlot0) || 0) % 7 + 7) % 7];
+}
+function programDayFocus(title) {
+  return String(title || "").replace(/^Día\s*[0-9A-Za-zÁÉÍÓÚáéíóúñÑ]+\s*(·\s*)?/i, "").trim();
+}
+/** Display label: "Lunes" or "Lunes · Sentadilla y empuje" — does not mutate stored titles. */
+function programDayLabel(daySlot0, dayOrTitle) {
+  const wd = programWeekdayName(daySlot0);
+  const title = typeof dayOrTitle === "string" ? dayOrTitle : ((dayOrTitle && dayOrTitle.title) || "");
+  const focus = programDayFocus(title);
+  return focus ? (wd + " · " + focus) : wd;
+}
+function dayWhoKey() {
+  return state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
+}
 function dayIndex(rt) {
-  const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
-  return store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, 0));
+  if (!rt || !rt.id) return 0;
+  const who = dayWhoKey();
+  const jump = store.get("nb_day_jump_" + who + "_" + rt.id, null);
+  if (jump && jump.date === todayKey() && jump.i != null) {
+    const n = (rt.daysPlan && rt.daysPlan.length) || 1;
+    return ((Number(jump.i) % n) + n) % n;
+  }
+  const n = (rt.daysPlan && rt.daysPlan.length) || 1;
+  const monIdx = mondayWeekIndex();
+  // Calendar: Mon→Día 1 …; beyond plan length = rest → keep last stored slot for jump UI
+  if (monIdx < n) return monIdx;
+  return store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, Math.max(0, n - 1)));
 }
 function setDayIndex(rt, n) {
-  const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
-  store.set("nb_day_" + who + "_" + rt.id, n);
+  const who = dayWhoKey();
+  const days = (rt.daysPlan && rt.daysPlan.length) || 1;
+  const i = ((Number(n) % days) + days) % days;
+  store.set("nb_day_" + who + "_" + rt.id, i);
+  store.set("nb_day_jump_" + who + "_" + rt.id, { date: todayKey(), i: i });
+}
+function isProgramRestDay(rt) {
+  if (!rt || !rt.daysPlan || !rt.daysPlan.length) return false;
+  const jump = store.get("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
+  if (jump && jump.date === todayKey()) return false;
+  return mondayWeekIndex() >= rt.daysPlan.length;
 }
 function sessionKey(rt) {
   const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
@@ -12941,12 +13083,12 @@ function waReady(kind, extra) {
   return "Miguel, soy " + who + ".";
 }
 function weekDots() {
-  const names = ["D", "L", "M", "X", "J", "V", "S"];
+  // Must match mondayWeekIndex / weekRangeLocal: index 0 = Lunes
+  const names = WEEKDAYS_SHORT;
   const done = new Set(state.history.map((h) => h.date));
   const now = new Date();
-  const day = now.getDay();
   const mon = new Date(now);
-  mon.setDate(now.getDate() - ((day + 6) % 7));
+  mon.setDate(now.getDate() - mondayWeekIndex(now));
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
@@ -14452,7 +14594,7 @@ function header() {
         if (!isNaN(d.getTime())) syncLine = "Última sync: " + d.toLocaleString("es-PR", { dateStyle: "short", timeStyle: "short" });
       } catch (e) {}
     }
-    return `<div class="offline-bar">Sin conexión · el trabajo queda en este teléfono · ${syncLine}</div>`;
+    return `<div class="offline-bar">Sin conexión · el trabajo sigue aquí · ${syncLine}</div>`;
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
@@ -14736,7 +14878,7 @@ function homeView() {
       <span>Videos <b>${vids}/2</b></span>
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
-    ${day ? `<div class="card"><h3>Hoy · ${escapeHtml(day.title)}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : ""}
+    ${day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(dayIndex(rt) % daysPlan.length, day))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios${isProgramRestDay(rt) ? " · hoy descanso del plan" : ""}</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : ""}
     ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     ${(state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
@@ -14832,8 +14974,8 @@ function weekPeekHtml(rt, di) {
   if (!rt || !rt.daysPlan) return "";
   return `<details class="more-fold week-peek">
     <summary>Ver los ${rt.daysPlan.length} días de esta rutina</summary>
-    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")}</p>
-    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : "Día " + (i + 1) + " · "}${escapeHtml(d.title)}</h3>
+    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")} · Día 1 = Lunes</p>
+    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : ""}${escapeHtml(programDayLabel(i, d))}</h3>
       ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(displayName(it))}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
     </div>`).join("")}
     <button type="button" class="btn ghost" id="seeWeekRt">Abrir ficha de la rutina</button>
@@ -14882,7 +15024,7 @@ function pickerOptions(list, currentId) {
 function workClientAskHtml() {
   return `<div class="work-pick">
     <p class="muted">Hoy muestra solo su programa activo. Pedir otro no lo cambia solo — Miguel lo ve en Bandeja.</p>
-    <button class="btn primary" type="button" data-view="programas">Pedir en Programas</button>
+    <button class="btn primary" type="button" data-view="programas">Pedir a Miguel</button>
   </div>`;
 }
 function workPickerHtml(band, list, currentId) {
@@ -14954,10 +15096,25 @@ function workView() {
   const pool = routinesByBand(band);
   const list = pool.length ? pool : routinesOfBand(band);
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
+    const emptyClient = state.role === "client"
+      ? nbEmpty({
+          icon: "◆",
+          title: "Miguel te asigna pronto",
+          hint: "Aún no hay programa activo. Puede pedir uno; Miguel lo aprueba en Bandeja. No se cambia solo.",
+          cta: `<button class="btn primary" type="button" data-view="programas">Pedir programa</button>`
+        })
+      : nbEmpty({
+          icon: "◆",
+          title: "Hoy sin programa",
+          hint: "Aún no hay rutina activa. Elija una abajo o asigne desde Programas.",
+          cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>`
+        });
     return `<section class="screen"><p class="tagline">Hoy</p>
       ${syncBannerHtml()}
-      ${nbEmpty({ icon: "◆", title: "Hoy sin programa", hint: "Aún no hay rutina activa. Pida una en Programas o espere a que Miguel asigne.", cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>` })}
-      ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, "")}
+      ${assignNoticeHtml()}
+      ${dayOneWelcomeBannerHtml()}
+      ${emptyClient}
+      ${state.role === "client" ? "" : workPickerHtml(band, list, "")}
     </section>`;
   }
   const di = dayIndex(rt) % rt.daysPlan.length;
@@ -14978,20 +15135,28 @@ function workView() {
   const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
   const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz sí":"Voz no"}</button>`;
   if (!live) {
+    const dayLab = programDayLabel(di, day);
+    const hoyLine = state.role === "client"
+      ? (`Hoy toca ${escapeHtml(dayLab)} · empecemos`)
+      : escapeHtml(dayLab);
+    const restNote = isProgramRestDay(rt) ? `<p class="muted">Hoy es descanso en el calendario (Día 1 = Lunes). Puede saltar a otro día abajo.</p>` : "";
     return `<section class="screen session-start">
       ${syncBannerHtml()}
-      <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)}</p>${voiceBtn}</div>
-      <h2>${escapeHtml(day.title)}</h2>
-      <p class="muted">${escapeHtml(rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
+      ${assignNoticeHtml()}
+      ${dayOneWelcomeBannerHtml()}
+      <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)}</p>${voiceBtn}</div>
+      <h2>${hoyLine}</h2>
+      ${restNote}
+      <p class="muted">${escapeHtml(shortName(rt) || rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
       ${packChip(selfClient())}
       ${floorLine()}
       ${renewBannerHtml()}
       ${(selfClient() && selfClient().cue) ? `<div class="card"><h3>De Miguel</h3><p>${escapeHtml(selfClient().cue)}</p></div>` : ""}
       <p class="tagline" style="margin:14px 0 0">Hoy va a hacer esto</p>
       ${dayPreviewHtml(day)}
-      <p class="muted">Toque un ejercicio para ver la foto y la técnica. El reloj no corre hasta Empezar.</p>
+      <p class="muted">Un toque abre el primer ejercicio. Series y reps quedan claros; marque Listo al cerrar cada serie.</p>
       ${weekPeekHtml(rt, di)}
-      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Revise la lista. Empezar abre el primer ejercicio y arranca el reloj. Dentro puede pausar.</p><button class="btn primary go" id="goLive">Empezar</button>`}
+      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Empezar abre el primer ejercicio y arranca el reloj. Dentro puede pausar.</p><button class="btn primary go" id="goLive">Empezar</button>`}
       <div class="actions" style="margin-top:8px">
         <button type="button" class="btn ghost" id="seeRoutinesHoy">Ver Programas</button>
         <button type="button" class="btn ghost" data-view="book">Biblioteca de ejercicios</button>
@@ -15000,13 +15165,14 @@ function workView() {
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
       </details>
     </section>`;
   }
   return `<section class="screen focus-session">
-    <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)} · ${escapeHtml(rt.name)}</p>${voiceBtn}</div>
-    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
+    ${assignNoticeHtml()}
+    <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)} · ${escapeHtml(shortName(rt) || rt.name)}</p>${voiceBtn}</div>
+    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(programDayLabel(di, day))}</h2>
     <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · Tiempo <span id="sessClock">00:00</span></p>
     <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ${state.sessStart ? "ghost" : "mint"}" id="startSess">${state.sessStart ? "Pausar" : (state.sessElapsed ? "Seguir" : "Empezar")}</button></div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
@@ -15014,7 +15180,7 @@ function workView() {
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
       ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
     </details>
     ${ses.items.map((it, i) => {
       const ex = findEx(it.exId);
@@ -15034,14 +15200,14 @@ function workView() {
         </header>
         <div class="work-body">
         <div class="rest-dock"${open===i ? ' id="restDock"' : ""}></div>
-        <div class="set-row muted" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase"><span>#</span><span>Peso</span><span>Reps</span><span>Ok</span></div>
+        <div class="set-row muted" style="font-size:11px;letter-spacing:.06em;text-transform:uppercase"><span>Serie</span><span>Peso</span><span>Reps</span><span>Listo</span></div>
         ${it.sets.map((s, si) => `<div class="set-row ${s.done?"done":""}">
           <span>${si + 1}</span>
           <div class="stepper"><button type="button" data-adj="${i}|${si}|w|-">−</button>
           <input class="field" data-w="${i}-${si}" value="${escapeHtml(String(s.w || last || ""))}" inputmode="decimal" placeholder="${escapeHtml(String(last || "lb"))}" aria-label="Peso">
           <button type="button" data-adj="${i}|${si}|w|+">+</button></div>
           <input class="field" data-r="${i}-${si}" value="${escapeHtml(String(s.r || (prev && prev.r) || ""))}" placeholder="${escapeHtml(String((prev && prev.r) || "reps"))}" inputmode="numeric" aria-label="Reps">
-          <label class="set-check"><input type="checkbox" data-d="${i}-${si}" ${s.done?"checked":""} aria-label="Serie lista"></label>
+          <label class="set-check" title="Listo"><input type="checkbox" data-d="${i}-${si}" ${s.done?"checked":""} aria-label="Listo"></label>
         </div>`).join("")}
         <div class="work-tools">
           <button class="btn small ghost" data-addset="${i}">+ serie</button>
@@ -15094,6 +15260,8 @@ function beep(freq, ms) {
 }
 
 function bindWork() {
+  bindWelcomeDayone();
+  bindAssignNotice();
   const rt = activeRoutine();
   const voice = $("#voiceToggle");
   if (voice) voice.onclick = (e) => {
@@ -15187,7 +15355,8 @@ function bindWork() {
       const it = ses.items[idx];
       const setNo = Number(String(el.dataset.d || "").split("-")[1] || 0) + 1;
       const setMax = (it && it.sets && it.sets.length) || 0;
-      speak("Serie " + setNo + " de " + setMax);
+      toast("Listo · serie " + setNo + " de " + setMax, 1100);
+      speak("Listo. Serie " + setNo + " de " + setMax);
       const last = parseFloat(lastLoad(it && it.exId)) || 0;
       const wEl = article && article.querySelector(`[data-w="${idx}-${el.dataset.d.split("-")[1]}"]`);
       const now = parseFloat(wEl && wEl.value) || 0;
@@ -15876,7 +16045,7 @@ function openRoutine(id) {
   modal.innerHTML = `<div class="sheet"><div class="handle"></div>
     <p class="tagline">${r.level} · ${r.place}</p><h2>${r.name}</h2><p>${r.goal}</p>
     ${r.evidence ? `<p class="muted" style="margin:8px 0 12px">${r.evidence}</p>` : ""}
-    ${r.daysPlan.map((d) => `<div class="card"><h3>${d.title}</h3>${d.items.map((it) => `<div class="list-row"><span>${it.name}</span><span class="muted">${it.sets} × ${it.reps}</span></div>`).join("")}</div>`).join("")}
+    ${r.daysPlan.map((d, i) => `<div class="card"><h3>${escapeHtml(programDayLabel(i, d))}</h3>${d.items.map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}</div>`).join("")}
     <div class="actions">${state.role === "client"
       ? (/^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""))
         ? `<button class="btn primary" type="button" id="pedirRt">Pedir a Miguel</button><button class="btn ghost" type="button" id="closeSheet">Cerrar</button>`
@@ -16576,33 +16745,55 @@ function showDay1IfNeeded() {
   if (store.get("nb_day1_seen")) return;
   if (!(state.profile && state.profile.unlocked)) return;
   store.set("nb_day1_seen", 1);
+  store.set("nb_welcome_v43", 0); // allow inline welcome once on Hoy
   const rt = typeof activeRoutine === "function" ? activeRoutine() : null;
-  const day = rt && rt.daysPlan ? rt.daysPlan[(typeof dayIndex === "function" ? dayIndex(rt) : 0) % rt.daysPlan.length] : null;
-  const trustOk = (typeof waiverSigned === "function" && waiverSigned()) && (typeof healthComplete === "function" && healthComplete());
+  const _di0 = rt && rt.daysPlan && rt.daysPlan.length
+    ? ((typeof dayIndex === "function" ? dayIndex(rt) : 0) % rt.daysPlan.length)
+    : 0;
+  const day = rt && rt.daysPlan && rt.daysPlan.length ? rt.daysPlan[_di0] : null;
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = `<div class="sheet">
-    <div class="handle"></div>
-    <p class="tagline">Tu día 1</p>
-    <h2>Hoy empieza el trabajo.</h2>
-    <p class="muted">${day ? ("Foco: " + escapeHtml(day.title)) : "Abra Hoy y cierre la primera serie."}</p>
-    ${!trustOk ? `<p class="muted">Si falta algún papel de confianza, puede completarlo luego. Hoy el foco es la primera serie.</p>` : `<p class="muted">Papeles listos. Empiece y cierre la primera serie.</p>`}
-    <div class="actions">
-      <button class="btn primary" id="day1Go">Ir a Hoy</button>
-      ${!trustOk ? `<button class="btn ghost" id="day1Trust">Confianza (opcional)</button>` : ""}
-      <button class="btn ghost" id="closeSheet">Seguir</button>
-    </div>
-  </div>`;
+  if (day) {
+    modal.innerHTML = `<div class="sheet nb-fade">
+      <div class="handle"></div>
+      <p class="tagline">Bienvenido</p>
+      <h2>Hoy toca ${escapeHtml(programDayLabel(_di0, day))} · empecemos</h2>
+      <p class="muted">Un toque y entra al primer ejercicio. No hace falta recorrer todas las pestañas.</p>
+      <div class="actions">
+        <button class="btn primary" id="day1Go">Empezar</button>
+        <button class="btn ghost" id="closeSheet">Ahora no</button>
+      </div>
+    </div>`;
+  } else {
+    modal.innerHTML = `<div class="sheet nb-fade">
+      <div class="handle"></div>
+      <p class="tagline">Bienvenido</p>
+      <h2>Miguel te asigna pronto</h2>
+      <p class="muted">Mientras, pida un programa. Miguel lo ve en Bandeja — no se cambia solo.</p>
+      <div class="actions">
+        <button class="btn primary" id="day1Pedir">Pedir programa</button>
+        <button class="btn ghost" id="closeSheet">Entendido</button>
+      </div>
+    </div>`;
+  }
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
   const go = modal.querySelector("#day1Go");
-  if (go) go.onclick = () => { modal.remove(); state.view = "work"; persist(); render(); };
-  const tr = modal.querySelector("#day1Trust");
-  if (tr) tr.onclick = () => {
+  if (go) go.onclick = () => {
     modal.remove();
-    if (!waiverSigned()) openWaiver(() => { if (!healthComplete()) openHealth(); else render(); });
-    else if (!healthComplete()) openHealth();
-    else render();
+    store.set("nb_welcome_v43", 1);
+    state.view = "work";
+    persist();
+    render();
+    setTimeout(() => { const b = $("#goLive"); if (b) b.click(); }, 80);
+  };
+  const pedir = modal.querySelector("#day1Pedir");
+  if (pedir) pedir.onclick = () => {
+    modal.remove();
+    store.set("nb_welcome_v43", 1);
+    state.view = "programas";
+    persist();
+    render();
   };
 }
 
@@ -16630,7 +16821,7 @@ function openCodeEntry() {
       if (errEl) { errEl.textContent = msg || ""; errEl.hidden = !msg; }
       if (msg) toast(msg);
     };
-    if (btn) { btn.disabled = true; btn.textContent = "Comprobando…"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Un momento…"; }
     setErr("");
     try {
     let a = parseClientCode(raw);
@@ -16681,7 +16872,14 @@ function openCodeEntry() {
     state.view = "work";
     persist();
     render();
-    toast("Bienvenido. Hoy se entrena.");
+    (function () {
+      const rt0 = activeRoutine();
+      const day0 = rt0 && rt0.daysPlan && rt0.daysPlan.length
+        ? rt0.daysPlan[dayIndex(rt0) % rt0.daysPlan.length]
+        : null;
+      if (day0) toast("Hoy toca " + day0.title + " · empecemos");
+      else toast("Bienvenido. Miguel te asigna pronto.");
+    })();
     setTimeout(() => showDay1IfNeeded(), 350);
     } finally {
       if (btn && document.body.contains(btn)) {
@@ -17544,7 +17742,7 @@ function bindEditor() {
   const addDay = $("#addDay");
   if (addDay) addDay.onclick = () => {
     collectDraftFromDom();
-    state.editDraft.daysPlan.push({ title: "Día nuevo", items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
+    const _di = state.editDraft.daysPlan.length; state.editDraft.daysPlan.push({ title: programWeekdayName(_di) + (_di > 6 ? " · extra" : ""), items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
     render();
   };
   $("#cancelRt").onclick = () => { state.editDraft = null; render(); };
@@ -17884,7 +18082,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=42", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=44", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
