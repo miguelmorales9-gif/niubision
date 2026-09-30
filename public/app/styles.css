@@ -629,3 +629,30 @@ img { background: transparent; }
   border-color: rgba(243,177,132,.28);
   color: var(--peach);
 }
+
+
+/* v43 — day-one + Pedir feedback */
+.welcome-dayone, .assign-notice {
+  border-color: var(--gold-dim);
+  margin-bottom: 12px;
+}
+.welcome-dayone h3, .assign-notice h3 {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.15;
+  margin: 4px 0 8px;
+}
+.welcome-dayone .actions, .assign-notice .actions {
+  margin-top: 10px;
+}
+.pedir-sent {
+  align-self: center;
+}
+.pedir-sent-btn {
+  opacity: .85;
+  pointer-events: none;
+}
+.focus-session .set-row.done .set-check {
+  filter: drop-shadow(0 0 6px rgba(143,203,179,.55));
+}
