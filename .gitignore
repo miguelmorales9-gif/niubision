@@ -1,0 +1,3 @@
+cloud/.wrangler/
+.vapid-local.json
+*.pem

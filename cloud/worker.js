@@ -1,3 +1,4 @@
+import { sendWebPush } from "./webpush.js";
 const COACH_MAIL = "miguel.morales9@gmail.com";
 const LEGACY = "nb-cloud-v1";
 
@@ -400,6 +401,125 @@ async function mailReceipt(row) {
   }
 }
 
+
+function vapidCfg(env) {
+  const publicKey = String((env && env.VAPID_PUBLIC_KEY) || "").trim();
+  const privateKey = String((env && env.VAPID_PRIVATE_KEY) || "").trim();
+  const subject = String((env && env.VAPID_SUBJECT) || "mailto:miguel.morales9@gmail.com").trim();
+  if (!publicKey || !privateKey) return null;
+  return { publicKey, privateKey, subject };
+}
+
+function normSub(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const endpoint = String(raw.endpoint || "").trim();
+  const keys = raw.keys || {};
+  const p256dh = String(keys.p256dh || "").trim();
+  const auth = String(keys.auth || "").trim();
+  if (!/^https:\/\//i.test(endpoint) || !p256dh || !auth) return null;
+  return {
+    endpoint,
+    expirationTime: raw.expirationTime == null ? null : raw.expirationTime,
+    keys: { p256dh, auth },
+    role: String(raw.role || "").toLowerCase() === "client" ? "client" : "coach",
+    clientId: String(raw.clientId || "").slice(0, 64),
+    accessCode: String(raw.accessCode || "").replace(/\D/g, "").slice(0, 6),
+    at: Date.now()
+  };
+}
+
+function pushBucket(row) {
+  row.push = row.push && typeof row.push === "object" ? row.push : { coach: [], clients: {} };
+  if (!Array.isArray(row.push.coach)) row.push.coach = [];
+  if (!row.push.clients || typeof row.push.clients !== "object") row.push.clients = {};
+  return row.push;
+}
+
+function upsertSub(list, sub) {
+  const next = (list || []).filter((s) => s && s.endpoint && s.endpoint !== sub.endpoint);
+  next.unshift({
+    endpoint: sub.endpoint,
+    expirationTime: sub.expirationTime,
+    keys: sub.keys,
+    at: sub.at || Date.now()
+  });
+  return next.slice(0, 8);
+}
+
+function dropEndpoint(row, endpoint) {
+  const b = pushBucket(row);
+  b.coach = (b.coach || []).filter((s) => s && s.endpoint !== endpoint);
+  Object.keys(b.clients || {}).forEach((cid) => {
+    b.clients[cid] = (b.clients[cid] || []).filter((s) => s && s.endpoint !== endpoint);
+    if (!b.clients[cid].length) delete b.clients[cid];
+  });
+}
+
+async function deliverPush(env, row, targets, payload) {
+  const vapid = vapidCfg(env);
+  if (!vapid || !targets || !targets.length) return { sent: 0, gone: 0 };
+  let sent = 0;
+  let gone = 0;
+  const body = Object.assign({ title: "NiuBision" }, payload || {});
+  for (const sub of targets) {
+    if (!sub || !sub.endpoint) continue;
+    try {
+      const r = await sendWebPush(sub, body, vapid, { ttl: 86400, urgency: "high", topic: String(body.tag || "nb").slice(0, 32) });
+      if (r.ok) sent += 1;
+      if (r.gone) {
+        gone += 1;
+        dropEndpoint(row, sub.endpoint);
+      }
+    } catch (e) {}
+  }
+  return { sent, gone };
+}
+
+function coachSubs(row) {
+  return (pushBucket(row).coach || []).slice();
+}
+
+function clientSubs(row, clientId, accessCode) {
+  const b = pushBucket(row);
+  const out = [];
+  const seen = new Set();
+  const add = (list) => {
+    (list || []).forEach((s) => {
+      if (!s || !s.endpoint || seen.has(s.endpoint)) return;
+      seen.add(s.endpoint);
+      out.push(s);
+    });
+  };
+  if (clientId && b.clients[clientId]) add(b.clients[clientId]);
+  if (accessCode) {
+    const hit = ((row.state && row.state.clients) || []).find((c) => String(c.accessCode || "") === String(accessCode));
+    if (hit && hit.id && b.clients[hit.id]) add(b.clients[hit.id]);
+  }
+  return out;
+}
+
+async function notifyCoach(env, row, title, body, url, tag) {
+  const r = await deliverPush(env, row, coachSubs(row), {
+    title: String(title || "NiuBision").slice(0, 48),
+    body: String(body || "").slice(0, 120),
+    url: url || "/?view=inbox",
+    tag: tag || "nb-coach"
+  });
+  if (r.gone) await putRow(env, row);
+  return r;
+}
+
+async function notifyClient(env, row, clientId, accessCode, title, body, url, tag) {
+  const r = await deliverPush(env, row, clientSubs(row, clientId, accessCode), {
+    title: String(title || "NiuBision").slice(0, 48),
+    body: String(body || "").slice(0, 120),
+    url: url || "/?view=work",
+    tag: tag || "nb-client"
+  });
+  if (r.gone) await putRow(env, row);
+  return r;
+}
+
 async function handle(req, env) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/$/, "") || "/";
@@ -415,7 +535,7 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 30 });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 31, push: !!(env && env.VAPID_PUBLIC_KEY) });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -494,6 +614,56 @@ async function handle(req, env) {
     return json({ ok: true });
   }
 
+
+  if (path === "/api/push/vapid" && method === "GET") {
+    const vapid = vapidCfg(env);
+    if (!vapid) return json({ ok: false, error: "VAPID no configurado" }, 503);
+    return json({ ok: true, publicKey: vapid.publicKey, subject: vapid.subject });
+  }
+
+  if (path === "/api/push/subscribe" && method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const sub = normSub(body.subscription || body);
+    if (!sub) return json({ error: "Suscripción inválida" }, 400);
+    const idn = await identity(req, env, url);
+    const row = idn.row;
+    const bucket = pushBucket(row);
+    const wantCoach = String(body.role || sub.role || idn.role || "").toLowerCase() === "coach";
+    const pinMatches = pinOk(env, pinOf(req, url, body));
+    if (wantCoach || idn.role === "coach") {
+      if (idn.role !== "coach" && !pinMatches) return json({ error: "Auth de coach requerida" }, 401);
+      bucket.coach = upsertSub(bucket.coach, sub);
+      await putRow(env, row);
+      return json({ ok: true, role: "coach" });
+    }
+    const code = String(body.accessCode || sub.accessCode || idn.code || "").replace(/\D/g, "").slice(0, 6);
+    const cid = String(body.clientId || sub.clientId || idn.clientId || "");
+    const clients = (row.state && row.state.clients) || [];
+    const living = clients.find((c) => {
+      if (!c) return false;
+      if (cid && String(c.id) === cid) return true;
+      if (/^\d{6}$/.test(code) && String(c.accessCode || "") === code) return true;
+      return false;
+    });
+    const clientOk = idn.role === "client" || !!living;
+    if (!clientOk) return json({ error: "Auth de cliente requerida" }, 401);
+    const clientId = String((living && living.id) || cid || idn.clientId || "");
+    if (!clientId) return json({ error: "Falta clientId" }, 400);
+    bucket.clients[clientId] = upsertSub(bucket.clients[clientId], sub);
+    await putRow(env, row);
+    return json({ ok: true, role: "client", clientId });
+  }
+
+  if ((path === "/api/push/unsubscribe" || path === "/api/push/unsub") && method === "POST") {
+    const body = await req.json().catch(() => ({}));
+    const endpoint = String((body.subscription && body.subscription.endpoint) || body.endpoint || "").trim();
+    if (!endpoint) return json({ error: "Falta endpoint" }, 400);
+    const idn = await identity(req, env, url);
+    dropEndpoint(idn.row, endpoint);
+    await putRow(env, idn.row);
+    return json({ ok: true });
+  }
+
   if (path === "/api/studio") {
     let body = {};
     if (method === "POST") body = await req.json().catch(() => ({}));
@@ -530,8 +700,19 @@ async function handle(req, env) {
     const idn = await identity(req, env, url);
     if (idn.role !== "coach") return json({ error: "Estudio no encontrado" }, 404);
     const body = await req.json().catch(() => ({}));
+    const prevPr = ((idn.row.state && idn.row.state.programRequests) || []).slice();
     idn.row.state = mergeStudio(idn.row.state || {}, body);
     await putRow(env, idn.row);
+    try {
+      const nextPr = (idn.row.state && idn.row.state.programRequests) || [];
+      for (const r of nextPr) {
+        if (!r || r.status !== "approved") continue;
+        const was = prevPr.find((x) => x && x.id === r.id);
+        if (was && was.status === "approved") continue;
+        const label = String(r.routineName || r.routineId || "programa").slice(0, 40);
+        await notifyClient(env, idn.row, r.clientId, r.accessCode, "Programa listo", "Miguel te asignó " + label + ".", "/?view=work", "nb-aprobado");
+      }
+    } catch (e) {}
     return json({ ok: true, state: idn.row.state });
   }
 
@@ -593,6 +774,7 @@ async function handle(req, env) {
       inbox: dup ? [] : [{ id: "in" + Date.now(), type: "lead", name: client.name, plan: client.plan, at: Date.now(), clientId: client.id }]
     });
     await putRow(env, row);
+    await notifyCoach(env, row, "Lead NiuBision", (client.name || "Cliente") + " firmó. Confirme el pago.", "/?view=inbox", "nb-lead");
     return json({ ok: true, state: { inbox: row.state.inbox } });
   }
 
@@ -634,6 +816,7 @@ async function handle(req, env) {
       inbox: dupPay ? [] : [{ id: "in" + Date.now(), type: "pay", name: payment.name, plan: payment.plan, at: Date.now(), clientId: payment.clientId, phone: payPhone, amount: payment.amount, method: payment.method, invoice: payment.invoice, ref: payment.ref }]
     });
     await putRow(env, row);
+    await notifyCoach(env, row, "Pago NiuBision", (payment.name || "Cliente") + " · " + (payment.amount || "") + " USD", "/?view=inbox", "nb-pay");
     return json({ ok: true });
   }
 
@@ -697,6 +880,10 @@ async function handle(req, env) {
       accessCode: cl.accessCode,
       email: cl.email || params.get("payer_email")
     });
+    if (cl.id || cl.accessCode) {
+      await notifyClient(env, row, cl.id, cl.accessCode, "Código listo", "Pago recibido. Su acceso ya está activo.", "/?view=work", "nb-code");
+    }
+    await notifyCoach(env, row, "Pago PayPal", (cl.name || pay.name || "Cliente") + " · " + (params.get("mc_gross") || "") + " USD", "/?view=inbox", "nb-pay");
     return json({ ok: true });
   }
 
@@ -724,7 +911,12 @@ async function handle(req, env) {
       (phone.length >= 10 && String(c.phone || "").replace(/\D/g, "") === phone)
     );
     await putRow(env, row);
-    return json({ ok: true, accessCode: hit && hit.accessCode, clientId: hit && hit.id });
+    const codeOut = hit && hit.accessCode;
+    if (hit) {
+      await notifyClient(env, row, hit.id, codeOut, "Código listo", "Su código de acceso ya está activo. Ábralo en NiuBision.", "/?view=work", "nb-code");
+      await notifyCoach(env, row, "Código emitido", (hit.name || body.name || "Cliente") + " · " + (codeOut || ""), "/?view=inbox", "nb-code-coach");
+    }
+    return json({ ok: true, accessCode: codeOut, clientId: hit && hit.id });
   }
 
   if (path === "/api/revoke" && method === "POST") {
@@ -786,6 +978,7 @@ async function handle(req, env) {
       inbox: [note]
     });
     await putRow(env, row);
+    await notifyCoach(env, row, "Pedir programa", note.name + " pide " + (note.routineName || note.routineId || "programa"), "/?view=inbox", "nb-pedir");
     return json({ ok: true });
   }
 
