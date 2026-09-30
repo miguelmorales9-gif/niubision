@@ -11609,7 +11609,7 @@ function dayOneWelcomeBannerHtml() {
   if (has) {
     const di = dayIndex(rt) % rt.daysPlan.length;
     const day = rt.daysPlan[di];
-    const title = (day && day.title) || "su sesión";
+    const title = day ? programDayLabel(di, day) : "su sesión";
     return `<div class="card welcome-dayone nb-fade" id="welcomeDayone">
       <p class="tagline">Bienvenido</p>
       <h3>Hoy toca ${escapeHtml(title)} · empecemos</h3>
@@ -12925,13 +12925,56 @@ function activeRoutine() {
     : state.profile.routine || "full-inicio";
   return findRoutine(id) || findRoutine("full-inicio");
 }
+/** Week starts Monday: 0=Lunes … 6=Domingo (never JS Sunday-first). */
+const WEEKDAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+const WEEKDAYS_SHORT = ["L", "M", "X", "J", "V", "S", "D"];
+function mondayWeekIndex(d) {
+  const x = d instanceof Date ? d : new Date();
+  return (x.getDay() + 6) % 7;
+}
+/** Program Día 1 (slot 0) = Lunes, Día 2 = Martes, … Día 7 = Domingo. */
+function programWeekdayName(daySlot0) {
+  return WEEKDAYS_ES[((Number(daySlot0) || 0) % 7 + 7) % 7];
+}
+function programDayFocus(title) {
+  return String(title || "").replace(/^Día\s*[0-9A-Za-zÁÉÍÓÚáéíóúñÑ]+\s*(·\s*)?/i, "").trim();
+}
+/** Display label: "Lunes" or "Lunes · Sentadilla y empuje" — does not mutate stored titles. */
+function programDayLabel(daySlot0, dayOrTitle) {
+  const wd = programWeekdayName(daySlot0);
+  const title = typeof dayOrTitle === "string" ? dayOrTitle : ((dayOrTitle && dayOrTitle.title) || "");
+  const focus = programDayFocus(title);
+  return focus ? (wd + " · " + focus) : wd;
+}
+function dayWhoKey() {
+  return state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
+}
 function dayIndex(rt) {
-  const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
-  return store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, 0));
+  if (!rt || !rt.id) return 0;
+  const who = dayWhoKey();
+  const jump = store.get("nb_day_jump_" + who + "_" + rt.id, null);
+  if (jump && jump.date === todayKey() && jump.i != null) {
+    const n = (rt.daysPlan && rt.daysPlan.length) || 1;
+    return ((Number(jump.i) % n) + n) % n;
+  }
+  const n = (rt.daysPlan && rt.daysPlan.length) || 1;
+  const monIdx = mondayWeekIndex();
+  // Calendar: Mon→Día 1 …; beyond plan length = rest → keep last stored slot for jump UI
+  if (monIdx < n) return monIdx;
+  return store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, Math.max(0, n - 1)));
 }
 function setDayIndex(rt, n) {
-  const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
-  store.set("nb_day_" + who + "_" + rt.id, n);
+  const who = dayWhoKey();
+  const days = (rt.daysPlan && rt.daysPlan.length) || 1;
+  const i = ((Number(n) % days) + days) % days;
+  store.set("nb_day_" + who + "_" + rt.id, i);
+  store.set("nb_day_jump_" + who + "_" + rt.id, { date: todayKey(), i: i });
+}
+function isProgramRestDay(rt) {
+  if (!rt || !rt.daysPlan || !rt.daysPlan.length) return false;
+  const jump = store.get("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
+  if (jump && jump.date === todayKey()) return false;
+  return mondayWeekIndex() >= rt.daysPlan.length;
 }
 function sessionKey(rt) {
   const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
@@ -13040,12 +13083,12 @@ function waReady(kind, extra) {
   return "Miguel, soy " + who + ".";
 }
 function weekDots() {
-  const names = ["D", "L", "M", "X", "J", "V", "S"];
+  // Must match mondayWeekIndex / weekRangeLocal: index 0 = Lunes
+  const names = WEEKDAYS_SHORT;
   const done = new Set(state.history.map((h) => h.date));
   const now = new Date();
-  const day = now.getDay();
   const mon = new Date(now);
-  mon.setDate(now.getDate() - ((day + 6) % 7));
+  mon.setDate(now.getDate() - mondayWeekIndex(now));
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
@@ -14835,7 +14878,7 @@ function homeView() {
       <span>Videos <b>${vids}/2</b></span>
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
-    ${day ? `<div class="card"><h3>Hoy · ${escapeHtml(day.title)}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : ""}
+    ${day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(dayIndex(rt) % daysPlan.length, day))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios${isProgramRestDay(rt) ? " · hoy descanso del plan" : ""}</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : ""}
     ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     ${(state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
@@ -14931,8 +14974,8 @@ function weekPeekHtml(rt, di) {
   if (!rt || !rt.daysPlan) return "";
   return `<details class="more-fold week-peek">
     <summary>Ver los ${rt.daysPlan.length} días de esta rutina</summary>
-    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")}</p>
-    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : "Día " + (i + 1) + " · "}${escapeHtml(d.title)}</h3>
+    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")} · Día 1 = Lunes</p>
+    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : ""}${escapeHtml(programDayLabel(i, d))}</h3>
       ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(displayName(it))}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
     </div>`).join("")}
     <button type="button" class="btn ghost" id="seeWeekRt">Abrir ficha de la rutina</button>
@@ -15092,15 +15135,18 @@ function workView() {
   const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
   const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz sí":"Voz no"}</button>`;
   if (!live) {
+    const dayLab = programDayLabel(di, day);
     const hoyLine = state.role === "client"
-      ? (`Hoy toca ${escapeHtml(day.title)} · empecemos`)
-      : escapeHtml(day.title);
+      ? (`Hoy toca ${escapeHtml(dayLab)} · empecemos`)
+      : escapeHtml(dayLab);
+    const restNote = isProgramRestDay(rt) ? `<p class="muted">Hoy es descanso en el calendario (Día 1 = Lunes). Puede saltar a otro día abajo.</p>` : "";
     return `<section class="screen session-start">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)}</p>${voiceBtn}</div>
+      <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)}</p>${voiceBtn}</div>
       <h2>${hoyLine}</h2>
+      ${restNote}
       <p class="muted">${escapeHtml(shortName(rt) || rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
       ${packChip(selfClient())}
       ${floorLine()}
@@ -15119,14 +15165,14 @@ function workView() {
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
       </details>
     </section>`;
   }
   return `<section class="screen focus-session">
     ${assignNoticeHtml()}
-    <div class="sess-top"><p class="tagline">${who}Día ${di + 1} · ${escapeHtml(band)} · ${escapeHtml(shortName(rt) || rt.name)}</p>${voiceBtn}</div>
-    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(day.title)}</h2>
+    <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)} · ${escapeHtml(shortName(rt) || rt.name)}</p>${voiceBtn}</div>
+    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(programDayLabel(di, day))}</h2>
     <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · Tiempo <span id="sessClock">00:00</span></p>
     <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ${state.sessStart ? "ghost" : "mint"}" id="startSess">${state.sessStart ? "Pausar" : (state.sessElapsed ? "Seguir" : "Empezar")}</button></div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
@@ -15134,7 +15180,7 @@ function workView() {
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
       ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">Día ${i + 1}</button>`).join("")}</div>
+      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
     </details>
     ${ses.items.map((it, i) => {
       const ex = findEx(it.exId);
@@ -15999,7 +16045,7 @@ function openRoutine(id) {
   modal.innerHTML = `<div class="sheet"><div class="handle"></div>
     <p class="tagline">${r.level} · ${r.place}</p><h2>${r.name}</h2><p>${r.goal}</p>
     ${r.evidence ? `<p class="muted" style="margin:8px 0 12px">${r.evidence}</p>` : ""}
-    ${r.daysPlan.map((d) => `<div class="card"><h3>${d.title}</h3>${d.items.map((it) => `<div class="list-row"><span>${it.name}</span><span class="muted">${it.sets} × ${it.reps}</span></div>`).join("")}</div>`).join("")}
+    ${r.daysPlan.map((d, i) => `<div class="card"><h3>${escapeHtml(programDayLabel(i, d))}</h3>${d.items.map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}</div>`).join("")}
     <div class="actions">${state.role === "client"
       ? (/^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""))
         ? `<button class="btn primary" type="button" id="pedirRt">Pedir a Miguel</button><button class="btn ghost" type="button" id="closeSheet">Cerrar</button>`
@@ -16701,16 +16747,17 @@ function showDay1IfNeeded() {
   store.set("nb_day1_seen", 1);
   store.set("nb_welcome_v43", 0); // allow inline welcome once on Hoy
   const rt = typeof activeRoutine === "function" ? activeRoutine() : null;
-  const day = rt && rt.daysPlan && rt.daysPlan.length
-    ? rt.daysPlan[(typeof dayIndex === "function" ? dayIndex(rt) : 0) % rt.daysPlan.length]
-    : null;
+  const _di0 = rt && rt.daysPlan && rt.daysPlan.length
+    ? ((typeof dayIndex === "function" ? dayIndex(rt) : 0) % rt.daysPlan.length)
+    : 0;
+  const day = rt && rt.daysPlan && rt.daysPlan.length ? rt.daysPlan[_di0] : null;
   const modal = document.createElement("div");
   modal.className = "modal";
   if (day) {
     modal.innerHTML = `<div class="sheet nb-fade">
       <div class="handle"></div>
       <p class="tagline">Bienvenido</p>
-      <h2>Hoy toca ${escapeHtml(day.title)} · empecemos</h2>
+      <h2>Hoy toca ${escapeHtml(programDayLabel(_di0, day))} · empecemos</h2>
       <p class="muted">Un toque y entra al primer ejercicio. No hace falta recorrer todas las pestañas.</p>
       <div class="actions">
         <button class="btn primary" id="day1Go">Empezar</button>
@@ -17695,7 +17742,7 @@ function bindEditor() {
   const addDay = $("#addDay");
   if (addDay) addDay.onclick = () => {
     collectDraftFromDom();
-    state.editDraft.daysPlan.push({ title: "Día nuevo", items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
+    const _di = state.editDraft.daysPlan.length; state.editDraft.daysPlan.push({ title: programWeekdayName(_di) + (_di > 6 ? " · extra" : ""), items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
     render();
   };
   $("#cancelRt").onclick = () => { state.editDraft = null; render(); };
@@ -18035,7 +18082,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=43", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=44", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
       } catch (e) {}
