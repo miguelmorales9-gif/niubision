@@ -1,0 +1,8 @@
+# Look Hybrid
+Branch: eng/ui-look-hybrid
+Primary alias (HTTP 200):
+  https://hybrid.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://b8e3f211.niubision-ui-preview.pages.dev
+Hard-refresh once (hybrid-preview / nb-offline-hybrid-preview).
+NO merge · NO niubision.com · logo untouched
