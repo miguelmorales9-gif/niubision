@@ -14408,16 +14408,18 @@ function openPedirBeats(routineId) {
 }
 function renderGate() {
   if (state.splash) {
-    $("#app").innerHTML = `<section class="splash" id="splash">
+    $("#app").innerHTML = `<section class="splash splash-hybrid" id="splash">
       <div class="orb" id="orb"></div>
-      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga el logo">
-        <svg class="ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" pathLength="100"/></svg>
+      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga pulsado el logo hasta completar el anillo">
+        <svg class="ring ring-hold" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52" pathLength="100"/>
+          <circle class="ring-progress" id="holdRing" cx="60" cy="60" r="52" pathLength="100"/>
+        </svg>
         <img src="${MARK}" alt="NiuBision" class="splash-logo">
       </button>
       <h1 class="splash-name">NiuBision</h1>
-      <p class="splash-tag">Mantenga pulsado el logo · anillo ámbar</p>
-      <p class="splash-hold-cue">Suelte cuando el anillo se complete</p>
-      <div class="hold-bar hold-bar-ember"><span id="holdFill"></span></div>
+      <p class="splash-tag">Mantenga pulsado el logo</p>
+      <p class="splash-hold-cue">El anillo ámbar se llena · suelte al completar</p>
     </section>`;
     bindSplash();
     guardLogoMedia($("#holdLogo"));
@@ -14532,9 +14534,21 @@ function playIntro() {
 }
 function bindSplash() {
   const wrap = $("#holdLogo");
-  const fill = $("#holdFill");
-  const ring = $(".ring circle");
+  const ring = $("#holdRing") || $(".ring-progress") || $(".ring circle");
   let hold = 0, ticking = false, raf, gone = false;
+  const paintRing = (v) => {
+    if (!ring) return;
+    ring.style.strokeDashoffset = String(100 - v);
+    wrap && wrap.style.setProperty("--hold", String(v));
+    wrap && wrap.setAttribute("aria-valuenow", String(Math.round(v)));
+  };
+  if (wrap) {
+    wrap.setAttribute("role", "progressbar");
+    wrap.setAttribute("aria-valuemin", "0");
+    wrap.setAttribute("aria-valuemax", "100");
+    wrap.setAttribute("aria-valuenow", "0");
+  }
+  paintRing(0);
   const go = () => {
     if (gone) return;
     gone = true;
@@ -14554,9 +14568,9 @@ function bindSplash() {
     cancelAnimationFrame(raf);
     const loop = () => {
       hold = Math.max(0, Math.min(100, hold + (ticking ? 2.4 : -3)));
-      if (fill) fill.style.width = hold + "%";
-      if (ring) ring.style.strokeDashoffset = String(100 - hold);
-      wrap.classList.toggle("charged", hold > 20);
+      paintRing(hold);
+      wrap.classList.toggle("charged", hold > 12);
+      wrap.classList.toggle("holding", ticking && hold > 0);
       if (hold >= 100) { go(); return; }
       if (hold > 0 || ticking) raf = requestAnimationFrame(loop);
     };
@@ -14566,7 +14580,7 @@ function bindSplash() {
   const up = () => step(false);
   wrap.addEventListener("pointerdown", down);
   window.addEventListener("pointerup", up);
-  wrap.addEventListener("click", () => { if (hold < 100) toast("Mantenga pulsado el logo"); });
+  wrap.addEventListener("click", () => { if (hold < 100) toast("Mantenga pulsado el logo hasta llenar el anillo"); });
 }
 
 function enterClient(view) {
@@ -18921,7 +18935,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v2", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v3", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

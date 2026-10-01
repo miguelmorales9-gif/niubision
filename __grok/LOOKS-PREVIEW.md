@@ -5,7 +5,7 @@
 | A Obsidiana | `eng/ui-look-obsidiana` | https://obsidiana.niubision-ui-preview.pages.dev | `obsidiana-preview` / `nb-offline-obsidiana-preview` |
 | B Ember | `eng/ui-look-ember` | https://ember.niubision-ui-preview.pages.dev | `ember-preview` / `nb-offline-ember-preview` |
 | C Nube v2 | `eng/ui-look-nube` | https://nube.niubision-ui-preview.pages.dev | `nube-preview` / `nb-offline-nube-preview` |
-| **Hybrid** | `eng/ui-look-hybrid` | https://hybrid.niubision-ui-preview.pages.dev | `hybrid-v2` / `nb-offline-hybrid-v2` |
+| **Hybrid** | `eng/ui-look-hybrid` | https://hybrid.niubision-ui-preview.pages.dev | `hybrid-v3` / `nb-offline-hybrid-v3` |
 
 ## Hard-refresh
 On phone: open URL → Safari/Chrome hard refresh (or Settings → clear site data for `*.pages.dev`) so the new SW cache name wins. One pull-to-refresh after first load is usually enough.

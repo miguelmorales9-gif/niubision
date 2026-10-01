@@ -1710,41 +1710,121 @@ input[type=file].hidden {
   .btn.primary { transition: none; }
 }
 
-
-/* Hybrid v2 — hold-to-enter amber sun-ring + readable legal */
-.splash .ring circle {
+/* Hybrid v3 — honest amber hold RING (no bar) + readable Cover legal */
+.splash.splash-hybrid .splash-logo-wrap {
+  width: min(68vw, 220px);
+  padding: 18px;
+  box-sizing: content-box;
+}
+.splash.splash-hybrid .splash-logo {
+  width: 100%;
+  filter: drop-shadow(0 0 20px rgba(255,138,31,.28));
+}
+.splash.splash-hybrid .ring.ring-hold {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  pointer-events: none;
+  z-index: 3;
+  overflow: visible;
+}
+.splash.splash-hybrid .ring-track {
+  fill: none;
+  stroke: rgba(255,138,31,.22);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+.splash.splash-hybrid .ring-progress {
+  fill: none;
   stroke: #FF8A1F;
   stroke-width: 4.5;
-  filter: drop-shadow(0 0 6px rgba(255,138,31,.55));
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 8px rgba(255,138,31,.7));
+  transition: stroke .12s ease;
 }
-.splash .hold-bar.hold-bar-ember,
-.splash .hold-bar {
-  width: min(72vw, 220px);
-  height: 6px;
-  background: rgba(255,138,31,.16);
-  box-shadow: 0 0 0 1px rgba(255,138,31,.22);
+.splash.splash-hybrid .splash-logo-wrap.holding .ring-progress {
+  stroke: #FFB347;
+  filter: drop-shadow(0 0 14px rgba(255,179,71,.85));
 }
-.splash .hold-bar span {
-  background: linear-gradient(90deg, #FFB347, #FF8A1F);
-  box-shadow: 0 0 12px rgba(255,138,31,.55);
+.splash.splash-hybrid .splash-logo-wrap.charged .splash-logo {
+  transform: scale(1.04);
+  filter: drop-shadow(0 0 28px rgba(255,138,31,.8)) !important;
 }
-.splash-logo-wrap.charged .splash-logo {
-  filter: drop-shadow(0 0 26px rgba(255,138,31,.75)) !important;
-}
-.splash-tag {
-  color: rgba(243,237,227,.82);
-  font-size: 15px;
+.splash.splash-hybrid .hold-bar { display: none !important; }
+.splash.splash-hybrid .splash-tag {
+  color: rgba(243,237,227,.88);
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: .02em;
-  margin-top: 6px;
-}
-.splash-hold-cue {
-  color: rgba(255,138,31,.9);
-  font-size: 12px;
-  letter-spacing: .04em;
-  margin: 6px 0 12px;
-  position: relative;
+  letter-spacing: .01em;
+  margin-top: 10px;
   z-index: 2;
+  position: relative;
+}
+.splash.splash-hybrid .splash-hold-cue {
+  color: rgba(255,179,71,.95);
+  font-size: 13px;
+  letter-spacing: .03em;
+  margin: 4px 0 0;
+  z-index: 2;
+  position: relative;
+  max-width: 28ch;
+  text-align: center;
+  line-height: 1.35;
+}
+.splash.splash-hybrid .splash-name {
+  z-index: 2;
+  position: relative;
+  margin-top: 4px;
+}
+
+/* Cover legal / footer links — premium-readable */
+.screen.hero.cover.cover-hybrid .cover-quiet {
+  margin-top: 28px;
+  opacity: 1;
+  gap: 12px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.screen.hero.cover.cover-hybrid .cover-quiet button {
+  color: rgba(243,237,227,.78);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(255,138,31,.45);
+  background: none;
+  border: 0;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+.screen.hero.cover.cover-hybrid .cover-quiet button:active {
+  color: var(--cream);
+}
+.screen.hero.cover.cover-hybrid .cover-footer-mark {
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: rgba(243,237,227,.78);
+}
+.screen.hero.cover.cover-hybrid .cover-footer-rule {
+  border-top-color: rgba(243,237,227,.4);
+}
+.screen.hero.cover.cover-hybrid .disclaimer {
+  margin-top: 16px;
+  max-width: 42ch;
+  opacity: 1;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(243,237,227,.7);
+  text-align: left;
 }
 .screen.hero.cover.cover-hybrid .cover-preview-hint {
   margin: 14px auto 0;
@@ -1761,21 +1841,4 @@ input[type=file].hidden {
 .screen.hero.cover.cover-hybrid .cover-preview-hint code {
   color: var(--cream);
   font-weight: 700;
-}
-.screen.hero.cover.cover-hybrid .cover-footer-mark {
-  font-size: 11px;
-  letter-spacing: .22em;
-  color: rgba(243,237,227,.72);
-}
-.screen.hero.cover.cover-hybrid .disclaimer {
-  margin-top: 16px;
-  max-width: 38ch;
-  opacity: 1;
-  font-size: 11px;
-  line-height: 1.5;
-  color: rgba(243,237,227,.62);
-  text-align: left;
-}
-.screen.hero.cover.cover-hybrid .cover-quiet {
-  opacity: .55;
 }
