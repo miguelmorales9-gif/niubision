@@ -1167,3 +1167,267 @@ input[type=file].hidden {
 @media (prefers-reduced-motion: reduce) {
   .btn.primary, .tagline, .progress > span { animation: none !important; }
 }
+
+
+/* ===== v62 — BOLD Cover + Client Hoy (phone-obvious) ===== */
+/* Less PR tropical; ink + sun gold; production orb exact */
+
+.screen.hero.cover.cover-v62 {
+  position: relative;
+  min-height: 100dvh;
+  min-height: 100svh;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: max(48px, env(safe-area-inset-top, 0px)) 24px max(40px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0;
+  background: var(--ink);
+  box-sizing: border-box;
+}
+.screen.hero.cover.cover-v62 .logo-btn {
+  margin: 0 auto 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+.screen.hero.cover.cover-v62 .splash-logo {
+  width: min(58vw, 208px);
+  height: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 0 28px rgba(212,176,106,.22));
+  animation: logoIdle 5.5s ease-in-out infinite;
+}
+.screen.hero.cover.cover-v62 .cover-brand {
+  margin: 10px 0 0;
+  font-size: 12px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--mute);
+  font-weight: 600;
+}
+.screen.hero.cover.cover-v62 .cover-headline,
+.screen.hero.cover.cover-v62 h1.cover-headline {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(40px, 12vw, 56px);
+  line-height: 1.02;
+  letter-spacing: -.02em;
+  color: var(--cream);
+  margin: 18px 0 14px;
+  max-width: 12ch;
+}
+.screen.hero.cover.cover-v62 > p.lede {
+  color: var(--mute);
+  font-size: 16px;
+  line-height: 1.45;
+  max-width: 22ch;
+  margin: 0 auto 36px;
+}
+.screen.hero.cover.cover-v62 .actions {
+  width: min(100%, 380px);
+  margin: 0 auto;
+}
+.screen.hero.cover.cover-v62 .btn.primary.cover-cta,
+.screen.hero.cover.cover-v62 .btn.primary {
+  min-height: 64px;
+  padding: 18px 22px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 18px;
+  background: var(--sun) !important;
+  color: var(--ink) !important;
+  box-shadow: 0 14px 40px rgba(212,176,106,.32);
+  letter-spacing: .01em;
+}
+.screen.hero.cover.cover-v62 .btn.ghost.cover-secondary,
+.screen.hero.cover.cover-v62 .btn.ghost {
+  margin-top: 12px;
+  min-height: 48px;
+  border-color: transparent;
+  color: var(--mute);
+  font-weight: 500;
+  font-size: 15px;
+  background: transparent;
+}
+.screen.hero.cover.cover-v62 .btn.ghost.cover-secondary:active {
+  color: var(--cream);
+}
+.screen.hero.cover.cover-v62 .quiet-links {
+  margin-top: 40px;
+  opacity: .55;
+  gap: 10px 20px;
+}
+.screen.hero.cover.cover-v62 .quiet-links button {
+  color: var(--mute);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.screen.hero.cover.cover-v62 .disclaimer {
+  margin-top: 36px;
+  max-width: 36ch;
+  opacity: .4;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Client Hoy — stacked hero, huge day + oversized ring + massive CTA */
+.session-start.client-hoy-v62 {
+  padding-top: 12px;
+}
+.session-start.client-hoy-v62 .hoy-hero.hoy-hero-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-height: none;
+  margin: 0 0 20px;
+  padding: 28px 16px 22px;
+  gap: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: rise var(--motion) var(--ease);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-greet {
+  font-size: 14px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--sun);
+  margin: 0 0 6px;
+}
+.session-start.client-hoy-v62 .hoy-hero-stack h2 {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(48px, 15vw, 68px);
+  line-height: 1;
+  letter-spacing: -.03em;
+  margin: 0 0 6px;
+  color: var(--cream);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-meta {
+  margin: 0 0 18px;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-ring {
+  width: 176px;
+  height: 176px;
+  flex: 0 0 176px;
+  margin: 4px auto 22px;
+  box-shadow: 0 0 0 1px rgba(212,176,106,.28), 0 18px 48px rgba(0,0,0,.45);
+  background: radial-gradient(circle at 35% 30%, rgba(212,176,106,.14), transparent 55%), var(--ink-2);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-ring-track {
+  stroke-width: 8;
+  stroke: var(--ink-3);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-ring-sun {
+  stroke-width: 8;
+  stroke: var(--sun);
+  filter: drop-shadow(0 0 8px rgba(212,176,106,.4));
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-ring b {
+  font-size: 34px;
+  color: var(--sun);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-ring small {
+  font-size: 12px;
+  margin-top: 4px;
+}
+.session-start.client-hoy-v62 .hoy-cta-wrap {
+  width: min(100%, 400px);
+  margin: 0 auto;
+}
+.session-start.client-hoy-v62 .hoy-cta-wrap .btn.primary,
+.session-start.client-hoy-v62 .hoy-cta-massive {
+  width: 100%;
+  min-height: 68px;
+  padding: 20px 22px;
+  font-size: 20px;
+  font-weight: 700;
+  border-radius: 18px;
+  background: var(--sun) !important;
+  color: var(--ink) !important;
+  box-shadow: 0 16px 44px rgba(212,176,106,.34);
+}
+.session-start.client-hoy-v62 .hoy-hero-stack .hoy-interp {
+  margin: 16px 0 0;
+  max-width: 28ch;
+  font-size: 14px;
+  color: var(--mute);
+  line-height: 1.4;
+}
+.session-start.client-hoy-v62 .prioridad-hero {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.session-start.client-hoy-v62 .prioridad-hero li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: 18px;
+  background: var(--ink-2);
+  border: 1px solid rgba(212,176,106,.28);
+  box-shadow: 0 10px 28px rgba(0,0,0,.28);
+}
+.session-start.client-hoy-v62 .prioridad-hero li.late {
+  border-color: rgba(224,168,136,.5);
+  box-shadow: inset 4px 0 0 0 var(--peach), 0 10px 28px rgba(0,0,0,.28);
+}
+.session-start.client-hoy-v62 .prioridad-hero .prio-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  background: var(--sun);
+}
+.session-start.client-hoy-v62 .prioridad-hero strong {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--cream);
+  margin-bottom: 4px;
+}
+.session-start.client-hoy-v62 .prioridad-hero span {
+  font-size: 14px;
+  color: var(--mute);
+  line-height: 1.4;
+}
+.session-start.client-hoy-v62 .hoy-more-trigger {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin: 8px 0 18px;
+  padding: 14px 8px;
+  font-size: 14px;
+  color: var(--sun);
+  text-decoration: none;
+  letter-spacing: .02em;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: transparent;
+}
+.session-start.client-hoy-v62 .more-fold {
+  margin-top: 4px;
+  opacity: .85;
+}
+.session-start.client-hoy-v62 .more-fold summary {
+  color: var(--mute);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen.hero.cover.cover-v62 .splash-logo { animation: none; }
+}

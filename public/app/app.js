@@ -14369,23 +14369,20 @@ function renderGate() {
     return;
   }
   $("#app").innerHTML = `
-    <section class="screen hero cover">
-      <p class="tagline">Entrenamiento</p>
+    <section class="screen hero cover cover-v62">
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
-      <h1>NiuBision</h1>
-      <p class="lede">Mira el trabajo. Disfruta el día.</p>
+      <p class="cover-brand">NiuBision</p>
+      <h1 class="cover-headline">Hoy se entrena.</h1>
+      <p class="lede">Mira el trabajo. Cierra el día.</p>
       <div class="actions">
-        <button class="btn primary" id="haveCode">Entrar con código</button>
-        <button class="btn ghost" id="studioLock">Soy coach</button>
+        <button class="btn primary cover-cta" id="haveCode">Entrar con código</button>
+        <button class="btn ghost cover-secondary" id="studioLock">Soy coach</button>
       </div>
       <div class="quiet-links">
         <button type="button" id="seePlans">Planes</button>
         <button type="button" id="seeAbout">Acerca de</button>
-        <button type="button" id="seeCoach">Entrenador</button>
-        <button type="button" id="seeSocial">Facebook</button>
         <button type="button" id="seePrivacy">Privacidad</button>
       </div>
-      ${guestTourHtml()}
       <p class="disclaimer">${APP_DISCLAIMER}</p>
     </section>`;
   bindGuestTour();
@@ -15614,17 +15611,25 @@ function workView() {
           cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>`
         });
     const dayName = escapeHtml(calendarWeekdayName());
-    return `<section class="screen session-start">
+    const emptyCls = state.role === "client" ? "screen session-start client-hoy client-hoy-v62" : "screen session-start";
+    return `<section class="${emptyCls}">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="hoy-hero">
+      <div class="hoy-hero${state.role === "client" ? " hoy-hero-stack" : ""}">
+        ${state.role === "client" ? `
+          <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
+          <h2>${dayName}</h2>
+          ${hoyRingHtml(0, 0, 0)}
+          <p class="hoy-interp">Sin rutina activa. Puede pedir un programa cuando quiera.</p>
+        ` : `
         <div>
           <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
           <h2>${dayName}</h2>
-          <p class="hoy-interp">${state.role === "client" ? "Sin rutina activa. Puede pedir un programa cuando quiera." : "Sin rutina activa."}</p>
+          <p class="hoy-interp">Sin rutina activa.</p>
         </div>
         ${hoyRingHtml(0, 0, 0)}
+        `}
       </div>
       ${emptyClient}
       ${state.role === "client" ? "" : workPickerHtml(band, list, "")}
@@ -15668,27 +15673,27 @@ function workView() {
       : (isProgramRestDay(rt) ? "Hoy es descanso en el calendario. Puede mirar la sesión o saltar de día." : ("Hoy toca " + dayLab + " — un solo toque para empezar."));
     const greet = hoyDayGreeting();
     const dayBig = programWeekdayName(di);
-    return `<section class="screen session-start">
-      ${syncBannerHtml()}
-      ${assignNoticeHtml()}
-      ${dayOneWelcomeBannerHtml()}
-      <div class="hoy-hero">
-        <div>
-          <p class="hoy-greet">${who}${escapeHtml(greet)}</p>
-          <h2>${escapeHtml(dayBig)}</h2>
-          <p class="hoy-meta">${escapeHtml(band)}${closed ? " · cerrado" : ""}</p>
-          <p class="hoy-interp">${escapeHtml(interp)}</p>
-          <button type="button" class="hoy-sheet-trigger" id="hoyDetail">Ver detalle de la sesión</button>
-        </div>
-        ${hoyRingHtml(pct, doneSets, totalSets)}
-        <div class="hoy-cta-wrap">
-          ${closed
-            ? `<button class="btn primary go" id="goLive">Ver la sesión</button>`
-            : `<button class="btn primary go" id="goLive">${pct > 0 && pct < 100 ? "Continuar" : "Empezar"}</button>`}
-        </div>
-      </div>
+    const isClient = state.role === "client";
+    const prioTop = isClient ? prio.slice(0, 2) : prio;
+    const ctaLabel = closed ? "Ver la sesión" : (pct > 0 && pct < 100 ? "Continuar" : "Empezar");
+    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-v62" : "screen session-start";
+    const prioBlock = prioTop.length
+      ? (isClient
+          ? `<ul class="prioridad prioridad-hero">${prioTop.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>`
+          : `<p class="tagline">Prioridad</p><ul class="prioridad">${prioTop.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>`)
+      : "";
+    const clientBelow = isClient ? `
+      ${prioBlock}
+      ${packChip(selfClient())}
+      ${renewBannerHtml()}
+      <button type="button" class="hoy-sheet-trigger hoy-more-trigger" id="hoyDetail">Ver sesión y más</button>
+      <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
+        <summary>Cambiar día o rutina</summary>
+        ${workClientAskHtml()}
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
+      </details>` : `
       ${restNote}
-      ${prio.length ? `<p class="tagline">Prioridad</p><ul class="prioridad">${prio.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>` : ""}
+      ${prioBlock}
       ${packChip(selfClient())}
       ${renewBannerHtml()}
       <div class="hoy-daylist">
@@ -15703,9 +15708,38 @@ function workView() {
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
-        ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
+        ${workPickerHtml(band, list, rt.id)}
         <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
-      </details>
+      </details>`;
+    return `<section class="${hoySectionCls}">
+      ${syncBannerHtml()}
+      ${assignNoticeHtml()}
+      ${dayOneWelcomeBannerHtml()}
+      <div class="hoy-hero${isClient ? " hoy-hero-stack" : ""}">
+        ${isClient ? `
+          <p class="hoy-greet">${escapeHtml(greet)}</p>
+          <h2>${escapeHtml(dayBig)}</h2>
+          <p class="hoy-meta">${escapeHtml(band)}${closed ? " · cerrado" : ""}</p>
+          ${hoyRingHtml(pct, doneSets, totalSets)}
+          <div class="hoy-cta-wrap">
+            <button class="btn primary go hoy-cta-massive" id="goLive">${ctaLabel}</button>
+          </div>
+          <p class="hoy-interp">${escapeHtml(interp)}</p>
+        ` : `
+        <div>
+          <p class="hoy-greet">${who}${escapeHtml(greet)}</p>
+          <h2>${escapeHtml(dayBig)}</h2>
+          <p class="hoy-meta">${escapeHtml(band)}${closed ? " · cerrado" : ""}</p>
+          <p class="hoy-interp">${escapeHtml(interp)}</p>
+          <button type="button" class="hoy-sheet-trigger" id="hoyDetail">Ver detalle de la sesión</button>
+        </div>
+        ${hoyRingHtml(pct, doneSets, totalSets)}
+        <div class="hoy-cta-wrap">
+          <button class="btn primary go" id="goLive">${ctaLabel}</button>
+        </div>
+        `}
+      </div>
+      ${clientBelow}
     </section>`;
   }
   return `<section class="screen focus-session">
@@ -15808,14 +15842,22 @@ function bindWork() {
       openHoySheet({
         title: day0 ? programDayLabel(di0, day0) : "Sesión",
         body: (rt0 ? ((shortName(rt0) || rt0.name) + " · " + ((day0 && day0.items) || []).length + " ejercicios · ~" + (rt0.minutes || 45) + " min") : ""),
-        extra: day0 ? dayPreviewHtml(day0) : "",
-        cta: "Empezar",
+        extra: (day0 ? (`<div class="hoy-daylist"><p class="tagline">Hoy va a hacer esto</p>${dayPreviewHtml(day0)}</div>` + (rt0 ? weekPeekHtml(rt0, di0) : "")) : "") +
+          (state.role === "client" ? `<div class="actions" style="margin-top:10px"><button type="button" class="btn ghost" id="hoySheetProgramas">Ver Programas</button></div>` : ""),
+        cta: ($("#goLive") && $("#goLive").textContent) || "Empezar",
         onGo: () => {
           const g = $("#goLive");
           if (g) g.click();
           else { store.set("nb_live", 1); render(); }
         }
       });
+      const hp = document.querySelector("#hoySheetProgramas");
+      if (hp) hp.onclick = () => {
+        const bd = document.querySelector(".nb-sheet-backdrop");
+        try { if (bd) bd.remove(); } catch (e) {}
+        document.body.classList.remove("modal-open");
+        state.view = "programas"; persist(); render();
+      };
     };
   }
   const goPulse = $("#goLive");
@@ -18772,7 +18814,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=61-preview", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=62-preview", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
