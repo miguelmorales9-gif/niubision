@@ -66,7 +66,7 @@ textarea { min-height: 80px; resize: vertical; }
 .ex-card h4 { font-size: 14px; line-height: 1.3; }
 .pill { display: inline-block; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--gold); margin-top: 4px; }
 .progress { height: 8px; background: var(--bg-3); border-radius: 99px; overflow: hidden; margin: 10px 0 14px; }
-.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--peach)); width: 0; transition: width .4s ease; }
+.progress > span { display: block; height: 100%; background: var(--sun); width: 0; transition: width .4s ease; }
 .work-ex { padding: 0; overflow: hidden; margin-bottom: 12px; }
 .work-ex header { display: flex; gap: 12px; padding: 12px; cursor: pointer; align-items: center; }
 .work-ex header img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; background: #000; flex: 0 0 64px; }
@@ -405,9 +405,8 @@ img { background: transparent; }
 .splash::before {
   content: ""; position: absolute; width: 140%; height: 140%; left: -20%; top: -20%;
   background:
-    radial-gradient(ellipse at 30% 40%, rgba(212,176,106,.22), transparent 42%),
-    radial-gradient(ellipse at 70% 60%, rgba(143,203,179,.12), transparent 46%),
-    radial-gradient(ellipse at 50% 30%, rgba(243,177,132,.1), transparent 40%);
+    radial-gradient(ellipse at 30% 40%, rgba(212,176,106,.14), transparent 42%),
+    radial-gradient(ellipse at 70% 60%, rgba(143,203,179,.08), transparent 46%);
   animation: aurora 14s linear infinite; pointer-events: none; z-index: 0;
 }
 .splash::after {
@@ -426,7 +425,7 @@ img { background: transparent; }
 .hold-bar span { transition: width .08s linear; }
 .sheet { animation: sheetIn .42s cubic-bezier(.16,1,.3,1); }
 .btn { transition: transform .18s cubic-bezier(.16,1,.3,1), filter .18s ease, background .18s ease, border-color .18s ease; position: relative; overflow: hidden; }
-.btn.primary { background: linear-gradient(90deg, #d4b06a, #f3b184, #d4b06a); background-size: 200% 100%; animation: goldSheen 4.5s linear infinite; }
+.btn.primary { background: var(--sun); }
 .btn.primary:hover, .btn.ghost:hover, .pay-btn:hover, .cover-tile:hover { border-color: var(--gold); filter: brightness(1.08); }
 .press { transform: scale(.97) !important; }
 .card, .plan, .ex-card, .rt-card, .ring-card {
@@ -790,8 +789,8 @@ html, body { background: var(--ink); color: var(--cream); }
   background: var(--ink-2); border: 1px solid var(--line);
 }
 .prioridad li.late {
-  border-color: rgba(243,177,132,.55);
-  box-shadow: 0 0 0 1px rgba(243,177,132,.2), 0 0 24px rgba(243,177,132,.12);
+  border-color: rgba(243,177,132,.4);
+  box-shadow: inset 3px 0 0 0 rgba(243,177,132,.55);
 }
 .prioridad .prio-dot {
   width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--sun); flex: 0 0 auto;
@@ -824,7 +823,7 @@ html, body { background: var(--ink); color: var(--cream); }
 /* Empties — warm, next-action */
 .nb-empty {
   text-align: center; padding: 36px 18px 28px;
-  background: linear-gradient(180deg, rgba(212,176,106,.06), transparent 70%);
+  background: var(--ink-2);
   border: 1px dashed var(--line); border-radius: 20px; margin: 12px 0;
 }
 .nb-empty-icon {
@@ -920,7 +919,7 @@ html, body { background: var(--ink); color: var(--cream); }
 .inbox-bucket.late-rail {
   border-left: 3px solid var(--peach) !important;
   box-shadow: inset 3px 0 0 0 var(--peach);
-  background: linear-gradient(90deg, rgba(243,177,132,.1), var(--ink-2) 36%);
+  background: var(--ink-2);
 }
 .inbox-bucket .bucket-empty { font-size: 13px; }
 .inbox-row { transition: opacity var(--motion-fast) var(--ease); }
@@ -991,4 +990,180 @@ input[type=file].hidden {
   .nb-skeleton { animation: none; background: var(--ink-3); }
   .splash-logo, .screen.hero.cover .splash-logo { animation: none; }
   .set-row.done { animation: none; }
+}
+
+
+/* ===== Imagine clean v61 — desat peach, premium minimal ===== */
+/* Tokens stay Pulso-compatible; peach = urgency only */
+:root {
+  --peach: #E0A888; /* slightly quieter than tropical coral */
+  --sun: #D4B06A;
+}
+
+/* Cover — orb + ES + clear CTAs, stronger whitespace */
+.screen.hero.cover {
+  gap: 0;
+  padding: 40px 22px 48px;
+}
+.screen.hero.cover .tagline {
+  color: var(--sun);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  animation: none;
+  letter-spacing: .14em;
+  margin-bottom: 14px;
+}
+.screen.hero.cover .splash-logo {
+  filter: drop-shadow(0 0 18px rgba(212,176,106,.18));
+}
+.screen.hero.cover h1 {
+  margin: 8px 0 12px;
+  letter-spacing: -.01em;
+}
+.screen.hero.cover > p.lede,
+.screen.hero.cover > p:not(.disclaimer):not(.tagline) {
+  max-width: 26ch;
+  margin: 0 auto 28px;
+  color: var(--mute);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.screen.hero.cover .actions { width: min(100%, 340px); margin: 0 auto; }
+.screen.hero.cover .btn.primary {
+  background: var(--sun);
+  color: var(--ink);
+  animation: none;
+  box-shadow: none;
+}
+.screen.hero.cover .btn.ghost {
+  margin-top: 10px;
+  border-color: var(--line);
+  color: var(--cream);
+}
+.screen.hero.cover .quiet-links {
+  margin-top: 28px;
+  gap: 8px 16px;
+  opacity: .85;
+}
+.screen.hero.cover .quiet-links button {
+  color: var(--mute);
+  font-size: 12px;
+  letter-spacing: .02em;
+}
+.screen.hero.cover .quiet-links button#studioLock {
+  color: var(--cream);
+  border-color: var(--line);
+  opacity: 1;
+}
+.screen.hero.cover .disclaimer {
+  margin-top: 32px;
+  max-width: 42ch;
+  opacity: .55;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Primary CTA — clean gold, no peach sheen */
+.btn.primary {
+  background: var(--sun) !important;
+  color: var(--ink);
+  animation: none !important;
+  background-image: none !important;
+}
+.hoy-cta-wrap .btn.primary {
+  box-shadow: 0 8px 22px rgba(0,0,0,.28);
+}
+
+/* Cards — calmer, more whitespace */
+.card, .plan, .ex-card, .rt-card, .prog-card, .hoy-hero {
+  box-shadow: none;
+}
+.card:hover, .plan:hover, .ex-card:hover, .rt-card:hover {
+  transform: none;
+  box-shadow: 0 0 0 1px rgba(212,176,106,.16);
+}
+.hoy-hero {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  padding: 20px 18px 18px;
+  gap: 14px;
+}
+.hoy-ring {
+  box-shadow: 0 0 0 1px rgba(212,176,106,.18);
+  background: var(--ink-3);
+}
+.hoy-ring-sun {
+  filter: none;
+  stroke: var(--sun);
+}
+.hoy-greet { color: var(--sun); }
+
+/* Taglines — static gold, no animated sheen */
+.tagline {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  color: var(--sun) !important;
+  animation: none !important;
+}
+
+/* Programas — quieter sticky chips */
+.prog-sticky .filters { gap: 6px; }
+.prog-sticky .filters button {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: transparent;
+}
+.prog-sticky .filters button.on {
+  background: rgba(212,176,106,.08);
+}
+.prog-more-filters {
+  margin-top: 6px;
+}
+.prog-more-filters summary {
+  cursor: pointer;
+  color: var(--mute);
+  font-size: 12px;
+  list-style: none;
+  padding: 6px 0;
+}
+.prog-more-filters summary::-webkit-details-marker { display: none; }
+.prog-abc button.on {
+  background: rgba(212,176,106,.08);
+  box-shadow: none;
+}
+
+/* Empties — minimal, no warm wash */
+.nb-empty {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-style: solid;
+  padding: 32px 18px 24px;
+}
+.nb-empty-icon {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--sun);
+}
+
+/* Bandeja late — urgency peach only, no sunset wash */
+.inbox-bucket.late-rail {
+  background: var(--ink-2) !important;
+  box-shadow: none !important;
+  border-left: 3px solid var(--peach) !important;
+}
+.prioridad li.late {
+  box-shadow: none;
+  border-color: rgba(224,168,136,.45);
+}
+
+/* Progress — solid sun */
+.progress > span {
+  background: var(--sun) !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.primary, .tagline, .progress > span { animation: none !important; }
 }

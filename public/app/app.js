@@ -12275,7 +12275,10 @@ function programasView() {
     <div class="prog-sticky">
       <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}">
       <div class="filters">${[["","Todos"],...days.slice(1)].map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
-      <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
+      <details class="prog-more-filters"${state.progKind ? " open" : ""}>
+        <summary>Tipo de programa</summary>
+        <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
+      </details>
     </div>
     ${blocks || nbEmpty({ icon: "☰", title: "Nada con estos filtros", hint: "La biblioteca sigue ahí. Quite filtros para ver A, B y C de nuevo.", cta: hasFilter ? `<button class="btn primary" type="button" id="progClearFilters">Quitar filtros</button>` : `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>` })}
   </section>`;
@@ -12600,7 +12603,7 @@ function inboxView() {
       <button type="button" data-chip="atrasado" class="${chip==="atrasado"?"on":""}">Atrasado</button>
       <button type="button" data-chip="hecho" class="${chip==="hecho"?"on":""}">Hecho</button>
     </div>
-    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia — buen día", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` }) : ""}
     <div class="card inbox-bucket nb-fade ${chip!=="hecho" && chip!=="atrasado" ? "" : "hidden"}">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
@@ -14367,7 +14370,7 @@ function renderGate() {
   }
   $("#app").innerHTML = `
     <section class="screen hero cover">
-      <p class="tagline">NiuBision</p>
+      <p class="tagline">Entrenamiento</p>
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
       <h1>NiuBision</h1>
       <p class="lede">Mira el trabajo. Disfruta el día.</p>
@@ -15338,7 +15341,7 @@ function homeView() {
         const stc = clientStatus(c);
         const late = sessionAgeDays(c) >= 7;
         return `<div class="list-row" data-pick="${c.id}" style="cursor:pointer"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.lastSession ? " · " + escapeHtml(c.lastSession.day || "sesión") : ""}</div></div>${late && stc === "activo" ? statusChip("sin sesión") : statusChip(stc)}</div>`;
-      }).join("")}</div>` : nbEmpty({ icon: "◎", title: "El piso está vacío", hint: "Añada el primer cliente en Gente, o espere un lead de WhatsApp. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
+      }).join("")}</div>` : nbEmpty({ icon: "◎", title: "Sin clientes aún", hint: "Añada el primer cliente en Gente. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
       ${cur ? lastWorkHtml(cur) : ""}
       <div class="coach-hoy-primary">
         <button class="btn primary" data-view="work">Abrir sesión</button>
@@ -15600,8 +15603,8 @@ function workView() {
     const emptyClient = state.role === "client"
       ? nbEmpty({
           icon: "◆",
-          title: "Hoy está claro",
-          hint: "Todavía no hay rutina activa. Pida un programa o escriba a Miguel — cuando él apruebe, aparece aquí.",
+          title: "Sin sesión hoy",
+          hint: "Todavía no hay rutina activa. Pida un programa; cuando Miguel apruebe, aparece aquí.",
           cta: `<button class="btn primary" type="button" data-view="programas">Pedir programa</button>`
         })
       : nbEmpty({
@@ -15619,7 +15622,7 @@ function workView() {
         <div>
           <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
           <h2>${dayName}</h2>
-          <p class="hoy-interp">${state.role === "client" ? "El día está quieto. Un toque cuando quiera pedir trabajo." : "Sin rutina activa en el piso."}</p>
+          <p class="hoy-interp">${state.role === "client" ? "Sin rutina activa. Puede pedir un programa cuando quiera." : "Sin rutina activa."}</p>
         </div>
         ${hoyRingHtml(0, 0, 0)}
       </div>
@@ -18769,7 +18772,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=60c-preview", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=61-preview", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

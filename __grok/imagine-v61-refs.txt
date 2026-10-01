@@ -1,0 +1,7 @@
+# Imagine stills (mood/hierarchy only — production orb unchanged)
+# Agent assets path:
+# /home/box/agent-data/agents/bb5aa72b-4de9-42a8-b60e-ee42e3554034/assets/
+1 Cover: bdacd5229cc44226d8734798c65818fd25c1fb74f85a05a5bde37b802a5e69b3.jpg
+2 Hoy:   6911d430b6335654ad58bde8d9d2a0d9a3615ceae4ddcad176ef84d5bb72df2a.jpg
+3 Pedir: 3dd81edc34512f82c513868e2bec27e48af9917a99b9020f4d866259a8378b38.jpg
+4 Bandeja: 2f55b6aa00a40e0113fea764c45a6ecf8c567611c8a5a4ca4c5621d676bc984c.jpg
