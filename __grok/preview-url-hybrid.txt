@@ -1,8 +1,12 @@
-# Look Hybrid
+# Look Hybrid v2
 Branch: eng/ui-look-hybrid
 Primary alias (HTTP 200):
   https://hybrid.niubision-ui-preview.pages.dev
 Latest deploy:
-  https://b8e3f211.niubision-ui-preview.pages.dev
-Hard-refresh once (hybrid-preview / nb-offline-hybrid-preview).
-NO merge · NO niubision.com · logo untouched
+  https://a5309615.niubision-ui-preview.pages.dev
+QA entry (preview only — does not write prod KV):
+  1) Hard-refresh once (cache hybrid-v2 / nb-offline-hybrid-v2)
+  2) Hold logo → Cover
+  3) Entrar → code 240101
+     OR open https://hybrid.niubision-ui-preview.pages.dev/?demo=hoy
+Hard-refresh once. NO merge · NO niubision.com · logo untouched

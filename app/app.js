@@ -10138,8 +10138,62 @@ function isOnline() {
 }
 function isPagesHost() {
   try {
-    return /niubision\.com$/i.test(location.hostname || "") || /github\.io$/i.test(location.hostname || "");
+    const h = location.hostname || "";
+    return /niubision\.com$/i.test(h)
+      || /github\.io$/i.test(h)
+      || /\.pages\.dev$/i.test(h)
+      || /niubision-ui-preview\.pages\.dev$/i.test(h);
   } catch (e) { return true; }
+}
+/** UI look previews on Cloudflare Pages — same prod API, local demo seat for QA. */
+function isUiPreviewHost() {
+  try {
+    const h = location.hostname || "";
+    return /niubision-ui-preview\.pages\.dev$/i.test(h) || /\.pages\.dev$/i.test(h);
+  } catch (e) { return false; }
+}
+const PREVIEW_DEMO_CODE = "240101";
+function previewDemoClient() {
+  const day = (typeof todayKey === "function") ? todayKey() : new Date().toISOString().slice(0, 10);
+  const sig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  return {
+    id: "c-preview-demo",
+    name: "Cliente demo",
+    plan: "Estándar",
+    routine: "full-inicio",
+    accessCode: PREVIEW_DEMO_CODE,
+    unpaid: false,
+    sex: "",
+    age: 28,
+    phone: "7875550101",
+    waiver: { name: "Cliente demo", date: day, signature: sig, text: "preview" },
+    health: {
+      name: "Cliente demo", date: day, phone: "7875550101", emer: "7875550199",
+      q1: "no", q2: "no", q3: "no", q4: "no", q5: "no", q6: "no", q7: "no"
+    },
+    contract: { name: "Cliente demo", plan: "Estándar", date: day, signature: sig, flagged: false, clientId: "c-preview-demo" }
+  };
+}
+function seedPreviewDemoSeat() {
+  const hit = previewDemoClient();
+  state.waiver = hit.waiver;
+  state.health = hit.health;
+  state.contracts = latestByPerson((state.contracts || []).filter((k) => !(k && k.clientId === hit.id)).concat([hit.contract]));
+  upsertClientFromAssign({
+    name: hit.name, plan: hit.plan, routine: hit.routine,
+    accessCode: hit.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+  });
+  applyClientAssign({
+    name: hit.name, plan: hit.plan, routine: hit.routine,
+    accessCode: hit.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone,
+    waiver: hit.waiver, health: hit.health, contract: hit.contract
+  });
+  state.splash = false;
+  store.set("nb_seen_cover", true);
+  store.set("nb_seen_intro", true);
+  state.view = "work";
+  persist();
+  return hit;
 }
 function isCrudId(id) {
   return /^[a-f0-9]{24}$/i.test(String(id || ""));
@@ -11168,6 +11222,7 @@ async function cloudRedeem(code) {
 async function lookupAccess(code) {
   const digits = String(code || "").replace(/\D/g, "");
   if (digits.length !== 6) return null;
+  if (isUiPreviewHost() && digits === PREVIEW_DEMO_CODE) return previewDemoClient();
   if (isRevoked(digits)) return null;
   if (isOnline()) {
     try {
@@ -14360,25 +14415,30 @@ function renderGate() {
         <img src="${MARK}" alt="NiuBision" class="splash-logo">
       </button>
       <h1 class="splash-name">NiuBision</h1>
-      <p class="splash-tag">Mantenga el logo para entrar</p>
-      <div class="hold-bar"><span id="holdFill"></span></div>
+      <p class="splash-tag">Mantenga pulsado el logo · anillo ámbar</p>
+      <p class="splash-hold-cue">Suelte cuando el anillo se complete</p>
+      <div class="hold-bar hold-bar-ember"><span id="holdFill"></span></div>
     </section>`;
     bindSplash();
     guardLogoMedia($("#holdLogo"));
     warmupIntro();
     return;
   }
+  const previewHint = isUiPreviewHost()
+    ? `<p class="cover-preview-hint">Vista previa · código demo <strong>240101</strong> o <code>?demo=hoy</code></p>`
+    : "";
   $("#app").innerHTML = `
     <section class="screen hero cover cover-hybrid">
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
       <h1 class="cover-brand-name">NiuBision</h1>
       <hr class="cover-rule" aria-hidden="true">
-      <h2 class="cover-headline">Tu próximo nivel</h2>
-      <p class="lede">Entrenamiento con Miguel</p>
+      <h2 class="cover-headline">Tu sesión de hoy</h2>
+      <p class="lede">Entrenamiento con tu coach</p>
       <div class="actions cover-actions-row">
         <button class="btn primary cover-cta" id="haveCode">Entrar <span class="cover-arrow" aria-hidden="true">↗</span></button>
         <button class="btn link cover-secondary" id="studioLock">Soy coach</button>
       </div>
+      ${previewHint}
       <div class="quiet-links cover-quiet">
         <button type="button" id="seePlans">Planes</button>
         <button type="button" id="seeAbout">Acerca de</button>
@@ -14386,7 +14446,7 @@ function renderGate() {
       </div>
       <div class="cover-footer">
         <hr class="cover-footer-rule" aria-hidden="true">
-        <p class="cover-footer-mark">ENTRENAMIENTO DE ALTO NIVEL</p>
+        <p class="cover-footer-mark">ENTRENAMIENTO CON TU COACH</p>
       </div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
     </section>`;
@@ -17585,7 +17645,8 @@ function openCodeEntry() {
       if (hit) {
         a = {
           name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
-          accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+          accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone,
+          waiver: hit.waiver, health: hit.health, contract: hit.contract
         };
         if (hit.waiver) state.waiver = hit.waiver;
         if (hit.health) state.health = hit.health;
@@ -17595,7 +17656,9 @@ function openCodeEntry() {
       }
     }
     if (!a || a.pending) {
-      setErr("Código no válido o aún no está pagado. Revise los 6 dígitos o espere la confirmación de Miguel.");
+      setErr(isUiPreviewHost()
+        ? "Código no válido. En esta vista previa use 240101 o abra ?demo=hoy."
+        : "Código no válido o aún no está pagado. Revise los 6 dígitos o espere la confirmación de Miguel.");
       return;
     }
     if (isRevoked(a.accessCode, a.clientId)) {
@@ -18740,6 +18803,19 @@ async function boot() {
   try { await loadStudioPointer(); } catch (e) {}
   try { await hydrateVault(); } catch (e) {}
   try {
+    const qDemo = new URLSearchParams(location.search || "");
+    if (isUiPreviewHost() && (qDemo.get("demo") === "hoy" || qDemo.get("preview") === "hoy")) {
+      state.splash = false;
+      seedPreviewDemoSeat();
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete("demo");
+        u.searchParams.delete("preview");
+        history.replaceState({}, "", u.pathname + (u.search || "") + (u.hash || ""));
+      } catch (e2) {}
+    }
+  } catch (e) {}
+  try {
     const q = new URLSearchParams(location.search || "");
     if (q.get("pago") === "ok") {
       toast("Pago enviado. Esperando confirmación…");
@@ -18845,7 +18921,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=62-preview", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v2", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
