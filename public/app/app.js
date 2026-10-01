@@ -10756,6 +10756,13 @@ async function cloudPushClient() {
   const report = clientReportPayload();
   if (!report.accessCode && !report.clientId) return { ok: false };
   if (isRevoked(report.accessCode, report.clientId)) return { ok: false, revoked: true };
+  /* Preview demo seat is local-only — skip /api/report (would 404). */
+  try {
+    if (typeof isUiPreviewHost === "function" && isUiPreviewHost()
+      && String(report.accessCode || "").replace(/\D/g, "") === (typeof PREVIEW_DEMO_CODE !== "undefined" ? PREVIEW_DEMO_CODE : "240101")) {
+      return { ok: true, preview: true };
+    }
+  } catch (e) {}
   if (!isOnline()) return { ok: false, offline: true };
   const token = authHeader();
   const bases = apiBases();
@@ -12298,44 +12305,121 @@ function programaCardHtml(r) {
 function programasView() {
   if (state.role === "coach" && state.editDraft) return editorView();
   const list = programasFiltered();
-  const bands = [["","Todos"],["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
   const days = [["","Días"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]];
   const kinds = [["","Tipo"],["cuerpo","Cuerpo"],["fuerza","Fuerza"],["sup-inf","Sup/inf"],["split","Split"],["gluteos","Glúteos"],["casa","Casa"]];
+  const abc = [["principiante","A","Principiante"],["intermedio","B","Intermedio"],["avanzado","C","Avanzado"]];
+  const hasFilter = !!(state.progBand || state.progDays || state.progKind || (state.progQ || "").trim());
+  const isClient = state.role === "client";
+  const activeId = activeRoutineId();
+  const activeRt = activeId ? findRoutine(activeId) : null;
+  const pending = pendingProgramRequests();
+  const total = allRoutines().length;
+
+  let hero = "";
+  if (isClient) {
+    if (activeRt) {
+      hero = `<article class="card prog-card is-active prog-hero-active">
+        <div class="prog-head"><h3>${escapeHtml(shortName(activeRt) || activeRt.name)}</h3><span class="st-chip ok prog-badge">Activo</span></div>
+        <p class="muted">${activeRt.days || "?"} días · ${activeRt.minutes || "?"} min · ${escapeHtml(activeRt.level || "")}</p>
+        <p>Hoy usa este programa. Pedir otro no lo cambia solo — Miguel aprueba en Bandeja.</p>
+        <div class="work-tools">
+          <button class="btn small ghost" type="button" data-prog-ver="${escAttr(activeRt.id)}">Ver</button>
+          <button class="btn small primary" type="button" id="progAskOther">Pedir otro a Miguel</button>
+        </div>
+      </article>`;
+    } else {
+      hero = `<article class="card prog-card prog-hero-active">
+        <div class="prog-head"><h3>Sin programa activo</h3><span class="st-chip prog-badge">Pedir</span></div>
+        <p class="muted">Elija nivel A/B/C o busque una plantilla, luego Pedir a Miguel.</p>
+      </article>`;
+    }
+    if (pending.length) {
+      hero += `<div class="prog-pending">
+        <p class="tagline">Enviado a Miguel</p>
+        ${pending.slice(0, 4).map((p) => `<div class="list-row prog-pending-row"><div><strong>${escapeHtml(p.routineName || p.routineId || "Programa")}</strong><div class="muted">Pendiente de aprobación</div></div><span class="st-chip ok">Enviado</span></div>`).join("")}
+      </div>`;
+    }
+  }
+
   const coachExtra = state.role === "coach"
     ? `<div class="actions" style="margin-bottom:8px">
         <button class="btn ghost" type="button" id="progNewRt">Nueva rutina</button>
         <button class="btn ghost" type="button" id="progOpenAi">Generar con IA</button>
         <button class="btn ghost" type="button" data-view="rutinas">Editor completo</button>
       </div>`
-    : `<p class="muted" style="margin-bottom:10px">Hoy muestra solo su programa activo. Aquí pide otro a Miguel — él aprueba en Bandeja; no se cambia solo.</p>`;
+    : "";
+
   const shelves = {};
   list.forEach((r) => {
     const k = kindOf(r);
     (shelves[k] = shelves[k] || []).push(r);
   });
   const order = ["cuerpo", "fuerza", "sup-inf", "split", "gluteos", "casa"];
-  const blocks = order.filter((k) => shelves[k] && shelves[k].length).map((k) => {
-    return `<p class="tagline" style="margin:16px 0 8px">${kindLabel(k)}</p>${shelves[k].map(programaCardHtml).join("")}`;
-  }).join("");
-  const abc = [["principiante","A","Principiante"],["intermedio","B","Intermedio"],["avanzado","C","Avanzado"]];
-  const hasFilter = !!(state.progBand || state.progDays || state.progKind || (state.progQ || "").trim());
-  return `<section class="screen">
+  const catalogList = isClient && activeId
+    ? list.filter((r) => r.id !== activeId)
+    : list;
+  const showCatalog = !isClient || hasFilter || state.progCatalogOpen;
+  // Client: collapse dump until level/search chosen or "Ver plantillas" opened
+  let blocks = "";
+  if (showCatalog) {
+    const limitedShelves = {};
+    catalogList.forEach((r) => {
+      const k = kindOf(r);
+      (limitedShelves[k] = limitedShelves[k] || []).push(r);
+    });
+    blocks = order.filter((k) => limitedShelves[k] && limitedShelves[k].length).map((k) => {
+      const rows = limitedShelves[k];
+      const cap = isClient && !hasFilter ? 3 : rows.length;
+      const shown = rows.slice(0, cap);
+      const more = rows.length > cap
+        ? `<p class="muted prog-shelf-more">+${rows.length - cap} más — busque o filtre por días/tipo</p>`
+        : "";
+      return `<p class="tagline prog-shelf-label">${kindLabel(k)}</p>${shown.map(programaCardHtml).join("")}${more}`;
+    }).join("");
+  }
+
+  const catalogGate = isClient && !showCatalog
+    ? `<div class="prog-catalog-gate">
+        <p class="muted">${total} plantillas en la biblioteca. Elija A, B o C, busque, o abra el catálogo.</p>
+        <button class="btn ghost" type="button" id="progOpenCatalog">Ver plantillas</button>
+      </div>`
+    : "";
+
+  const catalogBody = showCatalog
+    ? (blocks || nbEmpty({
+        icon: "☰",
+        title: "Nada con estos filtros",
+        hint: "La biblioteca sigue ahí. Quite filtros para ver A, B y C de nuevo.",
+        cta: hasFilter
+          ? `<button class="btn primary" type="button" id="progClearFilters">Quitar filtros</button>`
+          : `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>`
+      }))
+    : catalogGate;
+
+  const countLine = isClient
+    ? (hasFilter || state.progCatalogOpen
+      ? `${catalogList.length} plantillas · Hoy solo cambia si Miguel aprueba`
+      : `Activo primero · ${total} plantillas detrás de nivel y búsqueda`)
+    : `${list.length} de ${total} · Hoy solo cambia si Miguel aprueba.`;
+
+  return `<section class="screen programas-screen${isClient ? " programas-client" : ""}">
     <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Su biblioteca"}</p>
-    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Programas</h2>
-    <p class="muted">${list.length} de ${allRoutines().length} · Hoy solo cambia si Miguel aprueba.</p>
-    <div class="prog-abc" role="group" aria-label="Nivel">
-      ${abc.map(([id,letter,lab]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}">${letter}<small>${lab}</small></button>`).join("")}
+    <h2 class="prog-title">Programas</h2>
+    <p class="muted prog-count">${escapeHtml(countLine)}</p>
+    ${hero}
+    <div class="prog-abc" role="group" aria-label="Nivel A B C">
+      ${abc.map(([id,letter,lab]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}" aria-pressed="${(state.progBand||"")===id?"true":"false"}">${letter}<small>${lab}</small></button>`).join("")}
     </div>
     ${coachExtra}
     <div class="prog-sticky">
-      <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}">
-      <div class="filters">${[["","Todos"],...days.slice(1)].map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
-      <details class="prog-more-filters"${state.progKind ? " open" : ""}>
-        <summary>Tipo de programa</summary>
-        <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
-      </details>
+      <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}" aria-label="Buscar programas">
+      <div class="filters" role="group" aria-label="Días">${[["","Todos"],...days.slice(1)].map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
+      <label class="prog-kind-label" for="progKindSel">Tipo de programa</label>
+      <select class="field prog-kind-select" id="progKindSel" aria-label="Tipo de programa">
+        ${kinds.map(([id,l]) => `<option value="${escAttr(id)}"${(state.progKind||"")===id?" selected":""}>${escapeHtml(l)}</option>`).join("")}
+      </select>
     </div>
-    ${blocks || nbEmpty({ icon: "☰", title: "Nada con estos filtros", hint: "La biblioteca sigue ahí. Quite filtros para ver A, B y C de nuevo.", cta: hasFilter ? `<button class="btn primary" type="button" id="progClearFilters">Quitar filtros</button>` : `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>` })}
+    ${catalogBody}
   </section>`;
 }
 function bindProgramas() {
@@ -12348,9 +12432,41 @@ function bindProgramas() {
     // live filter without full nav rebuild
     render();
   });
-  $$("[data-prog-band]").forEach((b) => b.onclick = () => { state.progBand = b.dataset.progBand || ""; render(); });
-  $$("[data-prog-days]").forEach((b) => b.onclick = () => { state.progDays = b.dataset.progDays || ""; render(); });
-  $$("[data-prog-kind]").forEach((b) => b.onclick = () => { state.progKind = b.dataset.progKind || ""; render(); });
+  $$("[data-prog-band]").forEach((b) => b.onclick = () => {
+    const next = b.dataset.progBand || "";
+    state.progBand = (state.progBand === next) ? "" : next;
+    if (state.progBand) state.progCatalogOpen = true;
+    render();
+  });
+  $$("[data-prog-days]").forEach((b) => b.onclick = () => {
+    const next = b.dataset.progDays || "";
+    state.progDays = (String(state.progDays || "") === String(next)) ? "" : next;
+    if (state.progDays) state.progCatalogOpen = true;
+    render();
+  });
+  $$("[data-prog-kind]").forEach((b) => b.onclick = () => { state.progKind = b.dataset.progKind || ""; state.progCatalogOpen = true; render(); });
+  const kindSel = $("#progKindSel");
+  if (kindSel) kindSel.onchange = () => {
+    state.progKind = kindSel.value || "";
+    if (state.progKind) state.progCatalogOpen = true;
+    render();
+  };
+  const openCat = $("#progOpenCatalog");
+  if (openCat) openCat.onclick = () => { state.progCatalogOpen = true; render(); };
+  const clearF = $("#progClearFilters");
+  if (clearF) clearF.onclick = () => {
+    state.progBand = ""; state.progDays = ""; state.progKind = ""; state.progQ = "";
+    render();
+  };
+  const askOther = $("#progAskOther");
+  if (askOther) askOther.onclick = () => {
+    state.progCatalogOpen = true;
+    try {
+      const el = document.querySelector(".prog-sticky") || document.querySelector(".prog-abc");
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {}
+    toast("Elija una plantilla y pulse Pedir a Miguel");
+  };
   $$("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
   $$("[data-prog-pedir]").forEach((b) => b.onclick = () => {
     openPedirBeats(b.dataset.progPedir);
@@ -14438,11 +14554,11 @@ function renderGate() {
       <p class="lede">Entrenamiento con tu coach</p>
       <div class="actions cover-actions-row">
         <button class="btn primary cover-cta" id="haveCode">Entrar <span class="cover-arrow" aria-hidden="true">↗</span></button>
+        <button class="btn ghost cover-plans" id="seePlans" type="button">Planes</button>
         <button class="btn link cover-secondary" id="studioLock">Soy coach</button>
       </div>
       ${previewHint}
       <div class="quiet-links cover-quiet">
-        <button type="button" id="seePlans">Planes</button>
         <button type="button" id="seeAbout">Acerca de</button>
         <button type="button" id="seePrivacy">Privacidad</button>
       </div>
@@ -18935,7 +19051,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v3", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v4", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

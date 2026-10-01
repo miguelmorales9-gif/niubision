@@ -1842,3 +1842,63 @@ input[type=file].hidden {
   color: var(--cream);
   font-weight: 700;
 }
+
+/* Hybrid v4 — Planes under Entrar + client Programas density */
+.screen.hero.cover.cover-hybrid .btn.ghost.cover-plans {
+  min-height: 48px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 14px;
+  border: 1px solid rgba(243,237,227,.35);
+  background: rgba(243,237,227,.06);
+  color: var(--cream);
+  letter-spacing: .02em;
+}
+.screen.hero.cover.cover-hybrid .btn.ghost.cover-plans:active {
+  transform: scale(.98);
+  border-color: rgba(255,138,31,.5);
+}
+.programas-screen .prog-title {
+  font-family: var(--display);
+  font-size: clamp(26px, 8vw, 32px);
+  font-weight: 500;
+  margin: 0 0 6px;
+  letter-spacing: -.02em;
+}
+.programas-screen .prog-count { margin-bottom: 14px; }
+.programas-client .prog-hero-active {
+  margin-bottom: 14px;
+  border-color: rgba(255,138,31,.28);
+}
+.programas-client .prog-pending { margin: 0 0 16px; }
+.programas-client .prog-pending-row {
+  background: var(--ink-2);
+  border: 1px solid rgba(125,184,168,.28);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.programas-client .prog-catalog-gate {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px dashed rgba(243,237,227,.22);
+  border-radius: 16px;
+  text-align: center;
+}
+.programas-client .prog-catalog-gate .btn { margin-top: 10px; max-width: 280px; margin-left: auto; margin-right: auto; }
+.programas-screen .prog-kind-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(243,237,227,.72);
+  margin: 10px 0 6px;
+}
+.programas-screen .prog-kind-select {
+  margin-bottom: 8px;
+  background: var(--ink-2);
+  border: 1px solid rgba(243,237,227,.22);
+}
+.programas-screen .prog-shelf-label { margin: 16px 0 8px; }
+.programas-screen .prog-shelf-more { font-size: 12px; margin: -4px 0 12px; }

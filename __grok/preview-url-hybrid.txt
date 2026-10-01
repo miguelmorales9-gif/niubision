@@ -1,10 +1,7 @@
-# Look Hybrid v3
+# Look Hybrid v4
 Branch: eng/ui-look-hybrid
-Primary alias:
-  https://hybrid.niubision-ui-preview.pages.dev
-Latest deploy:
-  https://ff3dea49.niubision-ui-preview.pages.dev
-Hard-refresh (hybrid-v3 / nb-offline-hybrid-v3).
-Hold logo → amber RING fills → Cover.
+Alias: https://hybrid.niubision-ui-preview.pages.dev
+Hard-refresh hybrid-v4 / nb-offline-hybrid-v4
+Verify: Cover Entrar → Planes under it; Programas = activo/Pedir first, catalog gated
 Demo Hoy: 240101 or ?demo=hoy
-NO merge · NO niubision.com · logo untouched
+NO merge · NO niubision.com
