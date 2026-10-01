@@ -1,6 +1,8 @@
 # Look C — Nube v2
 Branch: eng/ui-look-nube
-Alias (pending deploy):
+Primary alias (HTTP 200):
   https://nube.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://2c75ba2d.niubision-ui-preview.pages.dev
 Hard-refresh once (nube-preview / nb-offline-nube-preview).
 NO merge · NO niubision.com · logo untouched
