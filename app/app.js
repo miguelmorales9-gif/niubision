@@ -14136,6 +14136,18 @@ function applyHash() {
   }
 }
 
+function guardLogoMedia(el) {
+  if (!el) return;
+  const prevent = (e) => e.preventDefault();
+  el.addEventListener("contextmenu", prevent);
+  el.addEventListener("dragstart", prevent);
+  const img = el.querySelector("img");
+  if (img) {
+    img.addEventListener("contextmenu", prevent);
+    img.addEventListener("dragstart", prevent);
+  }
+}
+
 function renderGate() {
   if (state.splash) {
     $("#app").innerHTML = `<section class="splash" id="splash">
@@ -14149,6 +14161,7 @@ function renderGate() {
       <div class="hold-bar"><span id="holdFill"></span></div>
     </section>`;
     bindSplash();
+    guardLogoMedia($("#holdLogo"));
     warmupIntro();
     return;
   }
@@ -14177,6 +14190,7 @@ function renderGate() {
     $("#logoPulse").classList.add("spin");
     setTimeout(() => $("#logoPulse").classList.remove("spin"), 700);
   };
+  guardLogoMedia($("#logoPulse"));
   /* Long-press logo (~1.2s) also opens coach PIN — quiet secondary path. */
   (function bindCoachHold() {
     const el = $("#logoPulse");
@@ -14185,6 +14199,7 @@ function renderGate() {
     const clear = () => { if (hold) { clearTimeout(hold); hold = null; } };
     el.addEventListener("pointerdown", (e) => {
       if (e.button && e.button !== 0) return;
+      if (e.pointerType === "touch") e.preventDefault();
       clear();
       hold = setTimeout(() => { hold = null; openCoachGate(); }, 1200);
     });
@@ -18424,7 +18439,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=50", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=51", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

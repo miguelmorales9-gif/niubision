@@ -122,7 +122,9 @@ body.modal-open { overflow: hidden; }
 .splash.out { opacity:0; transform:scale(.98); transition: .4s ease; }
 .orb { position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(212,176,106,.28), transparent 68%); filter:blur(8px); animation: pulse 2.8s ease-in-out infinite; }
 .splash-logo-wrap { position:relative; width:min(84vw, 280px); height:auto; border:0; background:none !important; padding:0; box-shadow:none; overflow:visible; }
+.splash-logo-wrap, .logo-btn { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
 .splash-logo { width:100%; height:auto; display:block; border-radius:0; object-fit:contain; background:transparent !important; animation: logoIdle 5.5s ease-in-out infinite; filter: drop-shadow(0 0 18px rgba(212,176,106,.32)); }
+.splash-logo, .logo-btn img { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; -webkit-user-drag:none; pointer-events:none; }
 @keyframes logoIdle {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.035); }
