@@ -1433,7 +1433,7 @@ input[type=file].hidden {
 }
 
 
-/* ===== Look A — Obsidiana (editorial dark ink + cream, Fraunces calm) ===== */
+/* ===== Look Hybrid — Obsidiana base + Ember CTA amber + Nube mint relief ===== */
 :root {
   --ink: #0E0D10;
   --ink-2: #17161B;
@@ -1441,27 +1441,69 @@ input[type=file].hidden {
   --cream: #F3EDE3;
   --mute: #9A948C;
   --line: #2A2830;
-  --sun: #E8DFD2;
+  /* Ember amber for primary action punch */
+  --ember: #FF8A1F;
+  --ember-2: #FFB347;
+  --sun: var(--ember);
   --peach: #C4B5A0;
-  --mint: #8FCBB3;
+  /* Soft mint relief (chips / success / empty) — not full light slate */
+  --mint: #7DB8A8;
+  --mint-2: #A8D5C8;
   --bg: var(--ink); --bg-2: var(--ink-2); --bg-3: var(--ink-3);
-  --gold: var(--cream); --gold-dim: #8a8278;
+  --gold: var(--ember); --gold-dim: #a85a12;
 }
 
 .app-header { background: rgba(14,13,16,.94); border-bottom-color: var(--line); }
-.brand-obsidiana strong {
+.brand-hybrid strong {
   font-family: var(--display); font-weight: 500; font-size: 17px;
   letter-spacing: .01em; color: var(--cream);
 }
-.brand-obsidiana .brand-tag-quiet { display: none; }
-.brand-obsidiana img { width: 36px; height: 36px; }
+.brand-hybrid .brand-tag-quiet { display: none; }
+.brand-hybrid img { width: 36px; height: 36px; }
 
 .nav { background: var(--ink); border-top: 1px solid var(--line); }
-.nav button.on { color: var(--cream); }
-.nav button.on::after { background: var(--cream); }
+.nav button.on { color: var(--ember); }
+.nav button.on::after { background: var(--ember); }
 
-/* Cover Obsidiana */
-.screen.hero.cover.cover-obsidiana {
+/* Primary CTA punch — amber (Empezar / Entrar / Aprobar / Pedir) */
+.btn.primary {
+  background: linear-gradient(180deg, var(--ember-2), var(--ember)) !important;
+  color: #0A0A0B !important;
+  font-weight: 700;
+  box-shadow: 0 10px 28px rgba(255,138,31,.28);
+  animation: none !important;
+  background-image: linear-gradient(180deg, var(--ember-2), var(--ember)) !important;
+}
+.btn.primary:active { transform: scale(.98); filter: brightness(.96); }
+.btn.primary:hover { border-color: var(--ember); filter: brightness(1.06); }
+
+/* Mint relief — chips, success, empty (not whole canvas) */
+.chip, .filters button.on, .prog-sticky .filters button.on, .prog-abc button.on {
+  border-color: rgba(125,184,168,.45);
+  color: var(--mint);
+  background: rgba(125,184,168,.1);
+}
+.st-chip.ok, .ok, .inbox-chips button[data-chip="hecho"].on {
+  color: var(--mint); border-color: rgba(125,184,168,.45);
+}
+.nb-empty {
+  background: rgba(125,184,168,.06);
+  border: 1px solid rgba(125,184,168,.22);
+}
+.nb-empty-icon {
+  background: rgba(125,184,168,.12);
+  border: 1px solid rgba(125,184,168,.28);
+  color: var(--mint);
+}
+.set-row.done input[type=checkbox] { accent-color: var(--mint); }
+.btn.mint {
+  background: rgba(125,184,168,.14);
+  color: var(--mint);
+  border: 1px solid rgba(125,184,168,.35);
+}
+
+/* Cover Hybrid — Obsidiana editorial bones + amber Entrar */
+.screen.hero.cover.cover-hybrid {
   position: relative;
   min-height: 100dvh; min-height: 100svh;
   max-width: none; width: 100%; margin: 0;
@@ -1469,154 +1511,201 @@ input[type=file].hidden {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; text-align: center; gap: 0;
   background: var(--ink); box-sizing: border-box;
+  overflow-x: hidden;
 }
-.screen.hero.cover.cover-obsidiana .logo-btn {
+.screen.hero.cover.cover-hybrid .logo-btn {
   margin: 0 auto 10px; border: 0; background: none; padding: 0;
 }
-.screen.hero.cover.cover-obsidiana .splash-logo {
+.screen.hero.cover.cover-hybrid .splash-logo {
   width: min(42vw, 132px); height: auto; margin: 0 auto;
-  filter: none; animation: none;
+  filter: drop-shadow(0 0 22px rgba(255,138,31,.18));
+  animation: logoIdle 5.5s ease-in-out infinite;
 }
-.screen.hero.cover.cover-obsidiana .cover-brand-name {
+.screen.hero.cover.cover-hybrid .cover-brand-name {
   font-family: var(--display); font-weight: 500;
   font-size: clamp(28px, 8vw, 36px); color: var(--cream);
   letter-spacing: -.01em; margin: 4px 0 18px;
 }
-.screen.hero.cover.cover-obsidiana .cover-rule {
+.screen.hero.cover.cover-hybrid .cover-rule {
   width: min(72%, 280px); border: 0; border-top: 1px solid rgba(243,237,227,.45);
   margin: 0 auto 28px;
 }
-.screen.hero.cover.cover-obsidiana .cover-headline {
+.screen.hero.cover.cover-hybrid .cover-headline {
   font-family: var(--display); font-weight: 500;
   font-size: clamp(36px, 10vw, 48px); line-height: 1.05;
   letter-spacing: -.02em; color: var(--cream);
   margin: 0 0 8px; max-width: 14ch;
   position: relative; display: inline-block;
 }
-.screen.hero.cover.cover-obsidiana .cover-headline::after {
-  content: ""; display: block; height: 1px; width: 72%;
-  background: rgba(243,237,227,.55); margin-top: 10px;
+.screen.hero.cover.cover-hybrid .cover-headline::after {
+  content: ""; display: block; height: 2px; width: 56%;
+  background: linear-gradient(90deg, var(--ember), transparent);
+  margin-top: 12px;
 }
-.screen.hero.cover.cover-obsidiana > p.lede {
+.screen.hero.cover.cover-hybrid > p.lede {
   color: rgba(243,237,227,.72); font-size: 15px; font-weight: 400;
   margin: 14px auto 32px; letter-spacing: .01em;
 }
-.screen.hero.cover.cover-obsidiana .cover-actions-row {
-  display: flex; align-items: center; justify-content: center;
-  gap: 18px; flex-wrap: wrap; width: auto; margin: 0 auto;
+.screen.hero.cover.cover-hybrid .cover-actions-row {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 14px; width: min(100%, 320px); margin: 0 auto;
 }
-.screen.hero.cover.cover-obsidiana .btn.primary.cover-cta {
-  min-height: 48px; padding: 12px 22px; font-size: 16px;
-  font-family: var(--display); font-weight: 500;
-  border-radius: 10px; border: 0;
-  background: var(--cream) !important; color: var(--ink) !important;
-  box-shadow: none; letter-spacing: .01em;
+.screen.hero.cover.cover-hybrid .btn.primary.cover-cta {
+  min-height: 56px; padding: 14px 24px; font-size: 17px;
+  font-weight: 700; border-radius: 14px; border: 0;
+  background: linear-gradient(180deg, var(--ember-2), var(--ember)) !important;
+  color: #0A0A0B !important;
+  box-shadow: 0 14px 36px rgba(255,138,31,.34);
+  letter-spacing: .02em;
+  transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s ease, filter .18s ease;
 }
-.screen.hero.cover.cover-obsidiana .cover-arrow { margin-left: 4px; font-size: 14px; }
-.screen.hero.cover.cover-obsidiana .btn.link.cover-secondary,
-.screen.hero.cover.cover-obsidiana .btn.cover-secondary {
+.screen.hero.cover.cover-hybrid .btn.primary.cover-cta:active {
+  transform: scale(.98);
+  box-shadow: 0 8px 20px rgba(255,138,31,.28);
+}
+.screen.hero.cover.cover-hybrid .cover-arrow { margin-left: 6px; font-size: 15px; }
+.screen.hero.cover.cover-hybrid .btn.link.cover-secondary,
+.screen.hero.cover.cover-hybrid .btn.cover-secondary {
   background: none; border: 0; color: var(--cream);
   font-family: var(--display); font-weight: 500; font-size: 16px;
   text-decoration: underline; text-underline-offset: 4px;
   min-height: auto; padding: 8px 4px; box-shadow: none;
+  align-self: center;
 }
-.screen.hero.cover.cover-obsidiana .cover-quiet {
+.screen.hero.cover.cover-hybrid .cover-quiet {
   margin-top: 28px; opacity: .35; gap: 10px 16px;
 }
-.screen.hero.cover.cover-obsidiana .cover-quiet button {
+.screen.hero.cover.cover-hybrid .cover-quiet button {
   color: var(--mute); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
 }
-.screen.hero.cover.cover-obsidiana .cover-footer {
-  margin-top: auto; padding-top: 48px; width: min(100%, 420px);
+.screen.hero.cover.cover-hybrid .cover-footer {
+  margin-top: auto; padding-top: 40px; width: min(100%, 420px);
+  flex: 0 0 auto;
 }
-.screen.hero.cover.cover-obsidiana .cover-footer-rule {
+.screen.hero.cover.cover-hybrid .cover-footer-rule {
   border: 0; border-top: 1px solid rgba(243,237,227,.28); margin: 0 0 16px;
 }
-.screen.hero.cover.cover-obsidiana .cover-footer-mark {
+.screen.hero.cover.cover-hybrid .cover-footer-mark {
   font-size: 10px; letter-spacing: .28em; text-transform: uppercase;
   color: rgba(243,237,227,.55); margin: 0;
 }
-.screen.hero.cover.cover-obsidiana .disclaimer {
+.screen.hero.cover.cover-hybrid .disclaimer {
   margin-top: 18px; max-width: 36ch; opacity: .28; font-size: 10px;
 }
 
-/* Client Hoy Obsidiana — editorial session card */
-.session-start.client-hoy-obsidiana { padding-top: 8px; }
-.session-start.client-hoy-obsidiana .hoy-hero.hoy-hero-obsidiana {
+/* Client Hoy Hybrid — editorial card + dense amber Empezar */
+.session-start.client-hoy-hybrid { padding-top: 8px; overflow-x: hidden; }
+.session-start.client-hoy-hybrid .hoy-hero.hoy-hero-hybrid {
   display: flex; flex-direction: column; align-items: stretch;
   text-align: left; max-height: none; margin: 0 0 18px;
   padding: 8px 0 0; gap: 0; background: transparent; border: 0;
   border-radius: 0; box-shadow: none;
+  animation: rise var(--motion) var(--ease);
 }
-.session-start.client-hoy-obsidiana .hoy-title-look {
+.session-start.client-hoy-hybrid .hoy-title-look {
   font-family: var(--display); font-weight: 500;
   font-size: clamp(40px, 12vw, 52px); line-height: 1;
-  letter-spacing: -.03em; color: var(--cream); margin: 4px 0 20px;
+  letter-spacing: -.03em; color: var(--cream); margin: 4px 0 8px;
 }
-.session-start.client-hoy-obsidiana .session-card-look {
-  background: var(--ink-2); border: 1px solid rgba(243,237,227,.18);
-  border-radius: 16px; padding: 18px 16px 16px;
+.session-start.client-hoy-hybrid .hoy-tagline-soft {
+  font-size: 12px; letter-spacing: .04em; color: var(--mute);
+  margin: 0 0 18px; line-height: 1.4;
 }
-.session-start.client-hoy-obsidiana .session-label {
+.session-start.client-hoy-hybrid .hoy-tagline-soft .mint-dot {
+  color: var(--mint); margin-right: 4px;
+}
+.session-start.client-hoy-hybrid .session-card-look {
+  background: var(--ink-2);
+  border: 1px solid rgba(255,138,31,.22);
+  border-radius: 18px; padding: 18px 16px 16px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.32);
+  overflow: hidden;
+}
+.session-start.client-hoy-hybrid .session-label {
   font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
   color: var(--mute); margin: 0 0 10px;
+  display: flex; align-items: center; gap: 8px;
 }
-.session-start.client-hoy-obsidiana .session-card-body {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+.session-start.client-hoy-hybrid .session-label .mint-chip {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; letter-spacing: .08em;
+  color: var(--mint); border: 1px solid rgba(125,184,168,.4);
+  background: rgba(125,184,168,.1); text-transform: uppercase;
 }
-.session-start.client-hoy-obsidiana .session-time {
+.session-start.client-hoy-hybrid .session-card-body {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 14px; min-width: 0;
+}
+.session-start.client-hoy-hybrid .session-card-main { min-width: 0; }
+.session-start.client-hoy-hybrid .session-time {
   font-family: var(--display); font-weight: 500;
   font-size: clamp(28px, 8vw, 36px); color: var(--cream);
   line-height: 1.05; margin: 0 0 10px;
 }
-.session-start.client-hoy-obsidiana .session-who {
-  display: flex; align-items: center; gap: 10px;
+.session-start.client-hoy-hybrid .session-who {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
 }
-.session-start.client-hoy-obsidiana .session-avatar {
+.session-start.client-hoy-hybrid .session-avatar {
   width: 28px; height: 28px; border-radius: 50%;
-  border: 1px solid rgba(243,237,227,.35);
-  background: radial-gradient(circle at 35% 30%, #3a3842, #1a191e);
+  border: 1px solid rgba(125,184,168,.4);
+  background: radial-gradient(circle at 35% 30%, rgba(125,184,168,.25), #1a191e);
   flex: 0 0 28px;
 }
-.session-start.client-hoy-obsidiana .session-who strong {
+.session-start.client-hoy-hybrid .session-who strong {
   display: block; font-family: var(--display); font-weight: 500;
   font-size: 15px; color: var(--cream);
 }
-.session-start.client-hoy-obsidiana .session-who span {
+.session-start.client-hoy-hybrid .session-who span {
   display: block; font-size: 12px; color: var(--mute); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.session-start.client-hoy-obsidiana .session-empezar {
-  flex: 0 0 auto; min-height: 40px; padding: 10px 14px;
-  border: 1px solid rgba(243,237,227,.55); border-radius: 10px;
-  background: transparent !important; color: var(--cream) !important;
-  font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
-  font-weight: 600; box-shadow: none;
+.session-start.client-hoy-hybrid .session-empezar {
+  width: 100%; min-height: 52px; padding: 14px 16px;
+  border: 0; border-radius: 14px;
+  background: linear-gradient(180deg, var(--ember-2), var(--ember)) !important;
+  color: #0A0A0B !important;
+  font-size: 15px; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 700; box-shadow: 0 12px 28px rgba(255,138,31,.32);
+  transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s ease;
 }
-.session-start.client-hoy-obsidiana .hoy-interp {
+.session-start.client-hoy-hybrid .session-empezar:active {
+  transform: scale(.98);
+}
+.session-start.client-hoy-hybrid .hoy-interp {
   margin: 14px 0 0; font-size: 13px; color: var(--mute); max-width: 36ch;
 }
-.session-start.client-hoy-obsidiana .hoy-ring-quiet {
-  margin-top: 16px; display: flex; justify-content: center; opacity: .85;
+.session-start.client-hoy-hybrid .hoy-ring-quiet {
+  margin-top: 16px; display: flex; justify-content: center; opacity: .9;
 }
-.session-start.client-hoy-obsidiana .hoy-ring-quiet .hoy-ring {
+.session-start.client-hoy-hybrid .hoy-ring-quiet .hoy-ring {
   width: 96px; height: 96px; flex: 0 0 96px;
-  box-shadow: none; background: var(--ink-2);
+  box-shadow: 0 0 0 1px rgba(255,138,31,.2);
+  background: var(--ink-2);
 }
-.session-start.client-hoy-obsidiana .hoy-ring-quiet .hoy-ring b { font-size: 18px; color: var(--cream); }
-.session-start.client-hoy-obsidiana .hoy-ring-quiet .hoy-ring-sun { stroke: var(--cream); filter: none; }
-.session-start.client-hoy-obsidiana .prioridad-hero li {
-  background: var(--ink-2); border: 1px solid rgba(243,237,227,.16);
+.session-start.client-hoy-hybrid .hoy-ring-quiet .hoy-ring b { font-size: 18px; color: var(--ember); }
+.session-start.client-hoy-hybrid .hoy-ring-quiet .hoy-ring-sun { stroke: var(--ember); filter: none; }
+.session-start.client-hoy-hybrid .hoy-ring-quiet .hoy-ring-track { stroke: var(--ink-3); }
+.session-start.client-hoy-hybrid .prioridad-hero li {
+  background: var(--ink-2); border: 1px solid rgba(243,237,227,.14);
   box-shadow: none;
 }
-.session-start.client-hoy-obsidiana .prioridad-hero .prio-dot { background: var(--cream); }
-.session-start.client-hoy-obsidiana .hoy-more-trigger {
+.session-start.client-hoy-hybrid .prioridad-hero .prio-dot { background: var(--ember); }
+.session-start.client-hoy-hybrid .hoy-more-trigger {
   color: var(--cream); border-color: rgba(243,237,227,.22);
 }
-.session-start.client-hoy-obsidiana .btn.primary {
-  background: var(--cream) !important; color: var(--ink) !important;
-  box-shadow: none;
+.session-start.client-hoy-hybrid .btn.primary {
+  background: linear-gradient(180deg, var(--ember-2), var(--ember)) !important;
+  color: #0A0A0B !important;
+  box-shadow: 0 10px 28px rgba(255,138,31,.28);
+}
+
+.progress > span {
+  background: linear-gradient(90deg, var(--ember), var(--ember-2)) !important;
+  animation: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen.hero.cover.cover-obsidiana .splash-logo { animation: none; }
+  .screen.hero.cover.cover-hybrid .splash-logo { animation: none; }
+  .session-start.client-hoy-hybrid .hoy-hero.hoy-hero-hybrid { animation: none; }
+  .btn.primary { transition: none; }
 }

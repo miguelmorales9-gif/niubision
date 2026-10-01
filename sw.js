@@ -1,9 +1,9 @@
-const CACHE = "nb-offline-obsidiana-preview";
+const CACHE = "nb-offline-hybrid-preview";
 const SHELL = [
   "/",
   "/index.html",
-  "/app/styles.css?v=obsidiana-preview",
-  "/app/app.js?v=obsidiana-preview",
+  "/app/styles.css?v=hybrid-preview",
+  "/app/app.js?v=hybrid-preview",
   "/favicon.svg",
   "/logo.png",
   "/icon-48.png",

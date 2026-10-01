@@ -14369,7 +14369,7 @@ function renderGate() {
     return;
   }
   $("#app").innerHTML = `
-    <section class="screen hero cover cover-obsidiana">
+    <section class="screen hero cover cover-hybrid">
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
       <h1 class="cover-brand-name">NiuBision</h1>
       <hr class="cover-rule" aria-hidden="true">
@@ -15087,7 +15087,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand brand-obsidiana"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">Mira el trabajo. Disfruta el día.</span></div></div>
+    <div class="brand brand-hybrid"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">Mira el trabajo. Disfruta el día.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -15616,16 +15616,17 @@ function workView() {
           cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>`
         });
     const dayName = escapeHtml(calendarWeekdayName());
-    const emptyCls = state.role === "client" ? "screen session-start client-hoy client-hoy-obsidiana" : "screen session-start";
+    const emptyCls = state.role === "client" ? "screen session-start client-hoy client-hoy-hybrid" : "screen session-start";
     return `<section class="${emptyCls}">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="hoy-hero${state.role === "client" ? " hoy-hero-obsidiana" : ""}">
+      <div class="hoy-hero${state.role === "client" ? " hoy-hero-hybrid" : ""}">
         ${state.role === "client" ? `
           <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-soft"><span class="mint-dot" aria-hidden="true">◆</span> Su día, con calma</p>
           <div class="session-card-look empty">
-            <p class="session-label">SESIÓN DE HOY</p>
+            <p class="session-label">SESIÓN DE HOY <span class="mint-chip">Libre</span></p>
             <div class="session-card-body">
               <div class="session-card-main">
                 <p class="session-time">${dayName}</p>
@@ -15694,7 +15695,7 @@ function workView() {
     const isClient = state.role === "client";
     const prioTop = isClient ? prio.slice(0, 2) : prio;
     const ctaLabel = closed ? "Ver la sesión" : (pct > 0 && pct < 100 ? "Continuar" : "Empezar");
-    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-obsidiana" : "screen session-start";
+    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-hybrid" : "screen session-start";
     const prioBlock = prioTop.length
       ? (isClient
           ? `<ul class="prioridad prioridad-hero">${prioTop.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>`
@@ -15733,11 +15734,12 @@ function workView() {
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="hoy-hero${isClient ? " hoy-hero-obsidiana" : ""}">
+      <div class="hoy-hero${isClient ? " hoy-hero-hybrid" : ""}">
         ${isClient ? `
           <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-soft"><span class="mint-dot" aria-hidden="true">◆</span> Un toque para empezar</p>
           <div class="session-card-look">
-            <p class="session-label">SESIÓN DE HOY</p>
+            <p class="session-label">SESIÓN DE HOY${closed ? ' <span class="mint-chip">Cerrado</span>' : ""}</p>
             <div class="session-card-body">
               <div class="session-card-main">
                 <p class="session-time">${escapeHtml(dayBig)}</p>
@@ -15749,7 +15751,7 @@ function workView() {
                   </div>
                 </div>
               </div>
-              <button class="btn ghost session-empezar go" id="goLive">${ctaLabel === "Empezar" ? "EMPEZAR" : escapeHtml(ctaLabel)}</button>
+              <button class="btn primary session-empezar go" id="goLive">${ctaLabel === "Empezar" ? "EMPEZAR →" : escapeHtml(ctaLabel)}</button>
             </div>
           </div>
           <p class="hoy-interp">${escapeHtml(interp)}</p>
