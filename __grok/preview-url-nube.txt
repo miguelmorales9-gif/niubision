@@ -1,0 +1,6 @@
+# Look C — Nube v2
+Branch: eng/ui-look-nube
+Alias (pending deploy):
+  https://nube.niubision-ui-preview.pages.dev
+Hard-refresh once (nube-preview / nb-offline-nube-preview).
+NO merge · NO niubision.com · logo untouched

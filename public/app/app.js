@@ -14369,20 +14369,22 @@ function renderGate() {
     return;
   }
   $("#app").innerHTML = `
-    <section class="screen hero cover cover-v62">
+    <section class="screen hero cover cover-nube">
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
-      <p class="cover-brand">NiuBision</p>
-      <h1 class="cover-headline">Hoy se entrena.</h1>
-      <p class="lede">Mira el trabajo. Cierra el día.</p>
-      <div class="actions">
-        <button class="btn primary cover-cta" id="haveCode">Entrar con código</button>
-        <button class="btn ghost cover-secondary" id="studioLock">Soy coach</button>
+      <h1 class="cover-brand-name">NiuBision</h1>
+      <h2 class="cover-headline">Tu próximo nivel</h2>
+      <hr class="cover-mint-rule" aria-hidden="true">
+      <p class="lede">Entrenamiento con Miguel</p>
+      <div class="actions cover-actions-stack">
+        <button class="btn primary cover-cta" id="haveCode"><span aria-hidden="true">→</span> Entrar</button>
+        <button class="btn link cover-secondary" id="studioLock">Soy coach</button>
       </div>
-      <div class="quiet-links">
+      <div class="quiet-links cover-quiet">
         <button type="button" id="seePlans">Planes</button>
         <button type="button" id="seeAbout">Acerca de</button>
         <button type="button" id="seePrivacy">Privacidad</button>
       </div>
+      <div class="nube-waves" aria-hidden="true"></div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
     </section>`;
   bindGuestTour();
@@ -15082,7 +15084,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>Mira el trabajo. Disfruta el día.</span></div></div>
+    <div class="brand brand-nube"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">Mira el trabajo. Disfruta el día.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -15611,16 +15613,20 @@ function workView() {
           cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>`
         });
     const dayName = escapeHtml(calendarWeekdayName());
-    const emptyCls = state.role === "client" ? "screen session-start client-hoy client-hoy-v62" : "screen session-start";
+    const emptyCls = state.role === "client" ? "screen session-start client-hoy client-hoy-nube" : "screen session-start";
     return `<section class="${emptyCls}">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="hoy-hero${state.role === "client" ? " hoy-hero-stack" : ""}">
+      <div class="hoy-hero${state.role === "client" ? " hoy-hero-nube" : ""}">
         ${state.role === "client" ? `
-          <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
-          <h2>${dayName}</h2>
-          ${hoyRingHtml(0, 0, 0)}
+          <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-nube"><span class="leaf" aria-hidden="true">🍃</span> Tu práctica. Tu energía. Tu día.</p>
+          <div class="session-card-look nube-session empty">
+            <div class="session-card-head"><h3 class="session-title">Sesión de hoy</h3></div>
+            <p class="session-time">${dayName}</p>
+            <div class="session-who"><div><strong>Sin rutina</strong><span>Pida un programa para empezar</span></div></div>
+          </div>
           <p class="hoy-interp">Sin rutina activa. Puede pedir un programa cuando quiera.</p>
         ` : `
         <div>
@@ -15676,7 +15682,7 @@ function workView() {
     const isClient = state.role === "client";
     const prioTop = isClient ? prio.slice(0, 2) : prio;
     const ctaLabel = closed ? "Ver la sesión" : (pct > 0 && pct < 100 ? "Continuar" : "Empezar");
-    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-v62" : "screen session-start";
+    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-nube" : "screen session-start";
     const prioBlock = prioTop.length
       ? (isClient
           ? `<ul class="prioridad prioridad-hero">${prioTop.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>`
@@ -15715,16 +15721,27 @@ function workView() {
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="hoy-hero${isClient ? " hoy-hero-stack" : ""}">
+      <div class="hoy-hero${isClient ? " hoy-hero-nube" : ""}">
         ${isClient ? `
-          <p class="hoy-greet">${escapeHtml(greet)}</p>
-          <h2>${escapeHtml(dayBig)}</h2>
-          <p class="hoy-meta">${escapeHtml(band)}${closed ? " · cerrado" : ""}</p>
-          ${hoyRingHtml(pct, doneSets, totalSets)}
-          <div class="hoy-cta-wrap">
-            <button class="btn primary go hoy-cta-massive" id="goLive">${ctaLabel}</button>
+          <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-nube"><span class="leaf" aria-hidden="true">🍃</span> Tu práctica. Tu energía. Tu día.</p>
+          <div class="session-card-look nube-session">
+            <div class="session-card-head">
+              <h3 class="session-title">Sesión de hoy</h3>
+              <span class="session-cal" aria-hidden="true">📅</span>
+            </div>
+            <p class="session-time"><span aria-hidden="true">🕒</span> ${escapeHtml(dayBig)}</p>
+            <div class="session-who">
+              <span class="session-avatar-mint" aria-hidden="true">👤</span>
+              <div>
+                <strong>Miguel</strong>
+                <span>${escapeHtml(dayLab)}${closed ? " · cerrado" : ""}</span>
+              </div>
+            </div>
+            <button class="btn primary session-empezar go" id="goLive">${ctaLabel === "Empezar" ? "Empezar →" : escapeHtml(ctaLabel)}</button>
           </div>
           <p class="hoy-interp">${escapeHtml(interp)}</p>
+          <div class="hoy-ring-quiet">${hoyRingHtml(pct, doneSets, totalSets)}</div>
         ` : `
         <div>
           <p class="hoy-greet">${who}${escapeHtml(greet)}</p>

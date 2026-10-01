@@ -1431,3 +1431,210 @@ input[type=file].hidden {
 @media (prefers-reduced-motion: reduce) {
   .screen.hero.cover.cover-v62 .splash-logo { animation: none; }
 }
+
+
+/* ===== Look C — Nube v2 (soft slate + soft mint, light) ===== */
+:root {
+  --ink: #E8EEF2;
+  --ink-2: #FFFFFF;
+  --ink-3: #DDE5EB;
+  --cream: #2C3A47;
+  --mute: #6B7A88;
+  --line: #D0DAE2;
+  --sun: #7DB8A8;
+  --peach: #C4A484;
+  --mint: #7DB8A8;
+  --mint-2: #A8D5C8;
+  --slate: #2C3A47;
+  --slate-soft: #5A6B7A;
+  --bg: var(--ink); --bg-2: var(--ink-2); --bg-3: var(--ink-3);
+  --gold: var(--mint); --gold-dim: #5a9a8a;
+}
+html, body {
+  background: var(--bg); color: var(--cream);
+  color-scheme: light;
+}
+a { color: var(--mint); }
+.app-header {
+  background: rgba(232,238,242,.94); border-bottom-color: var(--line);
+}
+.brand-nube strong {
+  font-weight: 700; font-size: 16px; color: var(--slate); letter-spacing: .01em;
+}
+.brand-nube .brand-tag-quiet { display: none; }
+.chip {
+  border-color: var(--mint); color: var(--slate); background: #fff;
+}
+.nav {
+  background: rgba(255,255,255,.92); border-top: 1px solid var(--line);
+}
+.nav button { color: var(--mute); }
+.nav button.on { color: var(--mint); }
+.nav button.on::after { background: var(--mint); }
+
+.card, .plan, .ex-card, .rt-card, .prog-card {
+  background: #fff; border-color: var(--line); color: var(--slate);
+  box-shadow: 0 8px 24px rgba(44,58,71,.06);
+}
+.btn.primary {
+  background: var(--mint) !important; color: #fff !important;
+  box-shadow: 0 8px 20px rgba(125,184,168,.28);
+}
+.btn.ghost {
+  border-color: var(--line); color: var(--slate); background: #fff;
+}
+.screen { color: var(--slate); }
+
+/* Cover Nube */
+.screen.hero.cover.cover-nube {
+  position: relative; overflow: hidden;
+  min-height: 100dvh; min-height: 100svh;
+  max-width: none; width: 100%; margin: 0;
+  padding: max(56px, env(safe-area-inset-top, 0px)) 28px max(28px, env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center; gap: 0;
+  background: #FFFFFF;
+  box-sizing: border-box;
+}
+.screen.hero.cover.cover-nube .logo-btn {
+  margin: 0 auto 12px; border: 0; background: none; padding: 0;
+}
+.screen.hero.cover.cover-nube .splash-logo {
+  width: min(40vw, 120px); height: auto; margin: 0 auto;
+  filter: drop-shadow(0 8px 20px rgba(44,58,71,.12));
+  animation: none;
+}
+.screen.hero.cover.cover-nube .cover-brand-name {
+  font-family: var(--display); font-weight: 500;
+  font-size: clamp(26px, 7vw, 34px); color: var(--slate);
+  letter-spacing: .02em; margin: 0 0 18px;
+}
+.screen.hero.cover.cover-nube .cover-headline {
+  font-family: var(--display); font-weight: 500;
+  font-size: clamp(32px, 9vw, 42px); line-height: 1.1;
+  letter-spacing: -.02em; color: var(--slate);
+  margin: 0 0 12px; max-width: 14ch;
+}
+.screen.hero.cover.cover-nube .cover-mint-rule {
+  width: 48px; border: 0; border-top: 2px solid var(--mint);
+  margin: 0 auto 14px;
+}
+.screen.hero.cover.cover-nube > p.lede {
+  color: var(--mute); font-size: 15px; margin: 0 auto 28px;
+}
+.screen.hero.cover.cover-nube .cover-actions-stack {
+  width: min(100%, 300px); margin: 0 auto; display: grid; gap: 14px;
+  justify-items: center;
+}
+.screen.hero.cover.cover-nube .btn.primary.cover-cta {
+  min-height: 52px; padding: 14px 28px; font-size: 16px; font-weight: 600;
+  border-radius: 999px; border: 0; width: 100%;
+  background: linear-gradient(180deg, #A8D5C8, #7DB8A8) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 28px rgba(125,184,168,.35);
+}
+.screen.hero.cover.cover-nube .btn.link.cover-secondary,
+.screen.hero.cover.cover-nube .btn.cover-secondary {
+  background: none; border: 0; color: var(--mint);
+  font-size: 15px; text-decoration: underline; text-underline-offset: 4px;
+  min-height: auto; padding: 6px 4px; box-shadow: none;
+}
+.screen.hero.cover.cover-nube .cover-quiet {
+  margin-top: 24px; opacity: .45;
+}
+.screen.hero.cover.cover-nube .cover-quiet button {
+  color: var(--mute); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+}
+.screen.hero.cover.cover-nube .nube-waves {
+  position: absolute; left: -10%; right: -10%; bottom: -4%;
+  height: 28%; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 80% at 20% 80%, rgba(125,184,168,.35), transparent 60%),
+    radial-gradient(ellipse 70% 90% at 70% 100%, rgba(168,213,200,.4), transparent 55%),
+    radial-gradient(ellipse 50% 70% at 45% 90%, rgba(200,220,230,.5), transparent 50%);
+  filter: blur(2px);
+}
+.screen.hero.cover.cover-nube .disclaimer {
+  position: relative; z-index: 1; margin-top: 40px; opacity: .35; font-size: 10px; color: var(--mute);
+}
+
+/* Client Hoy Nube */
+.session-start.client-hoy-nube { padding-top: 6px; }
+.session-start.client-hoy-nube .hoy-hero.hoy-hero-nube {
+  display: flex; flex-direction: column; align-items: stretch;
+  text-align: left; margin: 0 0 16px; padding: 4px 0 0;
+  background: transparent; border: 0; box-shadow: none; gap: 0;
+}
+.session-start.client-hoy-nube .hoy-title-look {
+  font-family: var(--display); font-weight: 500;
+  font-size: clamp(40px, 12vw, 52px); line-height: 1;
+  letter-spacing: -.03em; color: var(--slate); margin: 4px 0 8px;
+}
+.session-start.client-hoy-nube .hoy-tagline-nube {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--mute); margin: 0 0 18px;
+}
+.session-start.client-hoy-nube .leaf { color: var(--mint); }
+.session-start.client-hoy-nube .nube-session {
+  background: #fff; border: 1px solid var(--line);
+  border-radius: 20px; padding: 20px 18px 18px;
+  box-shadow: 0 12px 32px rgba(44,58,71,.08);
+}
+.session-start.client-hoy-nube .session-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.session-start.client-hoy-nube .session-title {
+  font-family: var(--display); font-weight: 500; font-size: 20px;
+  color: var(--slate); margin: 0;
+}
+.session-start.client-hoy-nube .session-cal {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: grid; place-items: center; background: rgba(125,184,168,.15);
+  font-size: 16px;
+}
+.session-start.client-hoy-nube .session-time {
+  font-size: 16px; color: var(--slate); font-weight: 600;
+  margin: 0 0 12px; display: flex; align-items: center; gap: 8px;
+}
+.session-start.client-hoy-nube .session-who {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+}
+.session-start.client-hoy-nube .session-avatar-mint {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(125,184,168,.2); color: var(--mint); font-size: 14px;
+}
+.session-start.client-hoy-nube .session-who strong {
+  display: block; font-size: 15px; color: var(--slate); font-weight: 600;
+}
+.session-start.client-hoy-nube .session-who span {
+  display: block; font-size: 12px; color: var(--mute); margin-top: 1px;
+}
+.session-start.client-hoy-nube .session-empezar {
+  width: 100%; min-height: 50px; border-radius: 14px; border: 0;
+  font-weight: 700; font-size: 16px;
+  background: var(--mint) !important; color: #fff !important;
+  box-shadow: 0 8px 22px rgba(125,184,168,.3);
+}
+.session-start.client-hoy-nube .hoy-interp { margin: 12px 0 0; color: var(--mute); font-size: 13px; }
+.session-start.client-hoy-nube .hoy-ring-quiet {
+  margin-top: 14px; display: flex; justify-content: center; opacity: .85;
+}
+.session-start.client-hoy-nube .hoy-ring-quiet .hoy-ring {
+  width: 88px; height: 88px; flex: 0 0 88px; box-shadow: none;
+  background: #fff; border: 1px solid var(--line);
+}
+.session-start.client-hoy-nube .hoy-ring-quiet .hoy-ring b { color: var(--mint); font-size: 16px; }
+.session-start.client-hoy-nube .hoy-ring-quiet .hoy-ring-sun { stroke: var(--mint); filter: none; }
+.session-start.client-hoy-nube .hoy-ring-quiet .hoy-ring-track { stroke: var(--ink-3); }
+.session-start.client-hoy-nube .prioridad-hero li {
+  background: #fff; border-color: var(--line); box-shadow: 0 6px 16px rgba(44,58,71,.05);
+}
+.session-start.client-hoy-nube .prioridad-hero .prio-dot { background: var(--mint); }
+.session-start.client-hoy-nube .prioridad-hero strong { color: var(--slate); }
+.session-start.client-hoy-nube .hoy-more-trigger {
+  color: var(--mint); border-color: var(--line); background: #fff;
+}
+.nb-empty { background: #fff; border-color: var(--line); }
+.nb-empty h3 { color: var(--slate); }
