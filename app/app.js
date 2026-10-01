@@ -13215,7 +13215,7 @@ function calendarWeekdayName() {
   return WEEKDAYS_ES[mondayWeekIndex(new Date())];
 }
 function filePickHtml(id, accept, label) {
-  return `<div class="file-pick"><button type="button" class="btn ghost" data-file-pick="${escAttr(id)}">${escapeHtml(label)}</button><input type="file" id="${escAttr(id)}" accept="${escAttr(accept)}" class="hidden" tabindex="-1" aria-hidden="true"></div>`;
+  return `<div class="file-pick"><button type="button" class="btn ghost" data-file-pick="${escAttr(id)}">${escapeHtml(label)}</button><input type="file" id="${escAttr(id)}" accept="${escAttr(accept)}" class="nb-sr-file hidden" tabindex="-1" aria-hidden="true"></div>`;
 }
 function bindFilePicks(root) {
   root = root || document;
@@ -15412,7 +15412,7 @@ function homeView() {
       <div class="card">
         <h3>Fotos de progreso</h3>
         <p class="muted">Hasta 6 fotos en este teléfono. Se comprimen. No se publican.</p>
-        <input type="file" id="progPhoto" accept="image/*" class="field">
+        ${filePickHtml("progPhoto", "image/*", "Elegir foto")}
         <div class="photo-row">${(state.photos || []).map((p, i) => `<button class="photo" data-delph="${i}"><img src="${p}" alt=""></button>`).join("")}</div>
       </div>
     </div>
@@ -18027,6 +18027,7 @@ function bindChrome() {
     }
     persist(); toast("Medidas guardadas"); render();
   };
+  bindFilePicks();
   const ph = $("#progPhoto");
   if (ph) ph.onchange = () => {
     const f = ph.files && ph.files[0];
@@ -18322,9 +18323,8 @@ function routinesCoachView() {
     <div class="actions">
       <button class="btn primary" id="newRt">Nueva rutina</button>
       <button class="btn ghost" id="openAiCoach">Generar con IA</button>
-      <button class="btn ghost" id="uploadRt">Subir rutina JSON</button>
+      ${filePickHtml("rtFile", "application/json", "Elegir archivo JSON")}
       <button class="btn ghost" data-view="home">Volver a Hoy</button>
-      <input type="file" id="rtFile" accept="application/json" class="hidden">
     </div>
     ${allRoutines().map((r) => {
       const custom = (state.customRoutines || []).some((x) => x.id === r.id);
@@ -18461,9 +18461,11 @@ function bindRoutinesCoach() {
     };
     render();
   };
-  $("#uploadRt").onclick = () => $("#rtFile").click();
-  $("#rtFile").onchange = () => {
-    const f = $("#rtFile").files[0]; if (!f) return;
+  bindFilePicks();
+  const rtFileEl = $("#rtFile");
+  if (rtFileEl) rtFileEl.onchange = () => {
+    const f = rtFileEl.files[0]; if (!f) return;
+    
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -18767,7 +18769,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=60b-preview", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=60c-preview", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
