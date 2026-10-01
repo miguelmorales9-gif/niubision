@@ -13205,6 +13205,34 @@ function programDayLabel(daySlot0, dayOrTitle) {
   const focus = programDayFocus(title);
   return focus ? (wd + " · " + focus) : wd;
 }
+function hoyDayGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Buenos días";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+function calendarWeekdayName() {
+  return WEEKDAYS_ES[mondayWeekIndex(new Date())];
+}
+function filePickHtml(id, accept, label) {
+  return `<div class="file-pick"><button type="button" class="btn ghost" data-file-pick="${escAttr(id)}">${escapeHtml(label)}</button><input type="file" id="${escAttr(id)}" accept="${escAttr(accept)}" class="hidden" tabindex="-1" aria-hidden="true"></div>`;
+}
+function bindFilePicks(root) {
+  root = root || document;
+  $$("[data-file-pick]", root).forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.dataset.filePick;
+      const el = (root.getElementById && root.getElementById(id)) || document.getElementById(id);
+      if (el) el.click();
+    };
+  });
+}
+function hoyRingHtml(pct, doneSets, totalSets) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const done = Number(doneSets) || 0;
+  const tot = Number(totalSets) || 0;
+  return `<div class="hoy-ring" id="hoyRing" style="--pct:${p}" role="img" aria-label="${p} por ciento completado"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="hoy-ring-track" cx="50" cy="50" r="42" pathLength="100"/><circle class="hoy-ring-sun" cx="50" cy="50" r="42" pathLength="100" style="stroke-dasharray:100;stroke-dashoffset:100" data-target="${100 - p}"/></svg><div class="hoy-ring-label"><b>${p}%</b><small>${done}/${tot}</small></div></div>`;
+}
 function dayWhoKey() {
   return state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
 }
@@ -15126,8 +15154,8 @@ function openStudioSettings() {
       <button class="btn ghost" id="cloudNow">Sincronizar</button>
       <button class="btn ghost" id="exportData">Descargar respaldo</button>
       <button class="btn ghost" id="exportCloud" type="button">Descargar de la nube</button>
-      <input type="file" id="importData" accept="application/json" class="field" style="margin-top:8px">
-      <p class="muted" style="margin-top:6px">Restaurar: elija el archivo JSON arriba.</p>
+      <p class="muted" style="margin-top:10px">Restaurar desde un respaldo</p>
+      ${filePickHtml("importData", "application/json", "Elegir archivo JSON")}
     </div>
     <div class="card">
       <h3>Clave del estudio</h3>
@@ -15237,6 +15265,7 @@ function openStudioSettings() {
     } catch (e) { toast("No se pudo exportar"); }
     finally { expC.disabled = false; }
   };
+  bindFilePicks(modal);
   const imp = $("#importData", modal);
   if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0], () => { modal.remove(); render(); });
 }
@@ -15571,8 +15600,8 @@ function workView() {
     const emptyClient = state.role === "client"
       ? nbEmpty({
           icon: "◆",
-          title: "Aún no hay sesión hoy",
-          hint: "Pida un programa o escriba a Miguel. Cuando él apruebe, aparece aquí — no se cambia solo.",
+          title: "Hoy está claro",
+          hint: "Todavía no hay rutina activa. Pida un programa o escriba a Miguel — cuando él apruebe, aparece aquí.",
           cta: `<button class="btn primary" type="button" data-view="programas">Pedir programa</button>`
         })
       : nbEmpty({
@@ -15581,10 +15610,19 @@ function workView() {
           hint: "Aún no hay rutina activa. Elija una abajo o asigne desde Programas.",
           cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>`
         });
-    return `<section class="screen"><p class="tagline">Hoy</p>
+    const dayName = escapeHtml(calendarWeekdayName());
+    return `<section class="screen session-start">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
+      <div class="hoy-hero">
+        <div>
+          <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
+          <h2>${dayName}</h2>
+          <p class="hoy-interp">${state.role === "client" ? "El día está quieto. Un toque cuando quiera pedir trabajo." : "Sin rutina activa en el piso."}</p>
+        </div>
+        ${hoyRingHtml(0, 0, 0)}
+      </div>
       ${emptyClient}
       ${state.role === "client" ? "" : workPickerHtml(band, list, "")}
     </section>`;
@@ -15625,18 +15663,21 @@ function workView() {
     const interp = closed
       ? "Día cerrado. El trabajo se vio."
       : (isProgramRestDay(rt) ? "Hoy es descanso en el calendario. Puede mirar la sesión o saltar de día." : ("Hoy toca " + dayLab + " — un solo toque para empezar."));
+    const greet = hoyDayGreeting();
+    const dayBig = programWeekdayName(di);
     return `<section class="screen session-start">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
       <div class="hoy-hero">
         <div>
-          <p class="hoy-meta">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)}</p>
-          <h2>${escapeHtml(programWeekdayName(di))}</h2>
+          <p class="hoy-greet">${who}${escapeHtml(greet)}</p>
+          <h2>${escapeHtml(dayBig)}</h2>
+          <p class="hoy-meta">${escapeHtml(band)}${closed ? " · cerrado" : ""}</p>
           <p class="hoy-interp">${escapeHtml(interp)}</p>
           <button type="button" class="hoy-sheet-trigger" id="hoyDetail">Ver detalle de la sesión</button>
         </div>
-        <div class="hoy-ring" id="hoyRing" style="--pct:${pct}" aria-hidden="true"><div><b>${pct}%</b><small>${doneSets}/${totalSets}</small></div></div>
+        ${hoyRingHtml(pct, doneSets, totalSets)}
         <div class="hoy-cta-wrap">
           ${closed
             ? `<button class="btn primary go" id="goLive">Ver la sesión</button>`
@@ -15646,7 +15687,6 @@ function workView() {
       ${restNote}
       ${prio.length ? `<p class="tagline">Prioridad</p><ul class="prioridad">${prio.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>` : ""}
       ${packChip(selfClient())}
-      ${floorLine()}
       ${renewBannerHtml()}
       <div class="hoy-daylist">
         <p class="tagline">Hoy va a hacer esto</p>
@@ -15779,6 +15819,18 @@ function bindWork() {
   if (goPulse) {
     const prev = goPulse.onclick;
     goPulse.addEventListener("click", () => niuPulseTap(), { once: false });
+  }
+  const ringSun = document.querySelector("#hoyRing .hoy-ring-sun");
+  if (ringSun) {
+    const target = Number(ringSun.getAttribute("data-target") || "100");
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) ringSun.style.strokeDashoffset = String(target);
+    else {
+      ringSun.style.strokeDashoffset = "100";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { ringSun.style.strokeDashoffset = String(target); });
+      });
+    }
   }
 
   bindWelcomeDayone();
@@ -16558,7 +16610,8 @@ function peopleView() {
       <button class="btn ghost" id="exportData">Descargar JSON</button>
       <button class="btn ghost" id="emailBackup">Enviar a mi correo</button>
       <button class="btn primary" id="exportPdf">Expediente PDF para archivo</button>
-      <input type="file" id="importData" accept="application/json" class="field">
+      <p class="muted" style="margin-top:10px">Restaurar desde un respaldo</p>
+      ${filePickHtml("importData", "application/json", "Elegir archivo JSON")}
     </div>
   </section>`;
 }
@@ -18254,6 +18307,7 @@ function bindChrome() {
   if (exp) exp.onclick = () => { downloadBackup(); toast("Respaldo descargado"); };
   const em = $("#emailBackup");
   if (em) em.onclick = () => emailBackup();
+  bindFilePicks();
   const imp = $("#importData");
   if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0]);
   bindStudioOps();
@@ -18713,7 +18767,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=60-preview", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=60b-preview", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

@@ -345,6 +345,7 @@ img { background: transparent; }
 
 @property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 @property --glow { syntax: "<number>"; inherits: false; initial-value: 0.4; }
+@property --pct { syntax: "<number>"; inherits: true; initial-value: 0; }
 @keyframes halo {
   0%, 100% { opacity: .4; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.16); }
@@ -741,23 +742,37 @@ html, body { background: var(--ink); color: var(--cream); }
   animation: rise var(--motion) var(--ease);
 }
 .hoy-hero h2 {
-  font-family: var(--display); font-weight: 500; font-size: clamp(24px, 6vw, 30px);
-  line-height: 1.15; margin: 0 0 6px; color: var(--cream);
+  font-family: var(--display); font-weight: 500; font-size: clamp(28px, 7.5vw, 36px);
+  line-height: 1.1; margin: 0 0 6px; color: var(--cream);
 }
 .hoy-hero .hoy-interp { color: var(--mute); font-size: 14px; line-height: 1.4; margin: 0 0 10px; }
 .hoy-hero .hoy-meta { color: var(--mute); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.hoy-greet {
+  font-family: var(--display); font-weight: 500; font-size: 15px;
+  color: var(--sun); margin: 0 0 4px; letter-spacing: .01em;
+}
 .hoy-ring {
   --pct: 0;
-  width: 92px; height: 92px; border-radius: 50%; position: relative;
-  background:
-    radial-gradient(circle at center, var(--ink-2) 62%, transparent 63%),
-    conic-gradient(var(--sun) calc(var(--pct) * 1%), var(--ink-3) 0);
-  display: grid; place-items: center; flex: 0 0 92px;
-  transition: --pct var(--motion-ring) var(--ease);
-  box-shadow: 0 0 0 1px rgba(212,176,106,.18), 0 12px 28px rgba(0,0,0,.35);
+  width: 108px; height: 108px; border-radius: 50%; position: relative;
+  display: grid; place-items: center; flex: 0 0 108px;
+  box-shadow: 0 0 0 1px rgba(212,176,106,.22), 0 14px 32px rgba(0,0,0,.38);
+  background: radial-gradient(circle at 35% 30%, rgba(212,176,106,.16), transparent 55%), var(--ink-2);
 }
+.hoy-ring svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.hoy-ring-track {
+  fill: none; stroke: var(--ink-3); stroke-width: 7;
+}
+.hoy-ring-sun {
+  fill: none; stroke: var(--sun); stroke-width: 7; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: 50% 50%;
+  transition: stroke-dashoffset var(--motion-ring) var(--ease);
+  filter: drop-shadow(0 0 6px rgba(212,176,106,.45));
+}
+.hoy-ring-label { position: relative; z-index: 1; text-align: center; pointer-events: none; }
 .hoy-ring b {
-  font-family: var(--display); font-size: 18px; color: var(--sun); line-height: 1;
+  font-family: var(--display); font-size: 20px; color: var(--sun); line-height: 1;
 }
 .hoy-ring small { display: block; color: var(--mute); font-size: 10px; margin-top: 2px; text-align: center; }
 .hoy-cta-wrap { grid-column: 1 / -1; }
@@ -902,7 +917,11 @@ html, body { background: var(--ink); color: var(--cream); }
 .inbox-chips button[data-chip="atrasado"].on { border-color: var(--peach); color: var(--peach); }
 .inbox-chips button[data-chip="hecho"].on { border-color: var(--mint); color: var(--mint); }
 .inbox-bucket { position: relative; overflow: hidden; }
-.inbox-bucket.late-rail { border-left: 3px solid var(--peach); }
+.inbox-bucket.late-rail {
+  border-left: 3px solid var(--peach) !important;
+  box-shadow: inset 3px 0 0 0 var(--peach);
+  background: linear-gradient(90deg, rgba(243,177,132,.1), var(--ink-2) 36%);
+}
 .inbox-bucket .bucket-empty { font-size: 13px; }
 .inbox-row { transition: opacity var(--motion-fast) var(--ease); }
 
@@ -940,13 +959,18 @@ html, body { background: var(--ink); color: var(--cream); }
 #viewStage { animation: crossfade var(--motion-fast) var(--ease); }
 @keyframes crossfade { from { opacity: .55; } to { opacity: 1; } }
 
+.file-pick { margin-top: 8px; }
+.file-pick .btn { margin-top: 0; }
+.file-pick input[type=file].hidden { display: none !important; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
-  .hoy-ring { transition: none; }
+  .hoy-ring, .hoy-ring-sun { transition: none !important; }
   .nb-skeleton { animation: none; background: var(--ink-3); }
   .splash-logo, .screen.hero.cover .splash-logo { animation: none; }
+  .set-row.done { animation: none; }
 }
