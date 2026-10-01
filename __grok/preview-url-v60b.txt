@@ -1,0 +1,8 @@
+# v60b-preview — Pulso cálido QA must-fixes
+Branch: eng/ui-surprise-v60
+Primary alias (HTTP 200):
+  https://eng-ui-redesign-preview.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://fb1a0d87.niubision-ui-preview.pages.dev
+Hard-refresh once (v60b-preview / nb-offline-v60b-preview).
+NO merge · NO niubision.com · logo untouched
