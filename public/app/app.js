@@ -17038,7 +17038,7 @@ function showShare(c) {
   document.body.appendChild(modal);
   const box = $("#shareBox");
   box.focus(); box.select();
-  $("#copyShare").onclick = () => copyText(box.value).then((ok) => toast(ok ? "Copiado" : "Seleccione el texto y copie"));
+  $("#copyShare").onclick = () => copyText(code).then((ok) => toast(ok ? "Código copiado" : "No se pudo copiar"));
   $("#waShare").onclick = () => window.open(waClientLink(c, msg), "_blank");
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
 }
@@ -18512,7 +18512,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=52", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=53", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
