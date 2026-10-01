@@ -1,7 +1,11 @@
 # Look Hybrid v4
 Branch: eng/ui-look-hybrid
-Alias: https://hybrid.niubision-ui-preview.pages.dev
-Hard-refresh hybrid-v4 / nb-offline-hybrid-v4
-Verify: Cover Entrar → Planes under it; Programas = activo/Pedir first, catalog gated
-Demo Hoy: 240101 or ?demo=hoy
+Primary alias:
+  https://hybrid.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://21d4b6eb.niubision-ui-preview.pages.dev
+Hard-refresh (hybrid-v4 / nb-offline-hybrid-v4).
+Verify Cover: Entrar → Planes (under it) → Soy coach
+Verify Programas (demo Hoy): activo/Pedir first; catalog gated
+Demo: 240101 or ?demo=hoy
 NO merge · NO niubision.com
