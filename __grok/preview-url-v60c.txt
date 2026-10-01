@@ -3,6 +3,6 @@ Branch: eng/ui-surprise-v60
 Primary alias (HTTP 200):
   https://eng-ui-redesign-preview.niubision-ui-preview.pages.dev
 Latest deploy:
-  (pending)
+  https://baddce21.niubision-ui-preview.pages.dev
 Hard-refresh once (v60c-preview / nb-offline-v60c-preview).
 NO merge · NO niubision.com · logo untouched
