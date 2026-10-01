@@ -1,6 +1,8 @@
 # Look B — Ember
 Branch: eng/ui-look-ember
-Alias (pending deploy):
+Primary alias (HTTP 200):
   https://ember.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://af2f3f10.niubision-ui-preview.pages.dev
 Hard-refresh once (ember-preview / nb-offline-ember-preview).
 NO merge · NO niubision.com · logo untouched
