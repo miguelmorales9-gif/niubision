@@ -9628,6 +9628,25 @@ function clearToast() {
   t.classList.remove("show");
   clearTimeout(toast._t);
 }
+function setBusy(btn, on, labelBusy) {
+  if (!btn) return;
+  if (on) {
+    if (btn._busyLabel == null) btn._busyLabel = btn.textContent;
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+    btn.classList.add("is-busy");
+    if (labelBusy) btn.textContent = labelBusy;
+  } else {
+    btn.disabled = false;
+    btn.removeAttribute("aria-busy");
+    btn.classList.remove("is-busy");
+    if (btn._busyLabel != null) btn.textContent = btn._busyLabel;
+    btn._busyLabel = null;
+  }
+}
+function payCodeCta() {
+  return "Pago recibido · dar código";
+}
 function closeModals() {
   document.querySelectorAll(".modal").forEach((m) => { try { m.remove(); } catch (e) {} });
 }
@@ -10245,6 +10264,11 @@ function ntfyPost(topic, body, headers) {
       if (!ntfyPost._logged) {
         ntfyPost._logged = true;
         try { console.info("ntfy no configurado (" + res.status + ")."); } catch (e2) {}
+        try {
+          if (state.role === "coach" && !store.get("nb_webpush")) {
+            toast("Aviso ntfy no disponible · active Web Push en Ajustes", 3200);
+          }
+        } catch (e4) {}
       }
       return;
     }
@@ -12023,13 +12047,24 @@ function requestProgram(routineId) {
       programRequests: [row]
     }).catch(() => {});
   } catch (e) {}
+  toast("Guardando pedido…");
   postProgramRequest(row).then((r) => {
-    if (r && r.ok) { try { store.set("nb_last_sync_at", Date.now()); } catch (e) {} }
-  }).catch(() => {});
+    if (r && r.ok) {
+      try { store.set("nb_last_sync_at", Date.now()); } catch (e) {}
+      toast("Enviado a Miguel · lo ve en Bandeja");
+      notifyLocal("Enviado a Miguel", "Lo ve en Bandeja.", "/?view=programas");
+    } else if (r && r.offline) {
+      toast("Pedido guardado aquí · se envía al volver la red");
+    } else if (r && r.locked) {
+      toast("Entre con su código de 6 dígitos para pedir");
+    } else {
+      toast("Pedido guardado · Miguel lo verá al sincronizar");
+    }
+  }).catch(() => {
+    toast("Pedido guardado · Miguel lo verá al sincronizar");
+  });
   scheduleClientPush();
   pingCoach("Pedido de programa", (row.name || "Cliente") + " pide " + (row.routineName || row.routineId || "programa"));
-  notifyLocal("Enviado a Miguel", "Lo ve en Bandeja.", "/?view=programas");
-  toast("Enviado a Miguel");
   return row;
 }
 function clearProgramReqInbox(reqId) {
@@ -12551,58 +12586,72 @@ function inboxView() {
   const b = inboxBuckets();
   const rowClient = (c, actionHtml) => {
     normalizeClient(c);
-    return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.accessCode ? " · código listo" : ""}</div></div><span class="inbox-actions">${actionHtml}</span></div>`;
+    return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.accessCode ? " · código listo" : " · sin código"}</div></div><span class="inbox-actions">${actionHtml}</span></div>`;
   };
-  const rowNotice = (n, actionHtml) => `<div class="list-row inbox-row"><div><strong>${escapeHtml(n.name || "Cliente")}</strong><div class="muted">${escapeHtml(n.type === "pay" ? "Pago en la nube" : "Lead")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(String(n.amount)) + " USD" : ""}</div></div><span class="inbox-actions">${actionHtml}</span></div>`;
+  const rowNotice = (n, actionHtml, matchHtml) => `<div class="list-row inbox-row"><div><strong>${escapeHtml(n.name || "Cliente")}</strong><div class="muted">${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Lead")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(String(n.amount)) + " USD" : ""}</div>${matchHtml || ""}</div><span class="inbox-actions">${actionHtml}</span></div>`;
   const total = b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length + b.programReqs.length;
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
-    <p class="muted">${total ? total + " cosas que necesitan toque." : "0 pendientes. Nada que tocar hoy."}</p>
-    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja vacía", hint: "0 pedidos, 0 pagos sin código y 0 silencios. Hoy no queda nada.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    <p class="muted">${total ? total + " pendientes. Primero pedidos y pagos; luego firmas y silencios." : "Nada pendiente. Puede revisar Gente o Hoy."}</p>
+    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
     <div class="card inbox-bucket nb-fade">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
         const hit = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
         const missing = !hit;
         const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
-        const hint = missing ? "Programa no está en la biblioteca · Aprobar lo cierra" : "Plantilla · espera su ok";
+        const hint = missing ? "Ya no está en la biblioteca · Aprobar solo cierra el pedido" : "Aprobar lo deja activo en Hoy del cliente";
         return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
-      }).join("") : `<p class="muted">0 pedidos. Nadie ha pedido un programa.</p>`}
+      }).join("") : `<p class="muted bucket-empty">Sin pedidos. El cliente pide desde Programas; usted aprueba aquí.</p>`}
     </div>
     <div class="card inbox-bucket">
       <h3>Firmas listas · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
-      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">Confirmar+código</button>`)).join("") + `<p class="muted">Confirme el pago a mano. No se emite código solo.</p>` : "<p class='muted'>0 en esta cola. Nadie con firmas listas sin código.</p>"}
+      <p class="muted inbox-cue">Cuando el dinero esté en PayPal o ATH, pulse <strong>Pago recibido · dar código</strong>. No se emite solo.</p>
+      ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">${payCodeCta()}</button>`)).join("") : "<p class='muted bucket-empty'>Cola vacía. Nadie con firmas listas esperando código.</p>"}
     </div>
     <div class="card inbox-bucket">
-      <h3>Avisos de pago / lead <span class="muted">${b.waiting.length}</span></h3>
+      <h3>Pagos y leads sin código <span class="muted">${b.waiting.length}</span></h3>
+      <p class="muted inbox-cue">Aviso ≠ código. Si coincide con una ficha y ya firmó, confirme el pago. Si no hay ficha, ábrala en Gente.</p>
       ${b.waiting.length ? b.waiting.map((n) => {
         const cl = n._client || null;
         const cid = (cl && cl.id) || n.clientId || "";
         let act = "";
-        if (cl && clientAwaitingCode(cl)) {
-          act = `<button class="btn small primary" type="button" data-paid="${escAttr(cl.id)}">Confirmar+código</button>`;
+        let matchHtml = "";
+        if (cl) {
+          if (clientHasValidCode(cl)) {
+            matchHtml = `<div class="inbox-match">Coincide · ya tiene código ${escapeHtml(String(cl.accessCode))}</div>`;
+            act = `<button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`;
+          } else if (clientAwaitingCode(cl)) {
+            matchHtml = `<div class="inbox-match">Coincide · firmas listas · confirme el pago</div>`;
+            act = `<button class="btn small primary" type="button" data-paid="${escAttr(cl.id)}">${payCodeCta()}</button><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`;
+          } else {
+            matchHtml = `<div class="inbox-match">Coincide · faltan firmas en la app</div>`;
+            act = `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir ficha</button><button class="btn small ghost" type="button" data-wa-legal="${escAttr(cid)}">Recordar firmas</button><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`;
+          }
         } else if (cid) {
-          act = `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir cliente</button>`;
+          matchHtml = `<div class="inbox-match">Hay clientId · abra la ficha</div>`;
+          act = `<button class="btn small primary" type="button" data-openclient="${escAttr(cid)}">Abrir ficha</button><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`;
         } else {
-          act = `<button class="btn small ghost" type="button" data-view="people">Gente</button>`;
+          matchHtml = `<div class="muted" style="font-size:12px">Sin ficha aún · cree o pegue el aviso en Gente</div>`;
+          act = `<button class="btn small ghost" type="button" data-view="people">Ir a Gente</button><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`;
         }
-        return rowNotice(n, act + `<button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button>`);
-      }).join("") : "<p class='muted'>0 avisos. Nada pendiente de pago o lead sin código.</p>"}
+        return rowNotice(n, act, matchHtml);
+      }).join("") : "<p class='muted bucket-empty'>Sin avisos. Los pagos iniciados y leads nuevos salen aquí hasta tener código.</p>"}
     </div>
     <div class="card inbox-bucket">
       <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
       ${b.legalPend.length
-        ? (b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir cliente</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button>`)).join("") + `<p class="muted">Falta lo que firma el cliente en la app (relevo, PAR-Q, contrato).</p>`)
-        : "<p class='muted'>0 pendientes. Nadie debe firmar hoy — relevo, salud y contrato al día.</p>"}
+        ? (b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir ficha</button><button class="btn small ghost" type="button" data-wa-legal="${escAttr(c.id)}">Recordar firmas</button>`)).join("") + `<p class="muted">Falta lo que firma el cliente en la app (relevo, cuestionario de salud, contrato). Sin eso no hay código.</p>`)
+        : "<p class='muted bucket-empty'>Al día. Nadie debe firmar relevo, salud o contrato hoy.</p>"}
     </div>
     <div class="card inbox-bucket">
       <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
       ${b.silent.length ? b.silent.map((c) => {
         const age = sessionAgeDays(c);
-        const label = age >= 900 ? "Aún no cierra un día" : age + " días";
+        const label = age >= 900 ? "Aún no cierra un día" : age + " días sin sesión";
         return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")} · ${escapeHtml(label)}</div></div><span class="inbox-actions"><button class="btn small ghost" type="button" data-assignwa="${escAttr(c.id)}">Asignar + WhatsApp</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button></span></div>`;
-      }).join("") : "<p class='muted'>0 silencios. Nadie lleva 7 días sin sesión.</p>"}
+      }).join("") : "<p class='muted bucket-empty'>Nadie lleva 7 días sin sesión. El piso está activo.</p>"}
     </div>
     <div class="actions">
       <button class="btn ghost" data-view="people">Gente y códigos</button>
@@ -13095,6 +13144,7 @@ function bindStudioOps() {
     b.onclick = async () => {
       const p = (state.payments || []).find((x) => x.id === b.dataset.gotpay);
       if (!p) return;
+      setBusy(b, true, "Un momento…");
       if (/rutina con ia/i.test(p.plan || "")) {
         p.status = "recibido";
         state.aiCredits = (state.aiCredits || 0) + 1;
@@ -14352,8 +14402,10 @@ function openCoachGate() {
     openPinRecover();
   };
   modal.querySelector("#pinGo").onclick = async () => {
+    const btn = modal.querySelector("#pinGo");
     const a = ($("#pinA").value || "").trim();
     if (!/^\d{4,8}$/.test(a)) return toast("Use 4 a 8 dígitos");
+    setBusy(btn, true, "Un momento…");
     try {
       let ok = false;
       if (isOnline()) {
@@ -14363,15 +14415,18 @@ function openCoachGate() {
       } else if (state.pinHash || state.pin || state._legacyPin) {
         ok = await checkPin(a);
       } else {
+        setBusy(btn, false);
         toast("Sin conexión. Entre en línea una vez para validar la clave.");
         return;
       }
       if (!ok) {
+        setBusy(btn, false);
         if (!pinLocked() && (store.get("nb_pin_fails", 0) || 0) < 5) toast("Clave incorrecta");
         return;
       }
       clearToast();
     } catch (e) {
+      setBusy(btn, false);
       toast("No se pudo validar. Intente de nuevo.");
       return;
     }
@@ -14987,9 +15042,14 @@ function openStudioSettings() {
         toast("Avisos Web Push activos");
       } else {
         listenPayAlerts();
-        pingCoach("NiuBision", "Avisos activos en este teléfono");
-        notifyLocal("Avisos activos", "Este teléfono recibirá avisos del estudio.", "/?view=inbox");
-        toast(push && push.reason === "novapid" ? "Avisos locales + ntfy (VAPID pendiente en el servidor)" : "Avisos activos");
+        pingCoach("NiuBision", "Avisos locales en este teléfono");
+        notifyLocal("Avisos locales", "Web Push no quedó registrado. Puede reintentar.", "/?view=inbox");
+        const why = push && push.reason;
+        if (why === "novapid") toast("Avisos locales + ntfy · VAPID pendiente en el servidor");
+        else if (why === "post") toast("Permiso ok · no se pudo registrar Web Push. Reintente.");
+        else if (why === "unsupported") toast("Este navegador no admite Web Push. Quedan avisos locales.");
+        else if (why === "permission") toast("Permita las notificaciones del navegador");
+        else toast("Avisos locales activos · Web Push no quedó registrado");
       }
       modal.remove();
       openStudioSettings();
@@ -15120,14 +15180,14 @@ function homeView() {
       <p class="tagline">Estudio</p>
       <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
       ${floorLine()}
-      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · firmas sin código · avisos · PAR-Q · sin sesión" : "0 pendientes. Nada que tocar hoy."}</p></div>
+      <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · firmas sin código · avisos · PAR-Q · sin sesión" : "Nada pendiente. Toque para abrir Bandeja o ir a Gente."}</p></div>
       ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">0 urgencias. El piso está tranquilo.</p></div>`}
       ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
         normalizeClient(c);
         const stc = clientStatus(c);
         const late = sessionAgeDays(c) >= 7;
         return `<div class="list-row" data-pick="${c.id}" style="cursor:pointer"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.lastSession ? " · " + escapeHtml(c.lastSession.day || "sesión") : ""}</div></div>${late && stc === "activo" ? statusChip("sin sesión") : statusChip(stc)}</div>`;
-      }).join("")}</div>` : "<p class='muted'>Añada el primer cliente en Gente.</p>"}
+      }).join("")}</div>` : nbEmpty({ icon: "◎", title: "El piso está vacío", hint: "Añada el primer cliente en Gente, o espere un lead de WhatsApp. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
       ${cur ? lastWorkHtml(cur) : ""}
       <div class="actions">
         <button class="btn primary" data-view="work">Abrir sesión</button>
@@ -16214,6 +16274,16 @@ function peopleView() {
   state.clients = foldStudioClients((state.clients || []).map(attachLegalToClient));
   const inbox = recentInbox();
   const pays = dedupePayments(state.payments || []).slice().reverse();
+  const qPeople = String(state.peopleQ || "").toLowerCase().trim();
+  const peopleList = (state.clients || []).slice().sort((a, b) => {
+    const au = !a.accessCode ? 0 : (clientStatus(a) === "por vencer" || clientStatus(a) === "vencido" ? 1 : 2);
+    const bu = !b.accessCode ? 0 : (clientStatus(b) === "por vencer" || clientStatus(b) === "vencido" ? 1 : 2);
+    if (au !== bu) return au - bu;
+    return cleanName(a.name).localeCompare(cleanName(b.name), "es");
+  }).filter((c) => {
+    if (!qPeople) return true;
+    return cleanName(c.name).indexOf(qPeople) >= 0 || String(c.phone || "").indexOf(qPeople.replace(/\D/g, "")) >= 0;
+  });
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
@@ -16239,22 +16309,13 @@ function peopleView() {
       if (p.status === "recibido" || coded) {
         payAct = `<span class="ok">${coded && p.status !== "recibido" ? "código listo" : "recibido"}</span>`;
       } else if (clPay && clientAwaitingCode(clPay)) {
-        payAct = `<button class="btn small primary" type="button" data-paid="${escAttr(clPay.id)}">Confirmar+código</button>`;
+        payAct = `<button class="btn small primary" type="button" data-paid="${escAttr(clPay.id)}">Pago recibido · dar código</button>`;
       } else {
         payAct = `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`;
       }
       return `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}${coded && clPay && clPay.accessCode ? " · " + escapeHtml(String(clPay.accessCode)) : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${payAct}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`;
     }).join("")}</div>` : ""}
-    ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" }) : (state.clients || []).slice().sort((a, b) => {
-      const au = !a.accessCode ? 0 : (clientStatus(a) === "por vencer" || clientStatus(a) === "vencido" ? 1 : 2);
-      const bu = !b.accessCode ? 0 : (clientStatus(b) === "por vencer" || clientStatus(b) === "vencido" ? 1 : 2);
-      if (au !== bu) return au - bu;
-      return cleanName(a.name).localeCompare(cleanName(b.name), "es");
-    }).filter((c) => {
-      const q = String(state.peopleQ || "").toLowerCase().trim();
-      if (!q) return true;
-      return cleanName(c.name).indexOf(q) >= 0 || String(c.phone || "").indexOf(q.replace(/\D/g, "")) >= 0;
-    }).map((c) => {
+    ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" }) : (!peopleList.length ? nbEmpty({ icon: "⌕", title: "Nadie con esa búsqueda", hint: "Pruebe otro nombre o teléfono, o limpie el buscador.", cta: `<button class="btn ghost" type="button" id="clearPeopleQ">Limpiar búsqueda</button>` }) : peopleList.map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
       const st = clientStatus(c);
@@ -16266,7 +16327,7 @@ function peopleView() {
         ${clientHasValidCode(c) ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientAwaitingCode(c) ? `<p class="muted" style="margin:6px 0">Firmas listas · confirme el pago para dar código</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
-        ${clientHasValidCode(c) ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientAwaitingCode(c) ? `<button class="btn small primary" data-paid="${c.id}">Confirmar+código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
+        ${clientHasValidCode(c) ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientAwaitingCode(c) ? `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
         <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
         <button class="btn small ghost" data-timeline="${c.id}">Línea de tiempo</button>
@@ -16282,7 +16343,7 @@ function peopleView() {
         <textarea class="field" data-cue="${c.id}" placeholder="Mensaje que el cliente ve en Hoy">${escapeHtml(c.cue || "")}</textarea>
         </details>
       </div>`;
-    }).join("")}
+    }).join(""))}
     <div class="actions">
       <input class="search" id="newName" placeholder="Nombre">
       <select id="newPlan">${["Base","Estándar","Premium","Estándar · 12 semanas","Premium · 12 semanas","Pack 8","Pack 12"].map((p)=>`<option>${p}</option>`).join("")}</select>
@@ -16343,9 +16404,10 @@ function openRoutine(id) {
   if (!r) return;
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = `<div class="sheet"><div class="handle"></div>
-    <p class="tagline">${r.level} · ${r.place}</p><h2>${r.name}</h2><p>${r.goal}</p>
-    ${r.evidence ? `<p class="muted" style="margin:8px 0 12px">${r.evidence}</p>` : ""}
+  modal.innerHTML = `<div class="sheet nb-fade"><div class="handle"></div>
+    <p class="tagline">${escapeHtml(r.level || "")} · ${escapeHtml(r.place || "")}</p><h2>${escapeHtml(r.name)}</h2><p>${escapeHtml(r.goal || "")}</p>
+    ${r.evidence ? `<p class="muted" style="margin:8px 0 12px">${escapeHtml(r.evidence)}</p>` : ""}
+    ${state.role === "client" ? `<p class="muted pedir-note">Pedir no cambia Hoy. Miguel aprueba en Bandeja; entonces pasa a ser su programa activo.</p>` : ""}
     ${r.daysPlan.map((d, i) => `<div class="card"><h3>${escapeHtml(programDayLabel(i, d))}</h3>${d.items.map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}</div>`).join("")}
     <div class="actions">${state.role === "client"
       ? (/^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""))
@@ -16359,6 +16421,7 @@ function openRoutine(id) {
   const use = modal.querySelector("#useRt");
   if (use) use.onclick = () => {
     if (state.role === "client") {
+      setBusy(use, true, "Un momento…");
       requestProgram(r.id);
       close();
       return;
@@ -16373,7 +16436,12 @@ function openRoutine(id) {
     close();
   };
   const pedir = modal.querySelector("#pedirRt");
-  if (pedir) pedir.onclick = () => { requestProgram(r.id); close(); };
+  if (pedir) pedir.onclick = () => {
+    setBusy(pedir, true, "Enviando…");
+    const row = requestProgram(r.id);
+    if (!row) { setBusy(pedir, false); return; }
+    close();
+  };
 }
 
 function openExercise(id) {
@@ -17760,14 +17828,11 @@ function bindChrome() {
   if (pq) {
     pq.oninput = () => {
       state.peopleQ = pq.value;
-      const q = String(pq.value || "").toLowerCase().trim();
-      const digits = q.replace(/\D/g, "");
-      document.querySelectorAll(".people-card").forEach((card) => {
-        const t = (card.textContent || "").toLowerCase();
-        card.style.display = (!q || t.indexOf(q) >= 0 || (digits && t.indexOf(digits) >= 0)) ? "" : "none";
-      });
+      render();
     };
   }
+  const cpq = $("#clearPeopleQ");
+  if (cpq) cpq.onclick = () => { state.peopleQ = ""; render(); };
   const ow = $("#openWaiverNow"); if (ow) ow.onclick = () => openWaiver(() => render());
   $$("[data-contract]").forEach((b) => b.onclick = () => startOnboard(b.dataset.contract));
   $$("[data-health]").forEach((b) => b.onclick = () => openHealth(null));
@@ -17799,7 +17864,15 @@ function bindChrome() {
   $$("[data-paid]").forEach((b) => b.onclick = async () => {
     const c = state.clients.find((x) => x.id === b.dataset.paid);
     if (!c) return;
-    const done = await confirmClientPaid(c);
+    setBusy(b, true, "Un momento…");
+    let done = null;
+    try {
+      done = await confirmClientPaid(c);
+    } catch (e) {
+      setBusy(b, false);
+      toast("No se pudo confirmar. Intente de nuevo.");
+      return;
+    }
     if (!done) { render(); return; }
     toast(done.code ? ("Código listo: " + done.code) : "Pago recibido");
     render();
@@ -18439,7 +18512,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=51", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=52", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
