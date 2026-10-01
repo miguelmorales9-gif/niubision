@@ -1,0 +1,6 @@
+# Look A — Obsidiana
+Branch: eng/ui-look-obsidiana
+Alias (pending deploy):
+  https://obsidiana.niubision-ui-preview.pages.dev
+Hard-refresh once (obsidiana-preview / nb-offline-obsidiana-preview).
+NO merge · NO niubision.com · logo untouched
