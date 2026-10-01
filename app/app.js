@@ -9611,9 +9611,36 @@ const HABIT_LIB = [
     not: "Un video diario no sustituye el número de la serie." }
 ];
 
-function todayKey() {
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const NB_TZ = "America/Puerto_Rico";
+function prParts(d) {
+  const dt = d instanceof Date ? d : new Date();
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: NB_TZ, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short"
+    }).formatToParts(dt);
+    const get = (t) => {
+      const hit = parts.find((p) => p.type === t);
+      return hit ? hit.value : "";
+    };
+    const wdMap = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+    return {
+      y: Number(get("year")),
+      m: Number(get("month")),
+      d: Number(get("day")),
+      monIdx: wdMap[get("weekday")] != null ? wdMap[get("weekday")] : ((dt.getDay() + 6) % 7)
+    };
+  } catch (e) {
+    return {
+      y: dt.getFullYear(),
+      m: dt.getMonth() + 1,
+      d: dt.getDate(),
+      monIdx: (dt.getDay() + 6) % 7
+    };
+  }
+}
+function todayKey(d) {
+  const p = prParts(d);
+  return p.y + "-" + String(p.m).padStart(2, "0") + "-" + String(p.d).padStart(2, "0");
 }
 function toast(msg, ms) {
   let t = $("#toast");
@@ -11544,7 +11571,7 @@ function codeWaText(c, routineName) {
   let msg = "NiuBision\nHola " + ((c && c.name) || "cliente") + ".\n";
   if (rt) msg += "Su rutina: " + rt + ".\n";
   if (code) msg += "Su código de acceso es: " + code + "\n";
-  msg += "\nAbra niubision.com → Entrar → pegue el código.\nSee the work. Enjoy the day.";
+  msg += "\nAbra niubision.com → Entrar → pegue el código.\nMira el trabajo. Disfruta el día.";
   return msg;
 }
 function assignWaText(c, r) {
@@ -11554,7 +11581,7 @@ function assignWaText(c, r) {
   msg += "Le asigné: " + name + ".\n";
   msg += "Abra niubision.com → Entrar";
   if (code) msg += " → código " + code;
-  msg += ".\nSee the work. Enjoy the day.";
+  msg += ".\nMira el trabajo. Disfruta el día.";
   return msg;
 }
 function pushInboxNote(row) {
@@ -12247,12 +12274,14 @@ function programasView() {
   const days = [["","Días"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]];
   const kinds = [["","Tipo"],["cuerpo","Cuerpo"],["fuerza","Fuerza"],["sup-inf","Sup/inf"],["split","Split"],["gluteos","Glúteos"],["casa","Casa"]];
   const coachExtra = state.role === "coach"
-    ? `<div class="actions" style="margin-bottom:8px">
-        <button class="btn ghost" type="button" id="progNewRt">Nueva rutina</button>
-        <button class="btn ghost" type="button" id="progOpenAi">Generar con IA</button>
-        <button class="btn ghost" type="button" data-view="rutinas">Editor completo</button>
-      </div>`
-    : `<p class="muted" style="margin-bottom:10px">Hoy muestra solo su programa activo. Aquí pide otro a Miguel — él aprueba en Bandeja; no se cambia solo.</p>`;
+    ? `<details class="prog-tools"><summary>Crear o editar plantillas</summary>
+        <div class="actions tight">
+          <button class="btn ghost" type="button" id="progNewRt">Nueva rutina</button>
+          <button class="btn ghost" type="button" id="progOpenAi">Generar con IA</button>
+          <button class="btn ghost" type="button" data-view="rutinas">Editor completo</button>
+        </div>
+      </details>`
+    : `<p class="muted" style="margin-bottom:12px">Hoy muestra su programa activo. Aquí puede pedir otro a Miguel — él aprueba en Bandeja; no se cambia solo.</p>`;
   const shelves = {};
   list.forEach((r) => {
     const k = kindOf(r);
@@ -12264,7 +12293,7 @@ function programasView() {
   }).join("");
   return `<section class="screen">
     <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Biblioteca compartida"}</p>
-    <h2 style="font-family:var(--display);font-size:26px">Programas</h2>
+    <h2 class="page-title">Programas</h2>
     <p class="muted">${list.length} de ${allRoutines().length} plantillas. Misma estantería para coach y cliente.</p>
     ${coachExtra}
     <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}">
@@ -12414,20 +12443,19 @@ function inboxBucketCount() {
   return b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length + b.programReqs.length;
 }
 function weekRangeLocal() {
-  const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  mon.setHours(12, 0, 0, 0);
-  const sun = new Date(mon);
-  sun.setDate(mon.getDate() + 6);
-  const fmt = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const monIdx = mondayWeekIndex();
+  const tp = prParts();
+  const todayUtc = new Date(Date.UTC(tp.y, tp.m - 1, tp.d, 12, 0, 0));
+  const mon = new Date(todayUtc);
+  mon.setUTCDate(todayUtc.getUTCDate() - monIdx);
+  const fmt = (d) => d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon);
-    d.setDate(mon.getDate() + i);
+    d.setUTCDate(mon.getUTCDate() + i);
     days.push(fmt(d));
   }
-  return { start: fmt(mon), end: fmt(sun), days, labels: ["L", "M", "Mi", "J", "V", "S", "D"] };
+  return { start: days[0], end: days[6], days, labels: ["L", "M", "Mi", "J", "V", "S", "D"] };
 }
 function clientSessionsInWeek(c, days) {
   const set = new Set(days || []);
@@ -12575,7 +12603,7 @@ function printWeekPdf(c) {
   const missed = wr.days.filter((d) => d <= todayKey() && !doneDates.has(d));
   const rows = sessions.map((s) => "<tr><td>" + escapeHtml(s.date) + "</td><td>" + escapeHtml(s.day || "Sesión") + "</td><td>" + escapeHtml(String(s.doneSets != null ? s.doneSets + "/" + (s.total || "?") : "—")) + "</td></tr>").join("");
   const missLine = missed.length ? missed.map(escapeHtml).join(", ") : "Ninguno registrado";
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>NiuBision · semana</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:480px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} table{width:100%;margin-top:16px;border-collapse:collapse} td,th{padding:6px 0;border-bottom:1px solid #eee;font-size:14px;text-align:left} td:last-child,th:last-child{text-align:right}</style></head><body><h1>NiuBision · semana</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>" + escapeHtml(c.name) + "</strong></p><p class='muted'>" + escapeHtml(wr.start) + " → " + escapeHtml(wr.end) + "<br>Plan: " + escapeHtml(c.plan || "—") + "<br>Rutina: " + escapeHtml(rt ? rt.name : (c.routine || "—")) + "</p><p><strong>Sesiones esta semana:</strong> " + sessions.length + "</p><table><tr><th>Fecha</th><th>Día</th><th>Series</th></tr>" + (rows || "<tr><td colspan='3'>Sin sesiones registradas</td></tr>") + "</table><p class='muted' style='margin-top:16px'><strong>Días sin sesión (hasta hoy):</strong> " + missLine + "</p><p class='muted'>Resumen local del estudio. No es diagnóstico médico.</p></body></html>";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>NiuBision · semana</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:480px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} table{width:100%;margin-top:16px;border-collapse:collapse} td,th{padding:6px 0;border-bottom:1px solid #eee;font-size:14px;text-align:left} td:last-child,th:last-child{text-align:right}</style></head><body><h1>NiuBision · semana</h1><p class='muted'>Mira el trabajo. Disfruta el día.</p><p><strong>" + escapeHtml(c.name) + "</strong></p><p class='muted'>" + escapeHtml(wr.start) + " → " + escapeHtml(wr.end) + "<br>Plan: " + escapeHtml(c.plan || "—") + "<br>Rutina: " + escapeHtml(rt ? rt.name : (c.routine || "—")) + "</p><p><strong>Sesiones esta semana:</strong> " + sessions.length + "</p><table><tr><th>Fecha</th><th>Día</th><th>Series</th></tr>" + (rows || "<tr><td colspan='3'>Sin sesiones registradas</td></tr>") + "</table><p class='muted' style='margin-top:16px'><strong>Días sin sesión (hasta hoy):</strong> " + missLine + "</p><p class='muted'>Resumen local del estudio. No es diagnóstico médico.</p></body></html>";
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
@@ -12592,7 +12620,7 @@ function inboxView() {
   const total = b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length + b.programReqs.length;
   return `<section class="screen">
     <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
+    <h2 class="page-title">Bandeja de hoy</h2>
     <p class="muted">${total ? total + " pendientes. Primero pedidos y pagos; luego firmas y silencios." : "Nada pendiente. Puede revisar Gente o Hoy."}</p>
     ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
     <div class="card inbox-bucket nb-fade">
@@ -12778,7 +12806,7 @@ function emailReceipt(row) {
   }
 }
 function printReceipt(row) {
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>Mira el trabajo. Disfruta el día.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
@@ -13181,8 +13209,7 @@ function activeRoutine() {
 const WEEKDAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const WEEKDAYS_SHORT = ["L", "M", "Mi", "J", "V", "S", "D"];
 function mondayWeekIndex(d) {
-  const x = d instanceof Date ? d : new Date();
-  return (x.getDay() + 6) % 7;
+  return prParts(d instanceof Date ? d : new Date()).monIdx;
 }
 /** Program Día 1 (slot 0) = Lunes, Día 2 = Martes, … Día 7 = Domingo. */
 function programWeekdayName(daySlot0) {
@@ -13339,17 +13366,20 @@ function waReady(kind, extra) {
   return "Miguel, soy " + who + ".";
 }
 function weekDots() {
-  // Must match mondayWeekIndex / weekRangeLocal: index 0 = Lunes
+  // Must match mondayWeekIndex / weekRangeLocal: index 0 = Lunes (America/Puerto_Rico)
   const names = WEEKDAYS_SHORT;
   const done = new Set(state.history.map((h) => h.date));
-  const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(now.getDate() - mondayWeekIndex(now));
+  const today = todayKey();
+  const monIdx = mondayWeekIndex();
+  const todayParts = prParts();
+  const todayUtc = new Date(Date.UTC(todayParts.y, todayParts.m - 1, todayParts.d, 12, 0, 0));
+  const monUtc = new Date(todayUtc);
+  monUtc.setUTCDate(todayUtc.getUTCDate() - monIdx);
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(mon);
-    d.setDate(mon.getDate() + i);
-    const k = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-    return { label: names[i], on: done.has(k), today: k === todayKey() };
+    const d = new Date(monUtc);
+    d.setUTCDate(monUtc.getUTCDate() + i);
+    const k = d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+    return { label: names[i], on: done.has(k), today: k === today };
   });
 }
 function habitPctToday() {
@@ -14207,7 +14237,7 @@ function renderGate() {
         <img src="${MARK}" alt="NiuBision" class="splash-logo">
       </button>
       <h1 class="splash-name">NiuBision</h1>
-      <p class="splash-tag">Mantenga el logo para entrar</p>
+      <p class="splash-tag">Mantenga el logo · entre al estudio</p>
       <div class="hold-bar"><span id="holdFill"></span></div>
     </section>`;
     bindSplash();
@@ -14217,13 +14247,13 @@ function renderGate() {
   }
   $("#app").innerHTML = `
     <section class="screen hero cover">
-      <p class="tagline">NiuBision</p>
+      <p class="tagline">Puerto Rico · entrenamiento</p>
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
       <h1>NiuBision</h1>
-      <p>See the work. Enjoy the day.</p>
-      <div class="actions">
-        <button class="btn primary" id="haveCode">Entrar</button>
-        <button class="btn ghost" id="seePlans">Planes</button>
+      <p class="lede">Mira el trabajo. Disfruta el día.</p>
+      <div class="actions cover-cta">
+        <button class="btn primary" id="haveCode">Entrar con código</button>
+        <button class="btn ghost" id="seePlans">Ver planes</button>
       </div>
       <div class="quiet-links">
         <button type="button" id="seeAbout">Acerca de</button>
@@ -14932,7 +14962,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
+    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>Mira el trabajo. Disfruta el día.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -14959,7 +14989,9 @@ function openStudioSettings() {
   modal.innerHTML = `<div class="sheet nb-fade">
     <div class="handle"></div>
     <p class="tagline">Estudio</p>
-    <h2>Ajustes</h2>
+    <h2 class="page-title" style="margin-bottom:6px">Ajustes</h2>
+    <p class="muted" style="margin-bottom:14px">Lo diario arriba. Lo técnico, abajo.</p>
+    <p class="tagline">Uso diario</p>
     <div class="card">
       <h3>WhatsApp del estudio</h3>
       <p class="muted">Los botones de pedir código y video usan este número.</p>
@@ -14968,7 +15000,7 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Código al confirmar pago</h3>
-      <p class="muted">Al confirmar pago se crea el código y se muestra la ficha. WhatsApp solo se abre si usted toca el botón WhatsApp.</p>
+      <p class="muted">Al confirmar pago se crea el código y se muestra la ficha. WhatsApp solo se abre si usted toca el botón.</p>
       <label class="list-row" style="cursor:pointer;border:0;padding:8px 0">
         <span>Mostrar ficha del código al confirmar</span>
         <input type="checkbox" id="autoCodeToggle" ${autoCodeOn() ? "checked" : ""}>
@@ -14983,36 +15015,42 @@ function openStudioSettings() {
       <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr(payCfg().ath)}">
       <button class="btn primary" id="savePay">Guardar métodos de pago</button>
     </div>
-    <div class="card">
-      <h3>Avisos en este teléfono</h3>
-      <p class="muted">Web Push (VAPID) preferido. ntfy queda como respaldo opcional si aún no hay suscripción.</p>
-      <p class="muted">Estado: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "<span class='ok'>permitidas</span>" : (typeof Notification !== "undefined" && Notification.permission === "denied" ? "<span class='warn'>bloqueadas</span>" : "sin pedir")}${store.get("nb_webpush") ? " · <span class='ok'>Web Push</span>" : ""}</p>
-      <button class="btn primary" id="enableAlerts">Activar avisos</button>
-      <button class="btn ghost" id="copyAlerts" type="button">Copiar canal ntfy</button>
-    </div>
-    <div class="card">
-      <h3>Nube del estudio</h3>
-      <p class="muted">Servidor principal: api.niubision.com. El trabajo se sincroniza entre dispositivos del estudio.</p>
-      <div class="cloud-status">
-        <div class="row-line"><span>Estado</span><strong class="${cloudConnected() ? "ok" : "warn"}">${cloudConnected() ? "Conectado" : "Desconectado"}</strong></div>
-        <div class="row-line"><span>Última sync</span><span>${escapeHtml(lastSyncLabel())}</span></div>
-        <div class="row-line"><span>Estudio</span><span>${escapeHtml(maskStudioId(studioKey()))}</span></div>
+    <details class="prog-tools" open>
+      <summary>Avanzado · avisos, nube y clave</summary>
+      <div class="actions tight">
+        <div class="card" style="margin:0">
+          <h3>Avisos en este teléfono</h3>
+          <p class="muted">Web Push preferido. ntfy queda como respaldo opcional.</p>
+          <p class="muted">Estado: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "<span class='ok'>permitidas</span>" : (typeof Notification !== "undefined" && Notification.permission === "denied" ? "<span class='warn'>bloqueadas</span>" : "sin pedir")}${store.get("nb_webpush") ? " · <span class='ok'>Web Push</span>" : ""}</p>
+          <button class="btn primary" id="enableAlerts">Activar avisos</button>
+          <button class="btn ghost" id="copyAlerts" type="button">Copiar canal ntfy</button>
+        </div>
+        <div class="card" style="margin:0">
+          <h3>Nube del estudio</h3>
+          <p class="muted">Servidor principal: api.niubision.com.</p>
+          <div class="cloud-status">
+            <div class="row-line"><span>Estado</span><strong class="${cloudConnected() ? "ok" : "warn"}">${cloudConnected() ? "Conectado" : "Desconectado"}</strong></div>
+            <div class="row-line"><span>Última sync</span><span>${escapeHtml(lastSyncLabel())}</span></div>
+            <div class="row-line"><span>Estudio</span><span>${escapeHtml(maskStudioId(studioKey()))}</span></div>
+          </div>
+          <input class="field" id="cloudApiUrl" placeholder="https://api.niubision.com/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
+          <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
+          <button class="btn primary" id="cloudConnect">Conectar</button>
+          <button class="btn ghost" id="cloudNow">Sincronizar</button>
+          <button class="btn ghost" id="exportData">Descargar respaldo</button>
+          <button class="btn ghost" id="exportCloud" type="button">Descargar de la nube</button>
+          <label class="btn ghost file-btn" for="importDataSheet">Importar JSON</label>
+          <input type="file" id="importDataSheet" accept="application/json,.json" class="sr-file" aria-label="Importar JSON">
+          <p class="muted" style="margin-top:6px">Restaurar: use Importar JSON.</p>
+        </div>
+        <div class="card" style="margin:0">
+          <h3>Clave del estudio</h3>
+          <p class="muted">PIN del estudio. Cámbiela solo si necesita recuperar el acceso.</p>
+          <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
+        </div>
       </div>
-      <input class="field" id="cloudApiUrl" placeholder="https://api.niubision.com/api" value="${escAttr((state.settings.cloudUrl && /^https:\/\//.test(state.settings.cloudUrl) ? state.settings.cloudUrl : CLOUD_API))}">
-      <button class="btn ghost" id="saveCloudUrl" type="button">Guardar URL del servidor</button>
-      <button class="btn primary" id="cloudConnect">Conectar</button>
-      <button class="btn ghost" id="cloudNow">Sincronizar</button>
-      <button class="btn ghost" id="exportData">Descargar respaldo</button>
-      <button class="btn ghost" id="exportCloud" type="button">Descargar de la nube</button>
-      <input type="file" id="importData" accept="application/json" class="field" style="margin-top:8px">
-      <p class="muted" style="margin-top:6px">Restaurar: elija el archivo JSON arriba.</p>
-    </div>
-    <div class="card">
-      <h3>Clave del estudio</h3>
-      <p class="muted">PIN del estudio. Cámbiela solo si necesita recuperar el acceso.</p>
-      <button class="btn ghost" id="resetPin">Cambiar clave del estudio</button>
-    </div>
-    <button class="btn ghost" id="closeSheet">Cerrar</button>
+    </details>
+    <button class="btn ghost" id="closeSheet" style="margin-top:12px">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
@@ -15115,7 +15153,7 @@ function openStudioSettings() {
     } catch (e) { toast("No se pudo exportar"); }
     finally { expC.disabled = false; }
   };
-  const imp = $("#importData", modal);
+  const imp = $("#importDataSheet", modal);
   if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0], () => { modal.remove(); render(); });
 }
 function openWeekRecap(s) {
@@ -15178,7 +15216,7 @@ function homeView() {
     const bandejaN = inboxBucketCount();
     return `<section class="screen">
       <p class="tagline">Estudio</p>
-      <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
+      <h2 class="page-title">Hoy el piso.</h2>
       ${floorLine()}
       <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · firmas sin código · avisos · PAR-Q · sin sesión" : "Nada pendiente. Toque para abrir Bandeja o ir a Gente."}</p></div>
       ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">0 urgencias. El piso está tranquilo.</p></div>`}
@@ -15189,14 +15227,19 @@ function homeView() {
         return `<div class="list-row" data-pick="${c.id}" style="cursor:pointer"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.lastSession ? " · " + escapeHtml(c.lastSession.day || "sesión") : ""}</div></div>${late && stc === "activo" ? statusChip("sin sesión") : statusChip(stc)}</div>`;
       }).join("")}</div>` : nbEmpty({ icon: "◎", title: "El piso está vacío", hint: "Añada el primer cliente en Gente, o espere un lead de WhatsApp. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
       ${cur ? lastWorkHtml(cur) : ""}
-      <div class="actions">
+      <div class="actions coach-primary tight">
         <button class="btn primary" data-view="work">Abrir sesión</button>
         <button class="btn ghost" data-view="inbox">Bandeja de hoy</button>
-        <button class="btn ghost" data-view="programas">Programas</button>
-        <button class="btn ghost" data-view="people">Gente y códigos</button>
-        <button class="btn ghost" data-view="book">Ejercicios</button>
-        <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
       </div>
+      <details class="coach-more">
+        <summary>Más del estudio</summary>
+        <div class="actions tight">
+          <button class="btn ghost" data-view="programas">Programas</button>
+          <button class="btn ghost" data-view="people">Gente y códigos</button>
+          <button class="btn ghost" data-view="book">Ejercicios</button>
+          <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
+        </div>
+      </details>
     </section>`;
   }
   const dots = weekDots();
@@ -15212,8 +15255,8 @@ function homeView() {
   const headline = "Su semana";
   const sunday = new Date().getDay() === 0;
   return `<section class="screen dash">
-    <p class="tagline">${escapeHtml(state.profile.name || "Cliente")} · ${escapeHtml(state.profile.plan || "Estándar")}</p>
-    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">${escapeHtml(headline)}</h2>
+    <p class="tagline">${escapeHtml(state.profile.plan || "Plan")} · ${escapeHtml(state.profile.name || "Cliente")}</p>
+    <h2 class="page-title">${escapeHtml(headline)}</h2>
     <p>${silent ? statusChip("sin sesión") : packChip(pack)}</p>
     ${floorLine()}
     <div class="week">${dots.map((d) => `<span class="dot ${d.on?"on":""} ${d.today?"today":""}">${d.label}</span>`).join("")}</div>
@@ -15517,7 +15560,7 @@ function workView() {
   return `<section class="screen focus-session">
     ${assignNoticeHtml()}
     <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)} · ${escapeHtml(shortName(rt) || rt.name)}</p>${voiceBtn}</div>
-    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(programDayLabel(di, day))}</h2>
+    <h2 class="page-title">${escapeHtml(programDayLabel(di, day))}</h2>
     <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · Tiempo <span id="sessClock">00:00</span></p>
     <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ${state.sessStart ? "ghost" : "mint"}" id="startSess">${state.sessStart ? "Pausar" : (state.sessElapsed ? "Seguir" : "Empezar")}</button></div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
@@ -16067,7 +16110,7 @@ function libraryView() {
   const list = filteredExercises();
   return `<section class="screen">
     <p class="tagline">Biblioteca</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:10px">Ejercicios</h2>
+    <h2 class="page-title">Ejercicios</h2>
     <p class="muted">${state.role === "client" ? "Toque un ejercicio para ver la ficha. El trabajo del día está en Hoy." : "Fichas para armar y enseñar. El trabajo del cliente está en Hoy."}</p>
     <input class="search" id="q" placeholder="Buscar sentadilla, remo, plancha…" value="${escapeHtml(state.query || "")}">
     <div class="filters">${muscles.map(([id,l]) => `<button data-f="${id}" class="${state.filter===id?"on":""}">${l}</button>`).join("")}</div>
@@ -16090,7 +16133,7 @@ function habitView() {
   const n = HABITS_DAY.filter((h) => day[h.id]).length;
   return `<section class="screen">
     <p class="tagline">Entrenamiento y recuperación</p>
-    <h2 style="font-family:var(--display);font-size:26px">Hábitos de hoy</h2>
+    <h2 class="page-title">Hábitos de hoy</h2>
     <p class="muted">${n} de 3 hoy. Tres checks. La evidencia está abajo. El DRD no autoriza nutrición desde el entrenamiento personal.</p>
     <div class="progress"><span style="width:${Math.round(n/HABITS_DAY.length*100)}%"></span></div>
     ${HABITS_DAY.map((h) => `<label class="habit"><input type="checkbox" data-h="${h.id}" ${day[h.id]?"checked":""}><div><strong>${h.t}</strong><div class="muted">${h.d}</div></div></label>`).join("")}
@@ -16114,7 +16157,7 @@ function founderHtml() {
 function coachView() {
   return `<section class="screen">
     <p class="tagline">Conoce a tu entrenador</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Miguel Morales</h2>
+    <h2 class="page-title">Miguel Morales</h2>
     ${founderHtml()}
     <div class="actions"><button class="btn ghost" data-view="about">Acerca de NiuBision</button></div>
   </section>`;
@@ -16126,7 +16169,7 @@ function aboutView() {
       <img src="${MARK}" alt="Logo NiuBision">
       <div>
         <h2 class="about-creed" style="margin:0">NiuBision</h2>
-        <p class="muted" style="margin-top:4px">See the work. Enjoy the day.</p>
+        <p class="muted" style="margin-top:4px">Mira el trabajo. Disfruta el día.</p>
       </div>
     </div>
 
@@ -16135,7 +16178,7 @@ function aboutView() {
     <p style="margin-bottom:16px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
     <p style="margin-bottom:14px">Entrenamiento personal y coaching en línea en Puerto Rico. Lo dirige Miguel Morales, veterano del Ejército de los Estados Unidos, certificado por el DRD. Programas a la medida para hombres y mujeres que quieren cerrar el día, no soñarlo.</p>
     <p style="margin-bottom:8px">Abre la app. Mira lo que hiciste. Después vive.</p>
-    <p style="margin-bottom:16px">See the work. Enjoy the day.</p>
+    <p style="margin-bottom:16px">Mira el trabajo. Disfruta el día.</p>
 
     <div class="actions">
       <button class="btn primary" data-view="price">Ver planes</button>
@@ -16148,7 +16191,7 @@ function aboutView() {
 function socialView() {
   return `<section class="screen">
     <p class="tagline">Red social</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Síguenos en Facebook</h2>
+    <h2 class="page-title">Síguenos en Facebook</h2>
     <div class="card">
       <p>Trabajo, disciplina y el día a día de NiuBision. Entre al perfil oficial y síganos.</p>
       <p class="muted" style="margin-top:8px">facebook.com/NiuBision</p>
@@ -16160,7 +16203,7 @@ function socialView() {
 function privacyView() {
   return `<section class="screen legal">
     <p class="tagline">Aviso</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Privacidad</h2>
+    <h2 class="page-title">Privacidad</h2>
     <p>NiuBision guarda lo mínimo para entrenar. No vendemos datos. No cobramos tarjetas dentro de la app.</p>
     <h3>En este teléfono</h3>
     <p>Nombre, plan, código, series, peso, medidas, hábitos, fotos de progreso (hasta 6, comprimidas) y firmas del relevo y del contrato. Eso vive en el almacenamiento del navegador de este aparato.</p>
@@ -16182,7 +16225,7 @@ function privacyView() {
 function termsView() {
   return `<section class="screen legal">
     <p class="tagline">Aviso</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Términos y cancelación</h2>
+    <h2 class="page-title">Términos y cancelación</h2>
     <p>NiuBision es entrenamiento personal y coaching en línea en Puerto Rico, dirigido por Miguel Morales. No es un gimnasio con sede ni una tienda de ropa.</p>
     <h3>Pago</h3>
     <p>Precio final, sin IVU. PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038). El cobro lo confirman ellos. NiuBision no guarda tarjetas. El código de 6 dígitos se envía cuando Miguel pulse «Confirmar pago» o «Pago recibido · dar código», no al pulsar «Pagar con…».</p>
@@ -16205,7 +16248,7 @@ function pricesView() {
   return `<section class="screen">
     ${guestTourHtml()}
     <p class="tagline">Servicios</p>
-    <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
+    <h2 class="page-title">Qué paga y qué recibe</h2>
     ${chip}
     <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD. Precio final, sin IVU. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
     <div class="card">
@@ -16284,21 +16327,7 @@ function peopleView() {
     if (!qPeople) return true;
     return cleanName(c.name).indexOf(qPeople) >= 0 || String(c.phone || "").indexOf(qPeople.replace(/\D/g, "")) >= 0;
   });
-  return `<section class="screen">
-    <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
-    <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
-    <button class="btn ghost" type="button" data-view="inbox" style="margin-bottom:10px">Abrir bandeja de hoy</button>
-    <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
-    ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button></div>`).join("")}<p class="muted">Quitar aviso no borra al cliente. Si ya tiene código, el aviso no vuelve.</p></div>` : ""}
-    <div class="card">
-      <h3>Aviso del cliente</h3>
-      <p class="muted">Si le escribió por WhatsApp, pegue el mensaje aquí. El cliente entra a Gente aunque no lo haya añadido a mano.</p>
-      <textarea class="field" id="pasteLead" placeholder="Pegue el WhatsApp o la línea NBLEAD"></textarea>
-      <button class="btn primary" id="ingestLead" type="button">Añadir desde el aviso</button>
-    </div>
-    ${(state.contracts || []).length ? `<div class="card"><h3>Contratos</h3>${state.contracts.map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div>` : ""}
-    ${(pays || []).length ? `<div class="card"><h3>Pagos</h3>${pays.map((p) => {
+  const paysHtml = (pays || []).length ? pays.map((p) => {
       const clPay = (state.clients || []).find((c) =>
         (p.clientId && c.id === p.clientId)
         || (phoneNorm(p.phone).length >= 10 && phoneNorm(c.phone) === phoneNorm(p.phone))
@@ -16314,51 +16343,80 @@ function peopleView() {
         payAct = `<button class="btn small ghost" type="button" data-gotpay="${escAttr(p.id)}">Marcar recibido</button>`;
       }
       return `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}${coded && clPay && clPay.accessCode ? " · " + escapeHtml(String(clPay.accessCode)) : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${payAct}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`;
-    }).join("")}</div>` : ""}
-    ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" }) : (!peopleList.length ? nbEmpty({ icon: "⌕", title: "Nadie con esa búsqueda", hint: "Pruebe otro nombre o teléfono, o limpie el buscador.", cta: `<button class="btn ghost" type="button" id="clearPeopleQ">Limpiar búsqueda</button>` }) : peopleList.map((c) => {
+    }).join("") : "";
+  const listHtml = !Array.isArray(state.clients) || !state.clients.length
+    ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" })
+    : (!peopleList.length
+      ? nbEmpty({ icon: "⌕", title: "Nadie con esa búsqueda", hint: "Pruebe otro nombre o teléfono, o limpie el buscador.", cta: `<button class="btn ghost" type="button" id="clearPeopleQ">Limpiar búsqueda</button>` })
+      : peopleList.map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
       const st = clientStatus(c);
       const late = sessionAgeDays(c) >= 7;
       return `<div class="card people-card">
-        <strong>${escapeHtml(c.name)}</strong>
-        <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
+        <div class="people-head"><strong>${escapeHtml(c.name)}</strong>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</div>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
         ${clientHasValidCode(c) ? `<p class="ok" style="margin:6px 0">Código: ${escapeHtml(c.accessCode)}</p>` : clientAwaitingCode(c) ? `<p class="muted" style="margin:6px 0">Firmas listas · confirme el pago para dar código</p>` : `<p class="muted" style="margin:6px 0">Falta ${escapeHtml(clientLegalGaps(c).join(", "))}. El cliente los firma al elegir el plan.</p>`}
         ${c.lastSession ? `<p class="muted">Última: ${escapeHtml(c.lastSession.date || "")} · ${escapeHtml(c.lastSession.day || "")}</p>` : `<p class="muted">Sin sesión recibida.</p>`}
         <select data-assign="${c.id}">${pickerOptions(allRoutines().slice().sort((a,b)=>(a.days||0)-(b.days||0)||rankOf(a)-rankOf(b)), c.routine)}</select>
-        ${clientHasValidCode(c) ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientAwaitingCode(c) ? `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · recordar firmas</button>`}
-        <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
+        <div class="people-actions">
+          ${clientHasValidCode(c) ? `<button class="btn small ghost" data-link="${c.id}">Copiar código</button>` : clientAwaitingCode(c) ? `<button class="btn small primary" data-paid="${c.id}">Pago recibido · dar código</button>` : `<button class="btn small ghost" data-wa-legal="${c.id}">WhatsApp · firmas</button>`}
+          <button class="btn small primary" data-assignwa="${c.id}">Asignar + WhatsApp</button>
+        </div>
+        <details class="people-more"><summary>Más acciones</summary>
         <button class="btn small ghost" data-wa="${c.id}">WhatsApp</button>
         <button class="btn small ghost" data-timeline="${c.id}">Línea de tiempo</button>
         <button class="btn small ghost" data-weekpdf="${c.id}">PDF de la semana</button>
-        <details><summary>Más</summary>
         <button class="btn small ghost" data-agenda="${c.id}">Agenda</button>
         <button class="btn small ghost" data-video-in="${c.id}">Video</button>
         <button class="btn small ghost" data-recibo="${c.id}">Recibo</button>
         <button class="btn small ghost" data-renovar="${c.id}">Renovar</button>
-        <button class="btn small ghost" data-delc="${c.id}">Eliminar</button>
         <button class="btn small ghost" data-pdf="${c.id}">Ficha PDF</button>
+        <button class="btn small ghost" data-delc="${c.id}">Eliminar</button>
         <textarea class="field" data-note="${c.id}" placeholder="Nota privada del coach">${escapeHtml((state.notes && state.notes[c.id]) || "")}</textarea>
         <textarea class="field" data-cue="${c.id}" placeholder="Mensaje que el cliente ve en Hoy">${escapeHtml(c.cue || "")}</textarea>
         </details>
       </div>`;
-    }).join(""))}
-    <div class="actions">
-      <input class="search" id="newName" placeholder="Nombre">
-      <select id="newPlan">${["Base","Estándar","Premium","Estándar · 12 semanas","Premium · 12 semanas","Pack 8","Pack 12"].map((p)=>`<option>${p}</option>`).join("")}</select>
-      <select id="newSex" class="field"><option value="">Sexo (opcional)</option><option>Hombre</option><option>Mujer</option><option>Prefiero no decir</option></select>
-      <input class="field" id="newAge" inputmode="numeric" placeholder="Edad (opcional)">
-      <input class="field" id="newPhone" inputmode="tel" placeholder="Teléfono (opcional)">
-      <button class="btn primary" id="addClient">Añadir cliente</button>
-    </div>
-    <div class="card">
-      <h3>Respaldar este teléfono</h3>
-      <p class="muted">Baje un archivo y guárdelo en el correo o en Drive. Si pierde el teléfono, impórtelo aquí.</p>
-      <button class="btn ghost" id="exportData">Descargar JSON</button>
-      <button class="btn ghost" id="emailBackup">Enviar a mi correo</button>
-      <button class="btn primary" id="exportPdf">Expediente PDF para archivo</button>
-      <input type="file" id="importData" accept="application/json" class="field">
+    }).join(""));
+  return `<section class="screen">
+    <p class="tagline">Estudio</p>
+    <h2 class="page-title">Gente</h2>
+    <p class="muted">Lista del piso. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
+    <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
+    ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button></div>`).join("")}<p class="muted">Quitar aviso no borra al cliente. Si ya tiene código, el aviso no vuelve.</p></div>` : ""}
+    <p class="tagline" style="margin-top:8px">En el piso · ${peopleList.length}</p>
+    ${listHtml}
+    <details class="prog-tools" style="margin-top:16px"><summary>Añadir cliente</summary>
+      <div class="actions tight">
+        <input class="search" id="newName" placeholder="Nombre">
+        <select id="newPlan">${["Base","Estándar","Premium","Estándar · 12 semanas","Premium · 12 semanas","Pack 8","Pack 12"].map((p)=>`<option>${p}</option>`).join("")}</select>
+        <select id="newSex" class="field"><option value="">Sexo (opcional)</option><option>Hombre</option><option>Mujer</option><option>Prefiero no decir</option></select>
+        <input class="field" id="newAge" inputmode="numeric" placeholder="Edad (opcional)">
+        <input class="field" id="newPhone" inputmode="tel" placeholder="Teléfono (opcional)">
+        <button class="btn primary" id="addClient">Añadir cliente</button>
+      </div>
+    </details>
+    <details class="prog-tools"><summary>Pegar aviso de WhatsApp</summary>
+      <div class="actions tight">
+        <p class="muted">Si le escribió por WhatsApp, pegue el mensaje. El cliente entra aunque no lo haya añadido a mano.</p>
+        <textarea class="field" id="pasteLead" placeholder="Pegue el WhatsApp o la línea NBLEAD"></textarea>
+        <button class="btn primary" id="ingestLead" type="button">Añadir desde el aviso</button>
+      </div>
+    </details>
+    ${(state.contracts || []).length ? `<details class="prog-tools"><summary>Contratos · ${(state.contracts || []).length}</summary><div class="actions tight">${(state.contracts || []).map((k) => `<div class="list-row"><div><strong>${escapeHtml(k.name)}</strong><div class="muted">${escapeHtml(k.plan)} · ${escapeHtml(k.date)}</div></div><button class="btn small ghost" type="button" data-delk="${escAttr(k.id)}">Eliminar</button></div>`).join("")}</div></details>` : ""}
+    ${(pays || []).length ? `<details class="prog-tools"><summary>Pagos · ${(pays || []).length}</summary><div class="actions tight">${paysHtml}</div></details>` : ""}
+    <details class="prog-tools"><summary>Respaldo de este teléfono</summary>
+      <div class="actions tight">
+        <p class="muted">Baje un archivo y guárdelo en el correo o en Drive. Si pierde el teléfono, impórtelo aquí.</p>
+        <button class="btn ghost" id="exportData">Descargar JSON</button>
+        <button class="btn ghost" id="emailBackup">Enviar a mi correo</button>
+        <button class="btn ghost" id="exportPdf">Expediente PDF</button>
+        <label class="btn ghost file-btn" for="importData">Importar JSON</label>
+        <input type="file" id="importData" accept="application/json,.json" class="sr-file" aria-label="Importar JSON">
+      </div>
+    </details>
+    <div class="actions tight" style="margin-top:14px">
+      <button class="btn ghost" type="button" data-view="inbox">Abrir bandeja de hoy</button>
     </div>
   </section>`;
 }
@@ -18063,7 +18121,7 @@ function routinesCoachView() {
   if (state.editDraft) return editorView();
   return `<section class="screen">
     <p class="tagline">Programación</p>
-    <h2 style="font-family:var(--display);font-size:26px">Rutinas completas</h2>
+    <h2 class="page-title">Rutinas completas</h2>
     <p class="muted">${allRoutines().length} programas. Puede editar uno de stock o cargar uno nuevo. Lo que cree se guarda en este teléfono.</p>
     <div class="actions">
       <button class="btn primary" id="newRt">Nueva rutina</button>
@@ -18107,7 +18165,7 @@ function editorView() {
     </div>`).join("");
   return `<section class="screen">
     <p class="tagline">Editor</p>
-    <h2 style="font-family:var(--display);font-size:24px">Editar rutina</h2>
+    <h2 class="page-title">Editar rutina</h2>
     <input class="field" id="edName" value="${(d.name||"").replace(/"/g,"&quot;")}" placeholder="Nombre">
     <input class="field" id="edGoal" value="${(d.goal||"").replace(/"/g,"&quot;")}" placeholder="Objetivo">
     <textarea id="edEv" placeholder="Base científica, en una o dos frases">${d.evidence||""}</textarea>

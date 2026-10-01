@@ -1,0 +1,13 @@
+# v55-preview — world-class client polish (from live v53)
+Branch: eng/ui-redesign-preview @ 3358d02 (+ pages deploy)
+Hard rules: NO merge to main · NO niubision.com · NO KV wipe · NO logo · NO Worker prod
+
+## Working Cloudflare Pages preview (HTTP 200, v55-preview)
+Primary branch alias:
+  https://eng-ui-redesign-preview.niubision-ui-preview.pages.dev
+Latest preview deploy:
+  https://82b3c86e.niubision-ui-preview.pages.dev
+Earlier same build:
+  https://c2d5ba12.niubision-ui-preview.pages.dev
+
+Hard-refresh once (`v55-preview` cache bust).
