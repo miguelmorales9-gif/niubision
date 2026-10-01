@@ -11544,7 +11544,7 @@ function codeWaText(c, routineName) {
   let msg = "NiuBision\nHola " + ((c && c.name) || "cliente") + ".\n";
   if (rt) msg += "Su rutina: " + rt + ".\n";
   if (code) msg += "Su código de acceso es: " + code + "\n";
-  msg += "\nAbra niubision.com → Entrar → pegue el código.\nSee the work. Enjoy the day.";
+  msg += "\nAbra niubision.com → Entrar → pegue el código.\nMira el trabajo. Disfruta el día.";
   return msg;
 }
 function assignWaText(c, r) {
@@ -11554,7 +11554,7 @@ function assignWaText(c, r) {
   msg += "Le asigné: " + name + ".\n";
   msg += "Abra niubision.com → Entrar";
   if (code) msg += " → código " + code;
-  msg += ".\nSee the work. Enjoy the day.";
+  msg += ".\nMira el trabajo. Disfruta el día.";
   return msg;
 }
 function pushInboxNote(row) {
@@ -12262,16 +12262,22 @@ function programasView() {
   const blocks = order.filter((k) => shelves[k] && shelves[k].length).map((k) => {
     return `<p class="tagline" style="margin:16px 0 8px">${kindLabel(k)}</p>${shelves[k].map(programaCardHtml).join("")}`;
   }).join("");
+  const abc = [["principiante","A","Principiante"],["intermedio","B","Intermedio"],["avanzado","C","Avanzado"]];
+  const hasFilter = !!(state.progBand || state.progDays || state.progKind || (state.progQ || "").trim());
   return `<section class="screen">
-    <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Biblioteca compartida"}</p>
-    <h2 style="font-family:var(--display);font-size:26px">Programas</h2>
-    <p class="muted">${list.length} de ${allRoutines().length} plantillas. Misma estantería para coach y cliente.</p>
+    <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Su biblioteca"}</p>
+    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Programas</h2>
+    <p class="muted">${list.length} de ${allRoutines().length} · Hoy solo cambia si Miguel aprueba.</p>
+    <div class="prog-abc" role="group" aria-label="Nivel">
+      ${abc.map(([id,letter,lab]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}">${letter}<small>${lab}</small></button>`).join("")}
+    </div>
     ${coachExtra}
-    <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}">
-    <div class="filters">${bands.map(([id,l]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    <div class="filters">${days.map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    ${blocks || nbEmpty({ icon: "☰", title: "Sin resultados", hint: "Pruebe otro nivel, días o tipo. La biblioteca sigue ahí; solo cambió el filtro.", cta: `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>` })}
+    <div class="prog-sticky">
+      <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}">
+      <div class="filters">${[["","Todos"],...days.slice(1)].map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
+      <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
+    </div>
+    ${blocks || nbEmpty({ icon: "☰", title: "Nada con estos filtros", hint: "La biblioteca sigue ahí. Quite filtros para ver A, B y C de nuevo.", cta: hasFilter ? `<button class="btn primary" type="button" id="progClearFilters">Quitar filtros</button>` : `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>` })}
   </section>`;
 }
 function bindProgramas() {
@@ -12289,13 +12295,7 @@ function bindProgramas() {
   $$("[data-prog-kind]").forEach((b) => b.onclick = () => { state.progKind = b.dataset.progKind || ""; render(); });
   $$("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
   $$("[data-prog-pedir]").forEach((b) => b.onclick = () => {
-    const row = requestProgram(b.dataset.progPedir);
-    if (row) {
-      b.disabled = true;
-      b.textContent = "Enviado a Miguel";
-      b.classList.add("pedir-sent-btn");
-      render();
-    }
+    openPedirBeats(b.dataset.progPedir);
   });
   $$("[data-prog-asignar]").forEach((b) => b.onclick = () => {
     const cur = currentClient();
@@ -12590,12 +12590,18 @@ function inboxView() {
   };
   const rowNotice = (n, actionHtml, matchHtml) => `<div class="list-row inbox-row"><div><strong>${escapeHtml(n.name || "Cliente")}</strong><div class="muted">${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Lead")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(String(n.amount)) + " USD" : ""}</div>${matchHtml || ""}</div><span class="inbox-actions">${actionHtml}</span></div>`;
   const total = b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length + b.programReqs.length;
+  const chip = state.inboxChip || "nuevo";
   return `<section class="screen">
     <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
-    <p class="muted">${total ? total + " pendientes. Primero pedidos y pagos; luego firmas y silencios." : "Nada pendiente. Puede revisar Gente o Hoy."}</p>
-    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
-    <div class="card inbox-bucket nb-fade">
+    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Bandeja</h2>
+    <p class="muted">${total ? total + " pendientes · primero lo accionable" : "Nada pendiente ahora"}</p>
+    <div class="inbox-chips" role="tablist">
+      <button type="button" data-chip="nuevo" class="${chip==="nuevo"?"on":""}">Nuevo</button>
+      <button type="button" data-chip="atrasado" class="${chip==="atrasado"?"on":""}">Atrasado</button>
+      <button type="button" data-chip="hecho" class="${chip==="hecho"?"on":""}">Hecho</button>
+    </div>
+    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia — buen día", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    <div class="card inbox-bucket nb-fade ${chip!=="hecho" && chip!=="atrasado" ? "" : "hidden"}">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
         const hit = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
@@ -12605,12 +12611,12 @@ function inboxView() {
         return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : `<p class="muted bucket-empty">Sin pedidos. El cliente pide desde Programas; usted aprueba aquí.</p>`}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
       <h3>Firmas listas · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
       <p class="muted inbox-cue">Cuando el dinero esté en PayPal o ATH, pulse <strong>Pago recibido · dar código</strong>. No se emite solo.</p>
       ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">${payCodeCta()}</button>`)).join("") : "<p class='muted bucket-empty'>Cola vacía. Nadie con firmas listas esperando código.</p>"}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
       <h3>Pagos y leads sin código <span class="muted">${b.waiting.length}</span></h3>
       <p class="muted inbox-cue">Aviso ≠ código. Si coincide con una ficha y ya firmó, confirme el pago. Si no hay ficha, ábrala en Gente.</p>
       ${b.waiting.length ? b.waiting.map((n) => {
@@ -12639,13 +12645,13 @@ function inboxView() {
         return rowNotice(n, act, matchHtml);
       }).join("") : "<p class='muted bucket-empty'>Sin avisos. Los pagos iniciados y leads nuevos salen aquí hasta tener código.</p>"}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
       <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
       ${b.legalPend.length
         ? (b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir ficha</button><button class="btn small ghost" type="button" data-wa-legal="${escAttr(c.id)}">Recordar firmas</button>`)).join("") + `<p class="muted">Falta lo que firma el cliente en la app (relevo, cuestionario de salud, contrato). Sin eso no hay código.</p>`)
         : "<p class='muted bucket-empty'>Al día. Nadie debe firmar relevo, salud o contrato hoy.</p>"}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket late-rail ${chip==="atrasado" || chip==="nuevo" ? "" : "hidden"}">
       <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
       ${b.silent.length ? b.silent.map((c) => {
         const age = sessionAgeDays(c);
@@ -12653,6 +12659,7 @@ function inboxView() {
         return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")} · ${escapeHtml(label)}</div></div><span class="inbox-actions"><button class="btn small ghost" type="button" data-assignwa="${escAttr(c.id)}">Asignar + WhatsApp</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button></span></div>`;
       }).join("") : "<p class='muted bucket-empty'>Nadie lleva 7 días sin sesión. El piso está activo.</p>"}
     </div>
+    ${chip==="hecho" ? nbEmpty({ icon: "✓", title: "Nada marcado hecho hoy", hint: "Al aprobar pedidos o dar códigos, la bandeja se aligera sola. Siga en Gente si necesita fichas.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
     <div class="actions">
       <button class="btn ghost" data-view="people">Gente y códigos</button>
       <button class="btn ghost" data-view="home">Hoy el piso</button>
@@ -14198,6 +14205,121 @@ function guardLogoMedia(el) {
   }
 }
 
+
+function niuPulseTap() {
+  try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+}
+function openHoySheet(opts) {
+  opts = opts || {};
+  closeModals();
+  const modal = document.createElement("div");
+  modal.className = "nb-sheet-backdrop modal";
+  modal.innerHTML = `<div class="nb-sheet" role="dialog" aria-label="Detalle de Hoy">
+    <div class="handle"></div>
+    <p class="tagline">Hoy</p>
+    <h2 style="font-family:var(--display);font-size:24px;margin:0 0 8px">${escapeHtml(opts.title || "Sesión")}</h2>
+    <p class="muted">${escapeHtml(opts.body || "")}</p>
+    ${opts.extra || ""}
+    <div class="actions" style="margin-top:14px">
+      <button class="btn primary" type="button" id="hoySheetGo">${escapeHtml(opts.cta || "Empezar")}</button>
+      <button class="btn ghost" type="button" id="hoySheetClose">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  const close = () => { try { modal.remove(); } catch (e) {} document.body.classList.remove("modal-open"); };
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  const c = modal.querySelector("#hoySheetClose"); if (c) c.onclick = close;
+  const g = modal.querySelector("#hoySheetGo");
+  if (g) g.onclick = () => { niuPulseTap(); close(); if (typeof opts.onGo === "function") opts.onGo(); };
+}
+function openPedirBeats(routineId) {
+  const r = resolveRoutine(routineId) || findRoutine(routineId);
+  if (!r) { toast("Programa no encontrado"); return; }
+  let draft = {};
+  try { draft = JSON.parse(localStorage.getItem("niu.coachRequest.draft") || "{}") || {}; } catch (e) { draft = {}; }
+  draft.routineId = r.id;
+  draft.routineName = shortName(r) || r.name;
+  let beat = 1;
+  const motivos = [["tecnica","Técnica"],["dolor","Dolor / molestia"],["plan","Cambio de plan"],["otro","Otro"]];
+  const urgs = [["normal","Normal"],["pronto","Esta semana"],["urgente","Urgente"]];
+  closeModals();
+  const modal = document.createElement("div");
+  modal.className = "nb-sheet-backdrop modal";
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  const close = () => { try { modal.remove(); } catch (e) {} document.body.classList.remove("modal-open"); };
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  const paint = () => {
+    const dots = [1,2,3].map((n) => `<span class="${beat>=n?"on":""}"></span>`).join("");
+    let body = "";
+    if (beat === 1) {
+      body = `<p class="muted">¿Para qué pide <strong>${escapeHtml(shortName(r) || r.name)}</strong>?</p>
+        <div class="pedir-chips">${motivos.map(([id,l]) => `<button type="button" data-mot="${id}" class="${draft.motivo===id?"on":""}">${l}</button>`).join("")}</div>
+        <button class="btn primary" type="button" id="pedirNext" ${draft.motivo?"":"disabled"}>Continuar</button>`;
+    } else if (beat === 2) {
+      body = `<p class="muted">Detalle corto para Miguel (opcional) y urgencia.</p>
+        <textarea class="field" id="pedirDet" placeholder="Ej. me cuesta la sentadilla en el último tercio">${escapeHtml(draft.detalle || "")}</textarea>
+        <div class="pedir-chips">${urgs.map(([id,l]) => `<button type="button" data-urg="${id}" class="${(draft.urgencia||"normal")===id?"on":""}">${l}</button>`).join("")}</div>
+        <div class="row two"><button class="btn ghost" type="button" id="pedirBack">Atrás</button>
+        <button class="btn primary" type="button" id="pedirNext">Continuar</button></div>`;
+    } else {
+      const motLab = (motivos.find((x) => x[0]===draft.motivo) || ["","—"])[1];
+      const urgLab = (urgs.find((x) => x[0]===(draft.urgencia||"normal")) || ["","Normal"])[1];
+      body = `<p class="muted">Revise y envíe. Miguel lo ve en Bandeja — respuesta típica 1 día hábil.</p>
+        <div class="card"><p class="tagline">Resumen</p>
+          <h3>${escapeHtml(shortName(r) || r.name)}</h3>
+          <p class="muted">${escapeHtml(motLab)} · ${escapeHtml(urgLab)}</p>
+          ${draft.detalle ? `<p>${escapeHtml(draft.detalle)}</p>` : "<p class='muted'>Sin detalle extra.</p>"}
+        </div>
+        <div class="row two"><button class="btn ghost" type="button" id="pedirBack">Atrás</button>
+        <button class="btn primary" type="button" id="pedirSend">Enviar a Miguel</button></div>`;
+    }
+    modal.innerHTML = `<div class="nb-sheet" role="dialog" aria-label="Pedir programa">
+      <div class="handle"></div>
+      <p class="tagline">Pedir a Miguel</p>
+      <h2 style="font-family:var(--display);font-size:24px;margin:0 0 8px">Paso ${beat} de 3</h2>
+      <div class="pedir-beats">${dots}</div>
+      ${body}
+      <button class="btn ghost" type="button" id="pedirClose" style="margin-top:8px">Cancelar</button>
+    </div>`;
+    const cl = modal.querySelector("#pedirClose"); if (cl) cl.onclick = close;
+    Array.from(modal.querySelectorAll("[data-mot]")).forEach((b) => b.onclick = () => {
+      draft.motivo = b.dataset.mot; try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
+      paint();
+    });
+    Array.from(modal.querySelectorAll("[data-urg]")).forEach((b) => b.onclick = () => {
+      draft.urgencia = b.dataset.urg; try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
+      paint();
+    });
+    const det = modal.querySelector("#pedirDet");
+    if (det) det.oninput = () => { draft.detalle = det.value; };
+    const back = modal.querySelector("#pedirBack");
+    if (back) back.onclick = () => { beat = Math.max(1, beat - 1); paint(); };
+    const next = modal.querySelector("#pedirNext");
+    if (next) next.onclick = () => {
+      if (beat === 2 && det) draft.detalle = det.value;
+      try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
+      if (beat === 1 && !draft.motivo) { toast("Elija un motivo"); return; }
+      beat = Math.min(3, beat + 1); paint();
+    };
+    const send = modal.querySelector("#pedirSend");
+    if (send) send.onclick = () => {
+      niuPulseTap();
+      const row = requestProgram(r.id);
+      try {
+        draft.sentAt = Date.now();
+        localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft));
+      } catch (e) {}
+      close();
+      if (row) {
+        toast("Pedido enviado — Miguel lo ve en Bandeja");
+        render();
+      }
+    };
+  };
+  paint();
+}
 function renderGate() {
   if (state.splash) {
     $("#app").innerHTML = `<section class="splash" id="splash">
@@ -14220,17 +14342,17 @@ function renderGate() {
       <p class="tagline">NiuBision</p>
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
       <h1>NiuBision</h1>
-      <p>See the work. Enjoy the day.</p>
+      <p class="lede">Mira el trabajo. Disfruta el día.</p>
       <div class="actions">
-        <button class="btn primary" id="haveCode">Entrar</button>
-        <button class="btn ghost" id="seePlans">Planes</button>
+        <button class="btn primary" id="haveCode">Entrar con código</button>
+        <button class="btn ghost" id="studioLock">Soy coach</button>
       </div>
       <div class="quiet-links">
+        <button type="button" id="seePlans">Planes</button>
         <button type="button" id="seeAbout">Acerca de</button>
         <button type="button" id="seeCoach">Entrenador</button>
         <button type="button" id="seeSocial">Facebook</button>
         <button type="button" id="seePrivacy">Privacidad</button>
-        <button type="button" id="studioLock">Soy el coach</button>
       </div>
       ${guestTourHtml()}
       <p class="disclaimer">${APP_DISCLAIMER}</p>
@@ -14932,7 +15054,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
+    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>Mira el trabajo. Disfruta el día.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -15189,14 +15311,19 @@ function homeView() {
         return `<div class="list-row" data-pick="${c.id}" style="cursor:pointer"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.lastSession ? " · " + escapeHtml(c.lastSession.day || "sesión") : ""}</div></div>${late && stc === "activo" ? statusChip("sin sesión") : statusChip(stc)}</div>`;
       }).join("")}</div>` : nbEmpty({ icon: "◎", title: "El piso está vacío", hint: "Añada el primer cliente en Gente, o espere un lead de WhatsApp. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
       ${cur ? lastWorkHtml(cur) : ""}
-      <div class="actions">
+      <div class="coach-hoy-primary">
         <button class="btn primary" data-view="work">Abrir sesión</button>
-        <button class="btn ghost" data-view="inbox">Bandeja de hoy</button>
-        <button class="btn ghost" data-view="programas">Programas</button>
-        <button class="btn ghost" data-view="people">Gente y códigos</button>
-        <button class="btn ghost" data-view="book">Ejercicios</button>
-        <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
+        <button class="btn ghost" data-view="inbox">Bandeja${bandejaN ? " · " + bandejaN : ""}</button>
       </div>
+      <details class="more-fold">
+        <summary>Más del estudio</summary>
+        <div class="actions">
+          <button class="btn ghost" data-view="programas">Programas</button>
+          <button class="btn ghost" data-view="people">Gente y códigos</button>
+          <button class="btn ghost" data-view="book">Ejercicios</button>
+          <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
+        </div>
+      </details>
     </section>`;
   }
   const dots = weekDots();
@@ -15444,8 +15571,8 @@ function workView() {
     const emptyClient = state.role === "client"
       ? nbEmpty({
           icon: "◆",
-          title: "Miguel te asigna pronto",
-          hint: "Aún no hay programa activo. Puede pedir uno; Miguel lo aprueba en Bandeja. No se cambia solo.",
+          title: "Aún no hay sesión hoy",
+          hint: "Pida un programa o escriba a Miguel. Cuando él apruebe, aparece aquí — no se cambia solo.",
           cta: `<button class="btn primary" type="button" data-view="programas">Pedir programa</button>`
         })
       : nbEmpty({
@@ -15485,26 +15612,50 @@ function workView() {
       ? (`Hoy toca ${escapeHtml(dayLab)} · empecemos`)
       : escapeHtml(dayLab);
     const restNote = isProgramRestDay(rt) ? `<p class="muted">Hoy es descanso en el calendario (Día 1 = Lunes). Puede saltar a otro día abajo.</p>` : "";
+    const prio = [];
+    if (state.role === "client") {
+      if (!(selfClient() && selfClient().cue) && !closed) prio.push({ late: false, t: "Sesión de hoy", d: (shortName(rt) || rt.name || "Programa") + " · ~" + (rt.minutes || 45) + " min" });
+      if (selfClient() && selfClient().cue) prio.push({ late: false, t: "De Miguel", d: String(selfClient().cue).slice(0, 90) });
+      const pack = selfClient();
+      if (pack && sessionAgeDays(pack) >= 7) prio.push({ late: true, t: "Lleva días sin cerrar", d: "No pasa nada — Empiece cuando pueda. Hoy cuenta." });
+    } else {
+      prio.push({ late: false, t: who.replace(" · ","") || "Cliente", d: dayLab + " · " + (shortName(rt) || rt.name || "") });
+    }
+    while (prio.length > 3) prio.pop();
+    const interp = closed
+      ? "Día cerrado. El trabajo se vio."
+      : (isProgramRestDay(rt) ? "Hoy es descanso en el calendario. Puede mirar la sesión o saltar de día." : ("Hoy toca " + dayLab + " — un solo toque para empezar."));
     return `<section class="screen session-start">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
-      <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)}</p>${voiceBtn}</div>
-      <h2>${hoyLine}</h2>
+      <div class="hoy-hero">
+        <div>
+          <p class="hoy-meta">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)}</p>
+          <h2>${escapeHtml(programWeekdayName(di))}</h2>
+          <p class="hoy-interp">${escapeHtml(interp)}</p>
+          <button type="button" class="hoy-sheet-trigger" id="hoyDetail">Ver detalle de la sesión</button>
+        </div>
+        <div class="hoy-ring" id="hoyRing" style="--pct:${pct}" aria-hidden="true"><div><b>${pct}%</b><small>${doneSets}/${totalSets}</small></div></div>
+        <div class="hoy-cta-wrap">
+          ${closed
+            ? `<button class="btn primary go" id="goLive">Ver la sesión</button>`
+            : `<button class="btn primary go" id="goLive">${pct > 0 && pct < 100 ? "Continuar" : "Empezar"}</button>`}
+        </div>
+      </div>
       ${restNote}
-      <p class="muted">${escapeHtml(shortName(rt) || rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
+      ${prio.length ? `<p class="tagline">Prioridad</p><ul class="prioridad">${prio.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>` : ""}
       ${packChip(selfClient())}
       ${floorLine()}
       ${renewBannerHtml()}
-      ${(selfClient() && selfClient().cue) ? `<div class="card"><h3>De Miguel</h3><p>${escapeHtml(selfClient().cue)}</p></div>` : ""}
-      <p class="tagline" style="margin:14px 0 0">Hoy va a hacer esto</p>
-      ${dayPreviewHtml(day)}
-      <p class="muted">Un toque abre el primer ejercicio. Series y reps quedan claros; marque Listo al cerrar cada serie.</p>
+      <div class="hoy-daylist">
+        <p class="tagline">Hoy va a hacer esto</p>
+        ${dayPreviewHtml(day)}
+      </div>
       ${weekPeekHtml(rt, di)}
-      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Empezar abre el primer ejercicio y arranca el reloj. Dentro puede pausar.</p><button class="btn primary go" id="goLive">Empezar</button>`}
       <div class="actions" style="margin-top:8px">
         <button type="button" class="btn ghost" id="seeRoutinesHoy">Ver Programas</button>
-        <button type="button" class="btn ghost" data-view="book">Biblioteca de ejercicios</button>
+        ${voiceBtn}
       </div>
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
@@ -15605,6 +15756,31 @@ function beep(freq, ms) {
 }
 
 function bindWork() {
+  const hoyDet = $("#hoyDetail");
+  if (hoyDet) {
+    hoyDet.onclick = () => {
+      const rt0 = activeRoutine();
+      const di0 = rt0 ? dayIndex(rt0) % ((rt0.daysPlan || []).length || 1) : 0;
+      const day0 = rt0 && rt0.daysPlan ? rt0.daysPlan[di0] : null;
+      openHoySheet({
+        title: day0 ? programDayLabel(di0, day0) : "Sesión",
+        body: (rt0 ? ((shortName(rt0) || rt0.name) + " · " + ((day0 && day0.items) || []).length + " ejercicios · ~" + (rt0.minutes || 45) + " min") : ""),
+        extra: day0 ? dayPreviewHtml(day0) : "",
+        cta: "Empezar",
+        onGo: () => {
+          const g = $("#goLive");
+          if (g) g.click();
+          else { store.set("nb_live", 1); render(); }
+        }
+      });
+    };
+  }
+  const goPulse = $("#goLive");
+  if (goPulse) {
+    const prev = goPulse.onclick;
+    goPulse.addEventListener("click", () => niuPulseTap(), { once: false });
+  }
+
   bindWelcomeDayone();
   bindAssignNotice();
   const rt = activeRoutine();
@@ -16284,10 +16460,33 @@ function peopleView() {
     if (!qPeople) return true;
     return cleanName(c.name).indexOf(qPeople) >= 0 || String(c.phone || "").indexOf(qPeople.replace(/\D/g, "")) >= 0;
   });
+  const railDemo = (() => {
+    const all = state.clients || [];
+    let activo = 0, atrasado = 0, nuevo = 0, pausado = 0;
+    all.forEach((c) => {
+      normalizeClient(c);
+      const st = clientStatus(c);
+      const late = sessionAgeDays(c) >= 7;
+      if (st === "pausado" || st === "vencido") pausado++;
+      else if (!c.accessCode) nuevo++;
+      else if (late) atrasado++;
+      else activo++;
+    });
+    // local demo rails if empty roster — visual only, does not write clients
+    if (!all.length) { activo = 3; atrasado = 1; nuevo = 2; pausado = 1; }
+    return { activo, atrasado, nuevo, pausado, demo: !all.length };
+  })();
   return `<section class="screen">
     <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
-    <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
+    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Gente</h2>
+    <p class="muted">Fichas y códigos. El código sale con relevo, contrato y pago confirmado.</p>
+    ${railDemo.demo ? `<p class="demo-rails-note">Vista previa local de rieles — no escribe clientes ni nube.</p>` : ""}
+    <div class="people-rails" aria-label="Estados">
+      <div class="rail activo"><b>${railDemo.activo}</b><span>Activo</span></div>
+      <div class="rail atrasado"><b>${railDemo.atrasado}</b><span>Atrasado</span></div>
+      <div class="rail nuevo"><b>${railDemo.nuevo}</b><span>Nuevo</span></div>
+      <div class="rail pausado"><b>${railDemo.pausado}</b><span>Pausado</span></div>
+    </div>
     <button class="btn ghost" type="button" data-view="inbox" style="margin-bottom:10px">Abrir bandeja de hoy</button>
     <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
     ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button></div>`).join("")}<p class="muted">Quitar aviso no borra al cliente. Si ya tiene código, el aviso no vuelve.</p></div>` : ""}
@@ -16320,7 +16519,8 @@ function peopleView() {
       normalizeClient(c);
       const st = clientStatus(c);
       const late = sessionAgeDays(c) >= 7;
-      return `<div class="card people-card">
+      const railCls = (!c.accessCode) ? "rail-nuevo" : (st === "pausado" || st === "vencido") ? "rail-pausado" : (late ? "rail-atrasado" : "rail-activo");
+      return `<div class="card people-card ${railCls}">
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
@@ -18268,6 +18468,7 @@ function afterPaint() {
   if (state.view === "rutinas") bindRoutinesCoach();
   if (state.view === "programas") bindProgramas();
   if (state.view === "inbox") {
+    $$("[data-chip]").forEach((b) => b.onclick = () => { state.inboxChip = b.dataset.chip || "nuevo"; render(); });
     $$("[data-req-approve]").forEach((b) => b.onclick = () => { approveProgramRequest(b.dataset.reqApprove); render(); });
     $$("[data-req-ignore]").forEach((b) => b.onclick = () => { ignoreProgramRequest(b.dataset.reqIgnore); render(); });
     $$("[data-req-otra]").forEach((b) => b.onclick = () => openProgramOtra(b.dataset.reqOtra));
@@ -18512,7 +18713,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=53", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=60-preview", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
