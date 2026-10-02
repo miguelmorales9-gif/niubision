@@ -128,9 +128,9 @@ body.modal-open { overflow: hidden; }
 .splash.out { opacity:0; transform:scale(.98); transition: .4s ease; }
 .orb { position:absolute; width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(212,176,106,.28), transparent 68%); filter:blur(8px); animation: pulse 2.8s ease-in-out infinite; }
 .splash-logo-wrap { position:relative; width:min(84vw, 280px); height:auto; border:0; background:none !important; padding:0; box-shadow:none; overflow:visible; }
-.splash-logo-wrap, .logo-btn { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+.splash-logo-wrap, .logo-btn { -webkit-touch-callout:none !important; -webkit-user-select:none !important; user-select:none !important; touch-action:none; }
 .splash-logo { width:100%; height:auto; display:block; border-radius:0; object-fit:contain; background:transparent !important; animation: logoIdle 5.5s ease-in-out infinite; filter: drop-shadow(0 0 18px rgba(212,176,106,.32)); }
-.splash-logo, .logo-btn img { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; -webkit-user-drag:none; pointer-events:none; }
+.splash-logo, .logo-btn img { -webkit-touch-callout:none !important; -webkit-user-select:none !important; user-select:none !important; -webkit-user-drag:none; pointer-events:none !important; touch-action:none; }
 @keyframes logoIdle {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.035); }
@@ -1723,6 +1723,27 @@ input[type=file].hidden {
   width: 100%;
   filter: drop-shadow(0 0 20px rgba(255,138,31,.28));
 }
+
+/* Hold targets: block iOS/Android save-image callout without taking the press off the button. */
+.splash.splash-hybrid .splash-logo-wrap,
+.screen.hero.cover.cover-hybrid .logo-btn {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  touch-action: none;
+}
+.splash.splash-hybrid .splash-logo,
+.screen.hero.cover.cover-hybrid .splash-logo,
+.screen.hero.cover.cover-hybrid .logo-btn img {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+  pointer-events: none !important;
+  touch-action: none;
+}
+.splash.splash-hybrid .ring.ring-hold,
+.splash.splash-hybrid .ring.ring-hold * { pointer-events: none; }
 .splash.splash-hybrid .ring.ring-hold {
   position: absolute;
   left: 50%;

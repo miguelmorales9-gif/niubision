@@ -14425,8 +14425,14 @@ function guardLogoMedia(el) {
   const prevent = (e) => e.preventDefault();
   el.addEventListener("contextmenu", prevent);
   el.addEventListener("dragstart", prevent);
+  el.style.webkitTouchCallout = "none";
+  el.style.touchAction = "none";
   const img = el.querySelector("img");
   if (img) {
+    img.draggable = false;
+    img.setAttribute("draggable", "false");
+    img.style.webkitTouchCallout = "none";
+    img.style.touchAction = "none";
     img.addEventListener("contextmenu", prevent);
     img.addEventListener("dragstart", prevent);
   }
@@ -14551,12 +14557,12 @@ function renderGate() {
   if (state.splash) {
     $("#app").innerHTML = `<section class="splash splash-hybrid" id="splash">
       <div class="orb" id="orb"></div>
-      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga pulsado el logo hasta completar el anillo">
+      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga pulsado el logo hasta completar el anillo" oncontextmenu="return false">
         <svg class="ring ring-hold" viewBox="0 0 120 120" aria-hidden="true">
           <circle class="ring-track" cx="60" cy="60" r="52" pathLength="100"/>
           <circle class="ring-progress" id="holdRing" cx="60" cy="60" r="52" pathLength="100"/>
         </svg>
-        <img src="${MARK}" alt="NiuBision" class="splash-logo">
+        <img src="${MARK}" alt="NiuBision" class="splash-logo" draggable="false" oncontextmenu="return false">
       </button>
       <h1 class="splash-name">NiuBision</h1>
       <p class="splash-tag">Mantenga pulsado el logo</p>
@@ -14572,7 +14578,7 @@ function renderGate() {
     : "";
   $("#app").innerHTML = `
     <section class="screen hero cover cover-hybrid">
-      <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
+      <button class="logo-btn" id="logoPulse" aria-label="NiuBision" oncontextmenu="return false"><img src="${MARK}" alt="NiuBision" class="splash-logo" draggable="false" oncontextmenu="return false"></button>
       <h1 class="cover-brand-name">NiuBision</h1>
       <p class="cover-pair">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</p>
       <hr class="cover-rule" aria-hidden="true">
@@ -19088,7 +19094,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v6", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v7", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
