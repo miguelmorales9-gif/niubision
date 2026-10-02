@@ -3,7 +3,7 @@
 **Sitio oficial:** https://niubision.com
 
 Entrenamiento personal y coaching en línea en Puerto Rico.
-Fundador: Miguel Morales, entrenador personal certificado por el DRD.
+Fundador: Miguel Morales, entrenador personal certificado por el DRD, licencia 9798-3322359.
 
 Niubi + visión. See the work. Enjoy the day.
 

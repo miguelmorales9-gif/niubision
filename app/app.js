@@ -9459,7 +9459,7 @@ const MARK_HERO = "data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1B
 const COACH = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgICRINDQoOFRIWFhUSFBQXGiEcFxgfGRQUHScdHyIjJSUlFhwpLCgkKyEkJST/2wBDAQYGBgkICREJCREkGBQYJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCT/wgARCAIJAaQDASIAAhEBAxEB/8QAGwAAAgMBAQEAAAAAAAAAAAAAAAECAwQFBgf/xAAZAQEAAwEBAAAAAAAAAAAAAAAAAQIDBAX/2gAMAwEAAhADEAAAAfmAMAAYxMAYAwBgAMQwTAAYhgmAhghggATBDBJgJgkwQAhoEwSYIAQAxgAxMYAwBiYxMAGADExiGgNXoq28m/omimvzI+hcC1POE4XzEwQwiMEACYJMEMIjQJgkwSkhADYADAYAA2mDAAYmAwACYvXdbq49MZxly9luuvu7ZebNeTLXD4f6NVpj8jPY+P6uJKSmqGERhFtCABMEmCTQJgkwQA2AAwBgDBgDAGAAxMYe88572mtUs+ni9GU4yTo6vG07Y7eY1E0CjlpPwnucXRy/NCS6OOLAQwSYRUgiMENCTQhhEaAAYMAYAwBgDBpgDAGDJntd2jBzdlmvNo5+q+LJWaMatGmuNMSSyqG/Vg6nTy/JMvc4m/GkwQwQ0IaEAJMEmCUkJMIjEMBLBgDFJMGAMAYAMCyFh9d8r7rxeHVZqp1cvZOV8rTkhrpmtllTM9WqyJydCm3p4/FeW9n43blSYIaAaEmCGgTQgBKSEmERgNMGmMGAMBgMYmADAnt9FW/0bw/W5metK5vNz29lV4nrxbrOqVNL8nM4OmPU3c+2+ftOj4z2UvMV3Ya6eRNFHRwoAEwSaAAE0JNAmgTCIwAYNMGMAYNMGMAYmB1e9yOvzd/Y5vTxRHnYegxI87r2X2jo7IdLHo8Dp2ZdcM113RRm9dg2reSuWmunj8jXX5oAIYJMEpIQ0JMIjQgBAAwG0wYAwG0xgAxgAb/ReP8AcY9PoeROGeuzPG/LeiGnFaN/Y5nTPMHR5Kt85qLV6uP0dcDBZwpcIDo4kMEACYIaEmhACAEmERgNMYMGmDTGDBgDTAAO3xCJ97p8D7vPfLu52rn64Uasqc48F8rNGPvJJ8/TS2fsczqb8/gcNkNuZDEIAABDBACTQkwSaBNCAQ2hLYBJMGmDGAAMAAAYP2vifTxbbozW8nfpy8ZWr1KuVXMb+n5uE19XRzexS8N/G6uuXhadWXblABACGCABNBFhEaEAJNCAG0wYDaYwYNMGAMAAAAO5xNp6XNqxc/VZpU8t+bHRTpC00xqhZljfG/t8LvJ83x/oXgN+aAyapMENCGCTCI0IECaEmhADYDaYwYMBgwBiYAADAGme15e3Nz9Uux5+cW72Tl1xbq58FM1tx1dC+d/Z5fQy37nD6WSXi89+/r4OQtOYEyCABNCGiKkhJhFSQgAkmDTG0xgDaYMAAGAAAN7Jd+Nj5+rNi6tNNPO5fS8u+XO1z2IWmydNZ6MumunQ8T0/Pbc2m6tbc+ieSUjNssOcXUgmoCaEmhACTQgAYDaY2mMAbTGANMAGK/Tz5Tzwrh6Lu+P9Rz9WiudmW/PxbabVq2G2JootqLY2eOvnVsr0dPHPNdQW3ZNJFuMrHntMsenkM6agkwSaECEANpg0xtMbTBgMAYbpZtkMSDHGcTCcZk/b+C9Vjv0NlF2HXzoXEwt9TiefdyuFrz3Rho6OWVtaBw0mDXj1F4yVcbQpsjWacN+w5B0OeJNQSYIAGmMGEkxgDAHfv2TGTDVBMsUlBKaHXOINo9D2fBLPb38/nri3reBhnfJWRlak7c9pppupHrx7DDZLGdUgpaCiRZVNFDpZvnztcxzI9riwE1EoAGmNgNpjADrZtsxTza4JsrbgojBNCGgTiMTGmhiYTjMjdVYWuu8q15byPN6vMN+K7NK+VbNFLzmmqdJO7NM69OXrzHn1dTEoCBKMhuLG0wa2HS4PS5ExIFE2UTjKQ1Ai0AIEwQwaEE4zG0xtMd+awtV2ctw9TnBTZXKyVbJ0F5CWfQVThIs6HL1HS4nf4UxACsjTG0xiY+zxuvMcaEJJsCuEL67SKaENAIBMEp1k4yiTkpAwDoR+jS8p2+FqLfKe64Z5q3JuOfGzOWzrCrVQyUbc5OdVgrKWdnJOMxjEVltBITG0yeqvHMU2U2xNtFgWJxBNCAEMEMHTfnLYziTYEhM9N1vH/Zpeb6PL6hm8x7b5scrBpB4oyLanA1ZbIFsIhdVOskJQ26MWyYxjIRaaW0xgF2LZgkEYwvlRpJOURJggZEYIAdFtRamyQmNxkH2D4/1z1/Z422XM8D0+QXUihVTozAQkTdchuuwi4XFdlN4ujzehKw0kxx5RdZk0DaZPFuxlUbIBt5+4mosYmAAJoTArSaJSTS2gcoyOnTdYVZ9gcyHUrOUlAK3AiKRJtjpcydejLK1XZyy6tnZKiY5jTrLaY2gtybsUqhqFV0A0ODJuDJEQkkhiiVzrsmJWVWRIRCcq2TIolFIcVAcVEcHEVld5Kud0qroxKL6dhmK7xsiaCQZ3GUGANpm3l9TmyhGcIVpxL3XMslAJOsJxcQREVldkw5wnE1tImlEsIImoxHEiNJAJDuptNBXZKWWcoWRuxydxMgnMZMM7Tg2mOUNMtfI0ZkRiyJqhKI7aLC5OsJQsLabaQAQWQsSrISIRlElTdSOUJEqbawiAmkTSAnCRdKCJzVslXK4hZCsuqEBMhW0xiY5R1mjj/RPLZ68WEqtMownEjJMvrsqDRRpIVTgMGOcJBKMiMWiVdtZVOLHKFhQTgMGRU0RlELrs8jTKich37625Vna3Q8509GeLaiwpfyLT2wbQPucP1cT0nXZx+hm43pab08Zk9hy9cPOw3UXyjXZVas9OfQZ0A5KQSTE0CQiyuysjCcCU4SHXbEqbQgZFiOjrl2sujL0Njz2lmw7rZOrPqhHDtpJmUvn5dp65NoJe38n7PPaorhzdemhVzFXK38rTHndHn9TXDiQcb0tuqkUyUhyjIGmIAjGUSyE4ka7IA4stQEVJEW0Qiw6fa8x6XPp17Of0curHK/PbkuxdnnWrblurhoMBMeZlF65NqZ6no2nN2w5XU5NbXLl6JquXs5mmVsrcOmOWLVq6YWUkZwmOSBjQAEUBJARiwg0FjixoQVygEmyvvcHTW3c08rRn29fPTy2HpOjyNKunLaV0rLjTPwrT0xff8/7GLb9Fejj9Dn87pcm+fN0Lo2pwcvoeLbPTzO3w9cszjOa6KL84ThYMESAATK2mEoSIDRAcSbjIIyiIGSJRK2mdLVl359F+HTqiNXSvsrfgLZztMOoZCmnjWnthL3vivX5b7NeXTz9mHhd/kWyXUwUzGOjoc2+dvF6HN256batEw6bKiVkJiEyQIACtpilCQJxCE4hODJJoUlIlXOBEA29TkdymlvTwbs9+xmjh0x3cW6ia6DOZ6+WE9ufpek8/3cOnp257semjDvx2pkVc7Z18Xr8m+deLTj2wNOfSVQlEnKLBxZOLQ0IiAJpjjOIQkhCkMTHKMhRcCcJwNPY4/Wrfr3JU16fP6/ndM3h6OeIwGcmn/8QALxAAAgIBAgQFBAMBAQADAAAAAQIAAxEEEgUQITETICIwMhQjQVAzQEIkBhU0cP/aAAgBAQABBQL/APNadNbqDTwIxOE6NZ/8bo5bwTSvL+CX1xlKn9YASdFwToqKixVzPBOMdT21Okp1a67hdmk/VqpduHcOXRAtknMBlB9XQm+vrCek4lwkY/U8K0P09TWdV6wmCDO4szSxsho3Jes4vo/p7v0/CtKNVrLny47iHt3CNNzQswMIxPyPlxCj6jSfp+EU+FoN24jujCd5g5G2eJPGjWiGwGKYsrXe+pr8K/8ASieEaeEiARccu8KmBZ4YhSEbYGiNKfTOMrt4l+lWa2v/AIVzFHQMoi9YRMMYARMqI2ACCYK3inDVtg/+gXGt/Sr31aeJU+N67TFitGKsSyiM4yGRpuQHxQYBmPXMYn/ox6/0ojNnShN1juKYmtQwXZjO83tHZpnbLNZXWLOItYaXvRdFebkb4cUqbW3X8K02z9Ho9ONRbdw/TWU6HU2PozlafDSWaVIPGqNOosMQbi4xNTaYK1sK2VVDxWE01xR/mp1O1W9N16eHd+i0a5roylek6mzJN3RrfHrSmuzUNVU5mh6pqV9JqNkTTVmpdP8AcWjqlJlH8TOE1DL4s1bb9T+i4ccrYxrThe59MBGr6O2F3MZXU80le2a2r0GrdPBaCi3NNHqKqsX008RXJrTw9P8Ao9DZ4eq1IxOFbYOj7chqknhQjrpgTNXX0sQ1N8jsnxhunibqaaFecQL06T9GJXZ4i8ObwtXrfRq1syB1jmdbTQdoa0Omp0/iqlkAyLcCEiKcU16faOK6v6m79JoNVsFTJXbxI/cRchCcah2jawaSuriPiL9cWGn4qxtc7rKnyH9UK4iILq21T7f0y3Os12HsSL2RCzajTCyGv0fTdEqXf9P6cNUa263dG0ZjjDfp9/iaIHEU5jXbQzQ58OtWerJR/qRMjU11fO/5aM+u3+X9PoW8TQ9Qudst1WyDWKq/VXyzVX2wXaisPba8quIm5WO/NujbddqRjUfp+EHOstzWluTKtNtexVJa9Eg1dcVg8GJf6Qln2Qeuj9J4rWa9d+n0dng6rVDZbd/LWTg9Y1O6LpuprZYRGszC22JNN34npPq4Rg/p9Z9wnJCGI9YHiLHxnJMfrLXVIuWNYlJ62dW4johcpq+3+mrYPw7bmDIItnjz6j1fUYjajA62MoAiCVnBWzceIaoafT0XvUxavVS2iyn9LwxN+lEsWW17oyukLtBuMRIixYsBlWAuu1J1Nw7CVXOo+zbHoZR+gAyQi1rwq3fr8YLDk6LiykRUxFTMVZjknScQ1XhoggHRzgH0Ow9Ssyk7LY9TJ/eSosPEDlrSzcKu8PV2ndZ3jCMIa4tcVclvTyVMnU3rRXk2uog9TE7r9R2PWfnMVyIalshBH9tdOFmp1BuLelJom/6DF6wiWQKTAoidrIilzdYtCXWvqbFXEPplR9NAy1rZida4Z1imZWwPSU/sV1NYV2rNRfvijJJ3MZS2y0DKj0n8PjPQSsbi3pRvUz216VNRe+odFxPhLfh8aKBhLO9J9Mxy7TMWwpDUlsZCh/qV6fobDfLrRidlUQ8uH6sMtqdKzuUj1lOtQ66kyzWpTHsa1lHI9Vc/bu6V1D0P3q7csQiFZ2imZ3B9NCMf0aqXubw69OCz6lrbRjkep7CdoCUOm4p00+oqad3e2pQ/FKqpqNbbqSIBMzse0aXdSOi6joaGhg5YhEKQ9IDEsltQvHb39LovEmo1NdCEtc1lvTHL8eTEwDPVMvPVNvlb4jqp/kfraZeMio4bMLbZ4k3zfHcTOZmBpW8vp8Zfd0mnBVtUXm7JZ8+Q+4OZ7VGY+4nWw9S/xHR84XdmZmYDLG9PZczMVpVZNXV7ml0/1Fuu1AKk8+wHvDyJ8j3p+S/Nu9nRmP2l8jNvsbt35o0qYOttZqf2s/SaLdkchCdx9och5Ry7ymA4scYlkf8AiWCCE4WoZlp6j01iCAytpq08Sv2dLV41+uu8WLzsOIox7R7CGDzoZWMS3o3yS0Q/wrBB2tMrGIPU9pwIJmI0Q7kYYPsaP7VG7KJDB3+be00/Pm0ujt1ZXhlSGngmltGu4HbpBamVoswbl6L/ABV8l6RfU7HbXSI53POyxTK2l49fsXHZpFidzHOFQYHtN8v9f68mj0rau/Ua3S8I0zHX6k1V8WplPGjqZr6dhuXY1beIoGGr+f5Y4CDpceq+lFncv8uSNhru/nQbm1T7rh8k+Tdz67PaE/1/od/Jo7voNDwjh/izUDD6QhTx/h66iiiz6zQfyIGNTM6uT6bI56L3zua04XsKu+c889bOsPn0387t9w9GHRietYhPtj5f6Xv5Ht8Va6xTTcd1ir9jTajxU0to09+djWrunwNkzP8AWfQg653PmN6U5g+sDcp6+eo4ez5NMzcBAegHtHsvcfJfKO6a0X6Eept32rbvpV3dSNwRpYs7r+I0zhewTqSdxXrCeqz85xHARvNX8j2HUTvB6m9puyQd182k1zaaaXVaewXa/SULrtcdY5gOI4zM7h2MXuOs+R+RboIfSsPQCUnIrdAvmXvnqfSTBB0X2niQRe3kbR7ZZpyHOkGw6dtzVsswRDMxoTnyN0g+2JWsY5NY6scn8VnDGsP56+jsIOo5Z9t4sEHbyfWT6xCTq02/VVw6lCL9QLVzzPP4BVxD6iBHOxR1h9KjqYJXZ6fMvc9uxI5Z6e00EWfj3x0iriE7zjAUYjHcallhyUHIexUMkdoOS8s+0Oy+bPLPsqJ1eBcT/VrYCjMPpXuRzHbzUdF7Q9CeXY8h7I7JD7GfY7wdOQ9A+RQSwxR5Mecg10v3+S/jkD0EBzMzPn/Cw+xn2B05CWHce0XoD1YDmEJmFHmA3HXNvBOYvQt0J5CHsnbkJ+PKsMPI+T8eTPkEEZtsUYi9TY2AizqZsxN4ELFvPp2C22thyIesPXyf5X4cljeQclhhghh5iH2BM4i9YZ8QtZcnas8QzvMTcJtsPmAyeIaI6W3tMgzBEI5jsPhySN5ByHcwwQw+Q+wJgmbYNizfCxaAToIEd4NKYtKbdnm0i79TqgLH1HD2SEctxmeQn+IIsPmEbkPOfaGZtldT2QaC2fR11RNuyyr0UnBZwp8vB0365m3WGW6Wq6W8Kj6C5YdNYIayIIe0E/B8wjeU8x7A7/TPK9DY4Xhcr0VCN6FDEkqnihaWVr8YurGavUnl4OuykT/JhMcywy2KnobksPbzCNB5x7OnfMr6RCSB0moOLwYdQ9ZTVAxxk9pjHmqTwNEJmbo0fMsMslVfoPJY/nHdoPePLRviLqCI17NXQMVawgSuwvV4JeP6ZWdysfDO1bPLo6fqNTe3iXNkTMzM9LDLDAN72nZWeSR/OO7eY+3UcNQoevHhlbFsltYtWpGSM2xdQs0+N2qGXXt5OE1+FSohWOdhV4TLDLDNMMve2SeSRu/mHdoIYPbPk09uU35ZX9Vj7ZXqASrEmuvxAdMmbE2WfT7vIql2sq8BIzYF/WJaVO/McxzNP0jdjBF7HzjuYIYPdPKl9jo8Rsy3IgJDL28e2ePYA1i2KthA58GqD6nO9gJa2YeoGS/iAB3m2AY0rdjBP8nzjuYIYPdPJfkB0q+Vt2Y3y07JZH0rSzNZDSs+nnw9fB0KCFRhwFiH7rptvNAxdQtKt9w2DGlftFjdvOIfOfOOR5L8qu6YEZYKfEtr01YXaaZqPuqOkTJTkO+Alaz8XRuj6hcsXWqm1m1ExhLz/wA78k7t7A/onkvyU7WXrG+WiXorrtbqUoUyxSrr6By0y7r8ksueVkdZd0oszfLegvOJc3ofkkbkPMIf6J7L3mmxgjfKr/DL1ZTJjO6zxzFIZeWgH/RXBM4j9Y4yXO+9Jnc9jZaw5Zu4i9jyHnPkHvL3mnOK1AWvaMaUfbsbByzSwMpFpXnw3+eqLGn+R80/lM/yfgfke4n+TyH9Y8hB8pV/HV/9dfjX/DZKflqflP/EACoRAAIBAwQABAYDAAAAAAAAAAECAAMQERIhMUATMEFCBBQgIjNQUXGA/9oACAEDAQE/Af0yoTxPl2jUmHYpUc8wLiVGwYDmVKIMZSvPVpLkxeLMMxRiGVhkdWhxfF6p6tA/TmVOotMtuJS2hZor5s7n0g/uMItFSOnQ/HF3JjKYqwDaFYEjjAinAhOel8OfSA4e2J/FsRzmVWwMdNTg5niamgNixibwmPCxPPUQ7wGas2ziZh6wMEJNmaAbRlx1V3WK2JqheDeARlGnfq0eIVhWBYBas/tHVpcWMAtUqadutRb0gu9XHEPXWsRPHjVGP+BGpHkdTSYFmMTa6jeCNTBhpiEeelMGLTURnztF0HmPvNV6I3u3QomzIdUqIBxPbmaxekuBGmqMYfPRsGBo7kGKw90OgjaaRZBkzEaARhG6CNtDlp4QA+6wtQG+bNOI0boU4DiVHJ5gI4mbULGz9FIY8C7ZmZ//xAAlEQACAgICAwACAgMAAAAAAAAAAQIRAxAhQBIxQRMwIDJQYHD/2gAIAQIBAT8B/wAM5Jez80RZE+xkyV6G7IQtDVEMjRF31ckqQxEWS5EY+H1c3vSLHrGurmWluiHUckvZk5EkNajEZFjyO+nl/sS4SIyQ3pMciD5PvTyr6NXEWl6K1Axq302rPCo7pEtQEq6kvQ0KJTPEoXWaG2jyLsii+RO+rLhjRR4j40pPy46uUTFIchvWKH3q5Pe71CN9bLH7/COO+w8SPxCgl/oT/wChKfx9S0ORdnO360ptCmxP98pNHmzxofkiPBW8r43HoTQxPghKz6eO8jtiKIi/fJWURjY4v4LyXsvUnS0hiYuhIXB53609ZXpaQuhI9kYIcWt5dLUejMREb5oo/8QAPhAAAQMBBQUGBQMCBAcBAAAAAQACESEDEBIxUSAiQWFxEzAyQFCBBFJikaEjQrEzchSSwdE0Y3BzsuHw8f/aAAgBAQAGPwL/AKaxZWZcptrT2Yv6eLqV/wAOxbmKzPIqbKLUcs1BEH02AsfxVPo/3QawBrRwF2Wx+qyfq4rG09pZ/MOHX0sNaJJ4LtLSDa/+K5bEKirf23ww5lnpQ+ItB+o4bv0hRsCBVUoQpOxC7Ro3LT8H0hrX/wBNu8/ptZre/lRs2jf3DeHX0i0t8i9+EdAsRU5bHNU2M7oVoz5XEej/AAo1bi++xW+pWd2ZN88Vb8zPo/w2jWD+LpO3kF4VN38IO+Zg9Hs7IfuajGSrfms7guahUfKafmQXw5+g/wA+jttf+UsP3Wq8VVQrIXAKpRl4WGzJUg/ddm7MZLovh2MBIDau0qnMs3RaBsgl3iOnokOdhYBiceSxWQwP4QZBRsnZtDVaPmCThRm0MrctyDzW5bA+6387geKImFxPPgoa6zb0QmoPEII8wnNbqrNx5FWjNHEeh2x5AflclauGUBFAuBLflHEoOhrGnQKI4cVhBhVUwnPMmsQnA+PhKm2oOaLrOnI8VW60YWVlN/yq0P1eh2rOjk0NiTWq+JkQZGV2UotzGjlFmxo6BZCdYWHgEOkrE2RqFReFqrey1bpBQtPlBd6IzQnCfdMJ6FPsxxaiLsgStFTgpTekLOhXC/VOWO2jDO6JVrjzfuj0UWkSx4xEJv6ktfQBOIyNbqrkoZ4RxQQBKOE73BQc9gzlCEW27mCsIyZ+T6KbB5hrsjoUxx4EBe6zuwjiohFwdQLFoiJKda87igiw5ELCKejjfNEXj9wDr8RW9RQBICxTRc7sJuhDmYR6+kfDv+nCfa+iqZTqFYRmEcQUgr62/lc1Ksm+6f1PpFpZ8bN2L7pjkRyVF+m0vdxKmXfZYd6NGhQWkjmgRYuELGM12rcl1QKtB9R9Iaw5WgLU1vy1UcXKSpj7KsqAsrpAldb7bm6fSLJ/yuCtLM5TTkhOiobsruN0IRcE7D/UbVvPkoPpDLXhaMDkGHhkq0VBN1FnRQVlVYjcEDyRtmNm04812jcuPL0ewdxbLLsN3NErO6dmnidQKRxzVWNsici0UW8KajL0W1s3f9wD8XSqFarLbJNETw4XFQD7aqo7N305fZTRzdR6DATXTie4wNAviOY7Me3eGyac81JU6JreJTD7KFQqowu1CnMajzxdk0ZuKwilkPFqUHFF31SsQ491P7jkpN0cLhyTTsSyh0UHzc2tOMadVhFGDIIN4mpQXUXaXUVdjkpcpN0HNEom4bEqH/dTmNfMQ0KLI1HiteA6LAzwfzdKCa7QqVG1Cl321Un/APLhd17nUKWnCdFDhHlcVqcDQuzsx2diP/qrs7OjB+but8rs3ZqRw2IUI4N5yxPOy0d3DoPVSzyUMbKxF0/Vr0/3UeFg/C7Oz8I/Oxzu5KQsNrXmEQ20Bu33tHuiWguKrloNgXBAIdzAvlvj/lV7/HaHCz+V2bBA016rE8rAyje4pdndmtdkXC4dxy4qdjG3xjPn3xt7b+m3h8yLlJ73isu9nZA12u1bkc+XeYcmirjoF2bBDAYA8zPcAbeF2RRaeHd/Vabx/wBEPOjYLvZSo2g/iO6aw5ceiceGKNiPLztFBml+HZLe6trflAXujd08p+m3LM8AoeXOP2XhcOjljsndqzTiFKwm4i43Sjz7gxkd4dyLP6ZPvsdfJizHudEPh2NxWkeAf6rGP0mn2WOytnP5B0/grsviW9na5TwP+y7UChMO6qRc5txRXVBqJUqFGl4Uafwe4DdTCfpUbHTyZtx/UtDDV/i/iN5zqtn+bhK/xFmP1Gjh+4K2s3Vexv30UXBw2OiJQbcXabA6Jj+B3T3Fn1R6m+V18nY2fBjcP5QAyAulGzcrbTA9t07AROqH3RNwbxNdgJ9l7hTtyp1QKCJKxcT5SzeOIuhOtdL8J2Cg3Rc3XScgp2W2gRpQ1HcRoouC5DvTtlhrZnhoqWrPcwt62aTo2pXysGQvlRxUXdLpuwD32iwrC8SR3E+RO0N6hZi/9KACdFOP9odEIiuGYxQjnAMSqi+Qud+ELCFPG6dqdsKLo787Vpu0eI6LEWGZJFdVEPyAiaKTi8UjlVTLvCRh4K0GIneGHYm+OKk3x3wKnyB8jzUm+dO+d/aVF0egSoGV3RYe+dzp6HF8lT3zZpO8j6LAUbdX7QGqBHDdvnZPnY43xfLjC3R91U7YJXJS30OVJvxFZz0VN26qoJWW1CMVZroqKtFqPQclUgLOSvD91mTdVbjKalb5QgLLasm6uCINVisqj5b89gefqV+nZl3NbzvYLUqEXKCo2mH5ZcivdbzAVuP/AMyyB914VW4dPOUwqcTAt60celFRldTVcFOU/hRlHFctUGoObkVXat7Y/wBg7gnzo6IaIngpRUogGih1F1Racjlt2NnxdvnYqdiunnTPBCFAoOKqU13FBYgJuCjMSp2bOz1NUYyGW3CPOnneqqq5LCOCglYSaclhaanjoEIyUHJUzWcbNr8Sf7Gqt3JU2JUaegCEY4LmiDnxW/kqOcFMypGwAMyrOwafAK9diFle53yj0HdW9fn+FUNKqMJXHY7V2VkMSnW8kZorKt0lHn6BiHuqLJYig1uZ1UghVEbU8bV34uyRhRqsKylS5cl7D0CFlVNPNNYsMArdf7Gq53CNiysx+1uxKZaLGViOSJUakefClCi/sEqYqUa7ymaLFwTgom9g5onXZbrKHyhBqwKzbyn0HEnflVaMOiD2Gl2a3gul4OldnCo4BEKUXLpT0HmhSVqU8nJHC5clCpef7Sgghe/qiivdH0J9zrm3/wD/xAArEAACAgEDAwMEAwEBAQAAAAAAAREhMRBBUWFxgSCRoVCxwfAw0eFA8WD/2gAIAQEAAT8h/wDjY1j/AOlm894wu7HKK83yJVMnXZIocPZn3EP4ZNMS2p7dxgeRlNQ19NWkNt0ktyZOsSvHd+DYSgQiPbgxlaSCf4HdK3E3ZRlB2Wl8iJ9Al9j+CPob4D0JMtiTyF57F+WQGybDQdolScC4J7kdoGzhWwntktzGnBhPD6bMk4Ow/H9fSYFLS8j9zu/sT8CFSXkg67C3E0ROoOe5aI+YYIki9yAhu4mIRGncLyL6QtT7E280vJLNxHAynLtkYgotCVycNEtOMOmh3yiFTVGJiqVy9zLblNsal8iewy7SUHKfG/ySPoyLAgmeX7v4HIw/ciwPzmXlFJCoSMoGS57BIkpR3IzxOeT9aJLYhW4s0R+Sn4P/AA2X9GWWPB6lLq0iRSZFkTY1InAhCVsiyGyTqpluV3J3skWuE5fJRPB5Q/WOUn/2x/DkNgxL+wZrj3Gwb7GATJ40Mw1LQ1JSH1kVKW28xgT28KpWQnaGhWK8NckslhXLY6/b2lfR7jMeFBhFKHRyEhymQQ3glsU4iRM0pG5QVCRsJQbNkuoubQm6FtwcpHE/NCeuT+vP0arFJVMI66pDbV224ME0+3+lC0GKh9mTtj5Gpp2SEZZgUJ4qckAx8xI7QZzuYlJWRpElpiWGXgPal/g6WVIuH0SL91Jwn7AyMI4j6z90MTj2aI/AiMsf+7/AlKw5ZMb8sGYbwPvVJZ7IkSdA1JYY2lZZwJXLhG/kmNCltSM5ck5ZMrbYVtzcOzg/RIf0Nbrh+f8ABKRMHgj2IhUC5bEjYYAXBiqNsl2UM648olmGWzGe9acNiFEg/YZUHBRxoS6DmjnzsnXCLfjiCg+00hjTd9x2Z2JuiA82/wDRCeG39fQ/2+hx+RySIbLDIkdyi2RDMpNPFsSRblUoSLVSVTASnbcfIijKUNZ2vkOa+qZwjyMaJ2KEkR4qFPEN+yEPFdr2G23Ly/oc3f2RQrSom6oZodTEX7tOBIKT94RhNIdQQevkT8DUQuwRZGBCN0Jxv3EJqRfJwN3ZO0SMAXJE4U/59EaHKcNCItIK4e/yNjJ1DW4uPtDkKbHpBpiGro3UQqx1khSSVglMS/IQ3j4m4G4RMWUKYfI37C3EtLA9LJRDfRt/RVJhmW/pDGaQ+qKyZ1GIMuPEytj+ISWtK2zrLCglEd7xEIZw0PxEygSkwuOhNZuboSQ0+nDPcy5v6PVkqyUmxFK8Z/8AR4yM5JEDKWBxPkEKKRvaRulSLPZkq8YQOSvlYFI0EuWBZUgm4wQIHwy+josbrxG8FVeRTZQmF/Ih5W44HR9T3RnTe5G8NzRAt3grdqewrF1IhFew2ZlWUewsfpX9IrKYHskP5SEkbDcEWgTSkzaH4IZu0ThDY1B6YiKL5IM9xIR2ykI61kWgbOMlXDHOhK0QziWa7HTpfz9IU1OT+VXyhnmGmw3kaCUcxFQyPEU8hE07RyiBgbvBY+5iQUOBPeREFHfAiZ8qOxUeBLNQmL1Tv/if/NacSn2k2GmTdxjUSRSKbQoxfQflIbmkPXSIYkpVECEwKhhj3M1uJAy0wl0UX/Qe5DTThp7fR04xkrH3M0M0VyP7E6txhDCpSyxwy6fAzRKWaahlQvZ7Cl/oxeWlvQi7gnKxkhtuCcf+x8LJwm79Rr6NuIX1w5X3HHYrcsuU3uQ23HKEstzLMU5BCW8xjt3BntM5KEUHgEkPEviOWPV+w7TXUfPi4E7rgtL+HS3n6KyjNNNZayf2MN4EuhClie5eL5GF92hjUs3MCR/Yty2cTkdiwTcyIY60nQRJJ8jJquFbHZtuJbYQ5126T+nT2IlfdaXfj6C+IlsZpYFXkfURvPaUn8CmpqGmOWIIXlDllfJsRIfshC+kDgSl5FdmhMrO0fsPjI2QSY+THIMssYNG+wUG6V1s+NjHut/Ao/Bv+5iGunCE1S1Zb9fY2PLS46E8YSP8iWTwIXR5Fux76rqZMCU0OqVIisJSx5ii4GujoQbJzamb3N7HAsC4GEwsD+cUdAiZItlDXM8/u4olXsH/AEPWhprZ/wDAv4okmHUUuLnh2yJH68kb91sG/YQL2ijrEjK+RAv7GCyQg7ci5QPDluzEKfJP7xz0Hln9JcCkiK+5Bdwpkga2RIpiUR6DRZwOFjGoU0QaO3D94FXsW3f/AKLPHvwu5NajRLMIhWJHN5flmYwrZMtubh+raIlFKNyM3cmBEjbRssDrrMlEyyU97bhI+tlsEJVLkmDNbx2EybwT32GsZZjEIsdBIS2HB4Y6V8AgheyLoH/Kp8quSdWsPbyHrnun5ej832EjLppbDqF8iC2mG9zqaxJRUou8CbQxMYECSU2YtxJ7IdHW2SW8bCbUc/YWad8FdcnhQreUbWyZEmgwxOUJ4JD2sSL4JkYzTUNf8M+z78LuLpWwWXC/kdTDG3V3I2jM+XOiUtIcFtZCcHyCA1xmthNFpj+5EAFxJKaSrulhhsamkMcvYIS7tlku2fITA5wwy8Op2stKS02NRKdRINLcfwMVENMw/QNNmkaayn/OqO6FI7V7z1/0KH19lwhDifk0OhUz5ErGQfYoGxwyFxLTvx7CWbsR4F7CHRRo8fJZBgEKFoVg5CaC6hLJbcgQ8FITs3y9MA1blUUU4/3/ADJq4+XjsPm5bpLCHb5G12Eh0RLg4bIgQ9JM8PuY2fhjb4ET/Zi/YG9log3LoiBwOAW8dVCOUjApxk7beldem7kXf4KQpGEICNq7Eqm+i3fyOQzARDoRNkv/AEog2Eh5iwszoxUO/RJIpJ0SNErMuCgWrEsHhm8FGQlpGmhCMvlz20BkgshMTIGMipVDR5mnK/j7BXZWz8j8sx6JR2ESHj0IfoumMsI3JsQ1kw0JxfYXJNJ7sbeZMBpDAYuzl50JnUY8SRvL0MXEZA/G+q/i3CXPaySFbCLwPXkZuiNDchddHq9GLSop7DQiqFpvq7WjYKBxMYpTGlGWk3juQxHQQeyGnfUgwjBi0WCJaoxOHa/htCtflv8AA4aeZt+yLBIN7YJyvZfwPXYhfaPMGwiNNxtUiyQ5wFcP7N9Pd/5Kz23CP7ijWTmNmckW4Q0uBZD0cJpXZackG4naZI9BsdHXSJjljKsVJ+APPz61pzT7xkNbRmMzu47u/S/TuYELAVjfXBUKnfEFatwY6sU4uL92YlP7JYqiJolN4a3C6NGOOXkbtwmN5ga83HiAwoXEES8iZDYftJaeQq0HVGBInpBPN/TzovV0eBDVsR4f+FfiZC6rkxNhAx/wJY3JWJnF6EICb8vTfxZBuceT5CGjkwHxVTm/kD3GUvhlviCZHzsT7qVFvcyOpuyRFyyCXoGBgPOWbBBMYUyPkkk2GUjHQQo2vXlcKx3Y+YyPI4wNwRCpeQnC/iwi7COTRaxFK9wbNv5QuyE0vYlX1IeVCLlsKCb/AAHAmBKR3FMOxaGYz0FatkV3bQiZD7hmXC/YbvoMDoVsh6UI/YCCcOSv1wXBN/A8umLFgWTwbgIYnboroRqXn+KrFxk7CU9EN3puLIztVz0e/wAiuUcOyOmojXV7CezYrqkMjlRPhEzMS3dIz2shy/0RRJ3cY1riTnZEgWpE5dkk2mRJKXsD9cIzw/sW5qDSeRMpm1yxPYEN/wATwc9FhrvohZJdlpu5QqOVxI+R7fNKb2KIv1LfUSh4RVkVwGpW3E4lG48WLG33bFa2EOYUPF/6DNGNuxFNaFGL0jC7eu6rmhwkw8i2lLQ8OeCoT6o9GIhl26Eei3s5KMNKfwId5tqShtpWIQ2TDPh9dyJFHnYJyk1RTga8sSfK0cRJ5BK3gPJtHIk38g66HIlrPAiRywtPlk8LQIgR7/gW0jiy9jd5WexEWMNowJJ/hcwMfRVpN2pYTklEjoXQtFDcYsM1TEWlzQnOFnsFyZ/AwNxHaW7+S0kcj2UMYY3Fl6DF0zsN0M89BCmznJ7EQ8vIkjD3YgPJkVZ9f2n9j2geNg/yGv8ABSReqdZJoaWYmAwhI2LWdWxsbJGyYfQY2e7BG3x0SwjEWWKuwHym6yU0HbMyI39fbzPgt0mJSmuBqb7YHa5Q0OGToTJJ0knRsedDeOkSSJk6J0SSNjYyRoRdIbb7gQsIVhAJ5Jw+iLoqY/AWi9EG3w/fwZFR7MXdZQ+VuJwST6UmdG/QbtD0kkkb1NjZIxkiyS6fIyWENx3LP7MUvbQug3BDIYqet6Lsp3U/4LX1Fh3RM9SHXZjJuwaLLjHoSLGj9DPQ602JEybG4vQ9WnqqKOrFQrbkh8SEoJBLuBtLpDll8sdRVkT09TkOWgTwy3gkSNKuT8ofDRoGyMokkYdGdGI2MzLQjAnXMDBOqFEGBizIkMvgznkyNkRa5ZBbHgSFtEPdPUZ4fQSfq2H5jvFGPuFrk68iqVlDQlbmK2Hon8ijdyc6JLOPpPBkZamAgmbDiw/VOpQ/ASW8WpZYot2NjA0S8AeKCfJLbdvlnNiFxJFbSL1OUmXRMxviG3cMt5G2S5MxWcEHbXIUXvqg1+k8a2y9QWRZGIggjVRMy2gT7B3H3nQQ+Co5T7AY+hzhfYgOPL0EYNbEVhH6v11SILSOZTHjR85dh8tRDWU8mP8AB8gbPfTcOtVRD6baIZnoytDGMRuZQms6PRCb6+4uxL0OURRdqQvcaVSbr/Up1Rl2yaJS1XgjRcJbcnGz+5UE+rjBGeEKa65MOgS2GzwzI3rok/J9kQy3yNnITJVOqlBaXpkQhmenYWR40QWpjWs6MxHVKnIsur2bZvoOgKSTudpDtyi4ktiXxDnNCUpkhDyyjHqf8Qp/RAqQ4Tv6lZlC8lsu5JlJVoZRD8C4luIEzNmQfJMbPVQvIhaI2M9GBubaPRaGNDRBBA9JrZmLJOdMoFUlDf2J4qlySODlsyVGMkGjvVokm6+wiDM2N1E1PVUkSeXHwUWD5dS2JGlpUcDO+hkGlikvVbHvRDDRC0WR+iHk2Ho9EbaNEED1IAQ8hCdcTcZK+7FD8qGhDqmOyEfuTeME2GsfoiIlb8elqlV4i3FQEVeBEpSY3f3OtT1Gy3MSsN6cKIiuj2Rlolj2IQh6PWIeRYH6CFrBA2PSu7Dr26c4Eq92xlhy8Ffl0+pPwJ4bJFRly/lHLKBAjX/YR0Sxng/R6VKdv33kkc7uDg4ozuWRDv4C2t/IjC04TqJnYsedzI3FHnQvQ/TDAej0QvQxhEGCOnKyTc5buBaZRdBt6YUmY2+nlkTDd3/HYTQbXFsQl3Wx0mVuZ5HgKfoUG2yEjEZH9x+4k0sI5ZCWTqSj5J8XY6xM4Irst9xm2by9GRRmZiELRG/qLej0QtZG9EtTaMMkbcjKISaW9xQhxY1mplbi7fgQD8rBAG5FwRRKHT0NKPb52+RLNmWkRib5GNCdD7LEgqRxVRJsS40SaIafnRYzMaCF6N/UQ9XotXqlp3MQ7gbBq7JGUUluLZSS4IjJIhsbUO0Dw+F1F525FxhJ+iVzrdlf2eaByiCzALTNiljF8qMpMTW7IlJEJhEn+l6LEKIhiEMWuWhZHgRI/QWj1QWvEPYS3UOlCiYUIziWT3GhZmjesiD4Tg9yaNPdfJtAo1RtIHtSp7myIJXaY+BIzDm8G+HZDvCuCPBoh/ZQNSWiShmMQhiFpkP0Iej1Q9UtTxpGoQwsnwSSpqMAgbvRKMGExp5Y469RRbs5FFcqZTGULq163qKaKZkkOiXFwXombeyGS7ykMxXgwIlCIiTuybuIe9FuRr9JaPUejEPV6J+hDYz7hh76JI26olM3Uw/QetJbNyMkK6MuSxUEQN2JixPRrJwL+BCd2PRRazgujJApu5ZMbWCslJFl8DuYZ4Eg86CQ496p0Wq0PR6Hq/SloxkSmjDpCqOgcShm3yxtn3B7/YQJrU7EiHYfmRS+kay72YB+hY/YMQ+Y9Yvu0b+ghmwtzcYh5Fker0Wm+m2hn5H3NMfbQfeR8Z/YyZ8oyd/wPJ//2gAMAwEAAgADAAAAEOHIhpppisrmGKJMjEImkujtmnivkismgqpoGuvt7RZHqurkmopmmkjpukljpCrhnmFSTVSFgqpjgmnkmjpmmmhJhuqhcNP8ZdYqomuuhjqtgmmmmmqumgssoQyqcemsppqumkks1kkrhpplsnD8DwzB23phupirsmsirmmtortsmxXhl8cpMvmvjjnnksmqsmjsmohtd5GVP6IlXsilomsqjtiptjjuil4onH4+M8itvmpjqqmsikrqkprvv3RQsff5PevisigmvggxporsntvsicMDzXFAjrsihmprvvotjmrpogjoyg5cZw3umpsvrjlvvtjltkuorovvwPiKCzAHGjnosmsjovrliongjvKQDFsTBHlDOFlhrvvtqgnvhkgoFCWcCryOnprONHknrvgqhiplgOWgFzedT7ZivrOCshPughmohhkzNuFINOFXpjjsqJmmjf1gtpihu5JpggkHjsmjrmosIMNIjiAojquj4mMntuqnmjqnsrkANPEPhftonuzJintjlriomuOGKIKCGDFAzhnsoakvnKkslMtnkGqBADDNKOu8+olvJgvuCqmhulvqopHvqqkspojbhoummvqhltr9roqlsrrmNjoHJAwohkFtgphoktauopmprgiPFMPDAilulPussriohatkthtjBInIjEDMkurDarnJoks+pllphntEtvhDKLMwnsm4qtJpmiruiosmMpulNvKkQM0ps48jbpqrrgvivmoAILoNh/C8jfpma1x6zroiqqvqnlhLIlqMFhUj7piBcttxhitkohqmglLPsg4nfZgInQiDE3PuvrkmtgtrlsLqnjZjKgclZM3hlWphngstijmphPlmm0V+cWu4lX3zcmtjlikusmmqPrjpPbBv/wD/xAAjEQEAAwACAgICAwEAAAAAAAABABEhMUAQUSBBMGFQcKFx/9oACAEDAQE/EP4bg0P1zXTscqTGRZEbmycxyuq3oAoRcjo8XjB/49UkkdmoB9R4lBXVyqARgyyJiFjz0wkOIEtw2hFwkvIbIe26icx4fb/kSs6VKVzbBE7iITAPM9k3mLAu9SwvS53LM9kq5QwiIonLAG+J/lumpCAJqplGzSCJblMKizIzav8AFX4qDDq4tVcyeuNya6pGMZWsg2gi+56puiPeqaoipjfmFUKrmET+vqhKMJjnEvZXCX/o6tUMq4LyHHmoQpzFvqkN56RJwQfYxK29G/iNTGdi/onKv4z5vUc+Z1GHxf6iPnXQp+ADqAxdTSmF1P3K8rAQZOSIfiAYfnDuKXUvtKqOo5SjYUxPN9pcWOe1/PlU+pshzP2L7l2BPYfA1mQseJ5XQK8qEkgW9Rq4sFN8V5ChFsTZU7OXQLlClTTjhziDDxZ4DB1UxsW9DTUB2x6oWCyArPHDwYP34PPQysdw8QLxef/EACERAQACAQUBAQEBAQAAAAAAAAEAESEQIDAxQEFRcWFQ/9oACAECAQE/EP8Ajd+jLqmXyVx9KFWYGSO5jGCbPMDVuDMAI4GY/KJ0YQREw7lnl+kuGJKg7hQ8jtKUpPrhnTLzAcswKCXlT+EQ8VoeixMfqTHKSXWiX/UCivF1CVb+QVG/syQzCZhqZTxgKYpi59mHEGlDqHcGagYHkFqMMwY0lPcMqmL5icxS4WMxUfrHBB6eV2wXJCkEsVKJedA9+RF2RSC96FkZRn4+tMEaEYJbt6hjYMrwI4R0q2J26gAUba1rhD6xdqMmID9nXnEMSt4fYuj4TJW9/N1cDuGfraR4XUjvI5Np1wmpo6u08Rwnss9BvfCcT4zW5ZsO+cral2zBZGizYdJi5udQxU/SHOinbCi/2EMdSwI/61ppKgQT/CHDW0BtnXEFq/InaVVZ/euEgmMEF8ppQjBjMQRe+iKNLBl23oRLuo8cboaisRkiU3ZO2mCtHO+9PTlNccxEVCFjMgRM6doGitB85TXpBU+4sKz/xAAnEAEAAgIBBAICAwEBAQAAAAABABEhMUEQUWFxgZGhsSDB8NHh8f/aAAgBAQABPxBzKlQ6VA6hCVKlSpUSVKldah1dw6VEgRgSpXVlSoxP4PRJUTqSpXSoQ6VCHQ6V0rpUqV0qV0VK6Klfw5/hUqV1qViV0ro9a6B1IECV1qVKgSpU56BKgXKiQ6VKe0phuVOYnaBHUqVEZUqVKidE6PRldKiRlSoEqBAh0DoQOpqBKgSpUOjuPRbY/aYIWcvcj5ePoZYjyPzbSH4m0BlaPyNyyp2ik+G/zMvBNWL3/RvxE8fSyOyOSVnpUqV0evPR6JKiSo9HoxIwOlSoEroQIEqpUqBKgSpUroiFwC1OgOWWiewz6WnWOe6ahtWx8+olENmh2e4ILy4GWVboHGYyObg9qgiU7ANwkGJRfj8vTjxBKX7B4eD2Y9SmVKidK8RIxUqJ0ZUqVKiR1/CmB/LPQIdOOlQOhK6CBkbaNAd4fLztk/n/AOBi4QLNAa/+yyCGzM2EE4NsreC8371LBVoI6T1CpRpwQi1izUuHtAc4aJqJTwJai/YeTEtcFOkTl7U5+naVE6VKlRJUqoxrqkro9ElROhKgdDpXTcqHU6VA6Fp38wMuqdjPhHdgZ7TTW4D4MZ0eYl3RoRXiCxrmK1eU4hgrgPc8fETGgN00QMrRGzyEoRER3RiK214qoYRjAzp/1QnTB0H/APc9vbpUqVGVKjKlda6JEiR6MuHSoQMyulQIQJUqoSuhAluUXtLn5GB1ITaCgrj14leF2HzKULxGBAl5LgED7NSndyOA+YlRuhR/4scTseV67RLYBT7eIREUWqAsVhdmoxqvQwzvaXanzR8xy8RJUqJKlRIkTpUZUelRIkSVCEDodA6EIZnP8KgQZly92ghY9JfSUFsFgOVGzDl6lKt4kxEcDYlASu/mKiqsILGDlI41+O0LlByHb/kFbdhoMBlhtRrMU7AeEz9xCjvpgt6Ajzan8MdsTDeFP6jmV0qVEiSpUZUSPRJUToyodCVDoEqB/AJUCVAlKd2YDpdw9vuk+oBErVUx72PoomZhHjce9n33lsBWr3io/kGC3cK/qhiH5If+EMVYtDJBzch4PcZASY0uHtEWUf8AVDsGzHiOWqDPr9wvWo9HqnRlRJXSoyoyoECEOlSpUICVAlQOhAmNu2YwWiq/1/7CORLNiAQhYsXItrdQWmjQkIKolOkYL1Mp/O6nBZ6MPbMiRqwtoSrkE6xiK3h4DJC7XO8fD+vzApZSC04PqCCVb+0n6Iw3E61KlRlXKzE6PSonRlQ6kqEzCEIHQlQJUqoLBxFAAW14zafVRUEEoXVZlUV8TghZgGya4tmg1AbSyIvdHyQOtclbIMintivuXkrMjxBhBdwGQsjsZZRY9Cce8fieC1r5qGIIq34vCMCVElR6p1Yx6OOqRGBDqQ6hCEqBKlY6pu7EdozaZcf+/uIKim0EWrM/poG2+XsjONNOKGVrMl1ZR5mPyMrpRyYr357RLFLlWUueFreo+KRo2VxDaA1R2lvrVar0doIcdOy+P93j45cHVblfosX571pMyb3apaFhWmqqsT++jCMro9WJGMYkqV0roECVCB1CECVK6VLznGDEwLi1Qe7gGnGz54lHXBnJHLDEcpeh+RBGJZyhlT6EcgLgeO3uBsQbKB/TBjP1Vn5gYAsVsuMmaGvMY5UwH9xZGmohVd/Y3MIaeECwIB6r2OxOJiAwb9StEJZvFpZ+Yfqlbt7f8iF0i2rFn7leFBnoVfiv4sejKiR6PR3GMroQIQhDEIQgQgSpXS+1xg1bb9U5dPm8Cs+oVTO9w2v/ACaVGhfPeZxtCNtq3VRhuKAFZBdW5gjIKDYNKBVzOIaLwdnnTETTzAqCxMYSY/zUarupoi1EBF6G6HF1VwoRTWBkI0X6PuYk3gsH68bmeZFVr/yVnAGXFRuLtzQXFfCTCyxoZpH+jAqVIea2/HTfR6JK6sZXSurKf4EIfwCH8kActZ3GX6wiCmZCq/BL0ghuxEvyy5QNpmUlZV2LslLKFL/YVz9VFH1zeCcWq8R8XthCx1hgh8wtuHF1UO9moelGgaO6CqBBwbDjJxEWT7GcY/5MTNWsVLQqM5jelJQVGlY23ax+H8Re25MOYfqMktLfb/BlRlRKlXHqkY9EjuEIQJvoSoQlSrlQlSoCcMx0lf8AY/EBPptNWI3+IxZHCu20v8yigWz01MeeKaiJLDdj+YbXLa4IRgBOZnLWPywk3sF9oDoqJ4ZskaDirZUaoumm6/8AJgPo7SkGLi9x3AaE1BkbC7W4U1f6gKwVRex81Z8VFtlSv4J0ejGPVIyomZUIEISoQhA6EqB1Q7Qsez3lS6QgBZTyB/EysZzCnTgaqDUKVwC5mHhdmrgvKdPZO8YDq4TNd5ef2vjPabc0Bdbg7nJKtuOegG7hDkj3FNK2MMDP03ACIoYK3iBVsvjJNgCnIFr+vyRXUCmfk74hiTTvEPwB994EelFSutRIxjHqxIx6EIbgSuhCEP5353JQxSLxQekHvDQji8hL+mA8BYLsxuv9u5QOnatHpmUyGnmGgWwUNw4i4B+YiXloQ2+4GyBs5C9R4Y2sgws0mq7O4L0C6DKxIG3upmPRIsOTwxF5pUtjVP1HaeqBPweP3Nyv4O+ldKlRnMYldUjEHoEIEIdAgQIdT+BKg1gXRTePqOuGoGQB+YrYX4HUEQ51UtA02zbzHlIu6GA/uXxRLhonEabRNov6PcphF+1EzK5HWPcW+qUUd1yyxtBtBuGUlBFpvdfU4l/ALKlROu4ldajEj0ermJ0P4EOpDj+G+lwnMpcG80DGkK+6B+ZWMT7XKJZe5V9QVTP+Yze8AK/zMX9rdH1BJvZAp8yoCBYK1AkbSg+NRA8MN8nzMOgBm6XuXGLC1VbkeNTgLLKba/tKh/q/WpXRJX8E6J11Kj1Oh0MQhKhiEP4VKmuhHfZZ/wCgI+YJC3j81USlwBMQ9EXRswAjFpl9Ra0sgwfFVF3cFNegTKQoI0e7hmfIrHvzFUKtq7EhSokQY5B8Q7iCSXrz8TnVDa8Gj9P3LPK5zzlQKj1ej1Xox6c9GMYdCEqHQlQ/hX8K6EcUE8q/gQRN+FB5e1gJMmtwWWHQd7PUGhvDgWe4UF+4dqhomcTb8M6IRTfEMyi9WC4yiqNCNULLhacXkO3/AHeBWyu/+R4+CdGCTvuV0ZUeldElRjEldXoYsOhCEISoahM/yYSowNC70X+FiO8G7pZV6z8L5gRpTrcBV35mEdmkchHjscgR2n9iIAetZhskYK0ywgGW8XCzC+R1FQ2LAaTu+05CJbt/cAwYvXeCCLAcXBV8tq72cx/rgKUYRlDEz0S5XV6ViVGPRKjHUZUGEMwIQIE3CEDodLm4EroyuwMj5lMEwLNBv83ABnNFfb9QEMBtyZzGMluzRE4r5PCIQFQfPeKFBxZkrzGwHZmTESgjA+Wo+uVcH4loUW3vMKg6CQj2kIOasjNCCOSbdZrji+cy2DWYUgsB2c09xIps/g9KldKjGOY9GMqHQhCHUhqH8KhCO4QwkFS444UF+j9S6U0dmNwnYDQ33/HqIVDGmdvn6jqGgF4IKJ3Q93j/AHiB7B4V3ihfZg4O5Mm+lsJTF48Epbt4bCEUOKqI6OAPg/8AZSgGiPb+Ar5SUggUM7EGxPfaJ2S76cB4t3Cy+TEMKOnPXOPjfiJUf4PRiRjKlRidCEIQIQ6VCE3DpxKlRhCBDmOFF9C8Hv6mFu4iceIwBZuwqyFizyNvuVCm11THqDyoGrGIly0PzFobHvDqlJlrFHL3TWA+IS5FrxUFAsS0Fc8BUe8Je4Ovl2+/EMgXwOex8xDcVOAfELWC3a/Dv0iREoA5g+U/vC4Q2r6ChXsI4666sYyuruO4QhCDDqTmHSugdaIGS6gNsJzIMQvKu/BWLzbUcnBwW6SC/KnzcvjzB/09TABBaBydou1XAifqG1y1U0/Es3SzvGnN08cwkw25wTdBd3dgLseOYEqheF7h2Oud0EOkkTSn++3weYykouu7GanZfc/2I3VDA4OCNWAIqpSQKbDhi4WA0Hp38Ny+1Jmgven2pLUC+hL+XZ8PR6PRj0eiRhLlwhCBCHQlSugSuheMttePurwGWXaMTWcLxbQDBeb3FEBSDAbKB2AohK34QaP7lCJrpLL7QKGEZxhFck72Q5FOWlS5VvtS4l8IV2Zwu91uAFwMqd+AmWQLtCpqonqgPcTVYr1jl8G365h5gk7J5jKaK9A7wcwzrUdq5aFa4llSXdj3m40jFj7CK0LsrETi+M/M3oUoOVOzwPca8z2pvF7eHHqYGbIUnRIxjGMYxcw6HQ10EIdSDGEEgBVxRCQVe2vIH0GXiCS4J4viwc+OPtlKbT0cP2/JEweX7jF4f5DcvmJqe3mP5AbEsfUuC+LRWf8AkrHJXxYfmBORwTMxdhLZe6QMo8Qd8uPBCSq611aMzU6G3wIiilqj0h4g02OMc+0ahT5x2j9jFy4wZu/UQIUXx3lnssSrbcl8EtrFEJdeblJXGU5PPeIiXomldh/t8RsMbo/Bx+vPRjvqxjHeoQh0IEDodTodpc2RaWh5U4Dyx1Xs73VPxe3ioQFnRdvf37HH2wRMcz4NxebPo7QUe4/ueOBfaWGOZTOGMUKlsov3MVjg1WIXmry5/csCVnHL+f6mOQe5kqgY8Sm2lX2JnYVhNp2D+9RVTGB0djz55lByMPJ8ExsrIdr28y2uUWMQibH1CPQu7eJRdGW4hfVVi49+oTbTLbKxEaj3mFFwBzmAAkNnIcl/03HlK2opfHHss9S/zYXpO48nWoxjHcMQh0CGoESHQhNxxiBtwder4NvasyyJL7yDm5fEHGpef8Lg4iN3FFPXVrEZrazzUtQWGB3IXWvxMV1sZ8kJyuDXF94KLnTdMDjvLLWDeV1iLgQq+xz8VHAamRn7ry+D7nKgB7dg4IorpacsboBRTtTiC2gu/hLLWaFeZYDG0EDBq2XChvfES1K1DvhggwHqCMCWJ/2xC0qxMk0k9/1/5Dl7KL+mnyRaBpLMJ9OE+T5idkUjs6vR3CEDoYhCXKhCE9wowPdaCUUgwueVbrnAcEB4Kc7W7S7XK5YXNTRnvP6IZlO4vfieg0HYivNCr7R1eZd7M/g8StINLZXiV9ZUC0/xxF76tY2nw0xrCNHLiYM8uj/CUHDTw/ly/BFozQCk/b8zat+M9Qz4C6PcsrT7VLeqid6uJW96vEzWqts8Eb2YKgcjdVMed5ohtqsnMtWXHmFXDXqDlm/BCzrEGsMs5KPMqrODw7+39e4ILObuK7LeTu9/DLAAMDinZ89mO0ZAUj2i9HoQhCEIV1C5UniDBHf127+sxANcX0ncOPD8xdxnVAaDtLhibe77sE75iA1D3jAlVmK2rzMPiDRVCtjLZJTtzHFX4525O+ZX4nfF+ypmE+SYgNDtEGDD8sz0UMyXmaErsxBZw7QOwqojMVGoAlVBeHmOeChsj5EYgF39xRO6zcuMI+YbJG4BVya1ANFwp47fLj1czgKrG+4qy3ERth7wEvYgaOfQ+9dXoYhCVCEHoEwSZVwj/Ygvmu9JnSuI9w14OwQnRzzzMXa7SU5YtIoBzMmhBQQZbmHzDIanc/iNuvoSk4P5D8xWvnCWW0AmLo7CoIIbNw3lhT3Eujq481o1EyUvvAB42QF2ysdmCNY7RRZVGOtMG1yFHuDqWsEBmJe0GrXRdwHI6uxw+s/M7oVmZOzFvcu7ocMenge+/wD2PhChqLz6f3GL0LhDodaiOTNbXt9uA8pAZEIYHr7CvLcXsGg7RuE3jtGWNxLVcsNL6Tdxqc4nelFdRaI2YIY1xDPwSyOcRC8fmNMbYDSzAxTvUMFxm2/MHI13i3BAycU+YjW0wMgtSEpoR12YJDGeJ7gxWN+5RrWuZt+YZ3Bn4jL/AM+Yyus4rghKuOY1ouiC86mfd+ox5z4lgqvGeT9zLerHcafkjEhCEOhCE0ApU50/nflGubF+VP8AkpcUHfEos6JqciUFR1TiWJ2jdx+4BKngxI2PhlYXMNDWIKPMa1g47QMKsmW0oP8A7KMbqVcd4dvCIlg2h88xUTVE2Ac4cTO/JmYTyxEkitYng1zLIS19Jt+/1FvctwDYCCkNEVEySs5rO4yHiGLE2g/zW/VxehCEIS+gnHJu2T8CvmXEClNAJo9WfUsfcU85lA5cSg3/AIQBvaBW5mxKxz04Qxnp0uAueJsd5oOYRO7AXvMOFlY8wK5MB3UTnTB7SWYcXiIRRmY9VXkvUEPTVRUF0bncIS4aQqFjBDUxrRL2rgJOXmGClFzEYbuKi27IKM9o80QzGwD7jgd08oY/3ZYbUTEPB2+Gz46EIMuDCEQpX0+P2V+4y5R5Zf8AhDQeX+pUgxei4ipBM4iuZ5uby4lfcAuVUFsqiBmOBwIdTTA4mBVXDK01qDluHZHm5WIHl7+C2GNCgy/Bn8oKFvdB5qx+IiSWxTd6MD1nxDuYvXwZ4i2JjdTKne4SbcRUXjvAsWhgvAf9qFyQG5k2ko9S1AtbZhTZpKxIs7ecuU9NXiXy8NP99wPCX4B8DoMOhLigwBsE+4n8IfEu+VHQ+f6/8lz0mDN/4lTfclURL5mTE58TD30zUdwK4qB2zLkExJziZecEu8oBUCOGJc46gWC5ffB5YWEBKzb49/b4I6RmkSw+7fuJGzcs/B9CKW7RPeB/xfEHHqmUNqvGDfk8wDut4mL2p8neE9VGpfPmY4MMJ6pp98v9RDmycCtoNvVUPbL2OVwOeW1DFMFTulLKg6acxRd6H+OAfcvoIQhCOJv7hD+5ygZ3g6hlHe40O9fpjoNohwe1DlWDBEGDiIl4hrcU84m3ErNVOZ4r5lHZUZ4dHaZ9qGxYHfPiO5u7SCzkBda28K3tI7EPO7Obtq6vRntQlWbzAxLMoRqyk9nchkd4SZ2Am5As+RsfXeAMiC0w+FookNIpoESQ1h8MU8VxjXe/1/UY7q9iKZzROQz/AMJVA24IPLk7sUk27jpO2Drt+gQ1tNvbVP6YFQyKMOh0OmFC/wALn+oq3fgYTf7jW7EjIDi7I/dZP1M401veoJw+JTdvvo985iSoe4GcsMmZVs2PiZJzmZjwM3S4OCgi1xHL8Qz9yseFHSAP8YgIB2dgB+oPfor70C4mfNSB5O0MpKQuHR+w+4KbxKfiDMYLW9TMLdg48RCDzlKNabf3G6v4R/qhvqNvYIzOrx4JUXtwInLP/GCC+NEVC9xv5JaHQT8S0No39+H1cuGWk+2n8kIQnMISv7sqvDhKsOR5LiMjZT/vuUvbyigDYFHPMxMrXaioJhL8RxGViJKzuJAg5qK1Mx8z6yieVil6zOG5g0piLW4miUMjNFZpwlD2BnJ+YG4XRLm3Que3A+WvzENyu3zGVJSWFNMo+wajju3L69sQqKEyi4ftzER4A7H/AK/qFAdwG0fs7Exv24O0zqV12mW+WiPYbZjPbr4RsD7jgLr7uDBhDoMQTQt+0Cy209TImdGFBpcnsn+/4g3rWEl7jBuXXRj6nErN9NEG2chlgili6Jnb3O7dXNgd/EG1aLLz26c/fuzozeNnNHJCjlsweykKIjA0dq0+UmSLLvtvuc/gRj0nKQgwDtBuaHfmIcoNRhBBvWezDeUH0jmWJVqOwaIqAqtBCYXTa7/+IGBJhHuMC0G2echmVzGewjXuCxIM/I/bCEOhCBA4v2EhDZSH9otDJef95mS7DmfOifJCFAtLZpW3e5vdR3G5Wczz0JU32hdkeJZ8TkmKQtzHE7MRWm98TvVY5lWYfiO88M6KkX5y7MOuIiAEVbq5mNISCnBosmINOt2Abq0qz1uMIooTRraY9MOIjkLlikhTLUO+A5qA3D8kxT3LgpVlUVGytvz2ghk0RywF7T4eZZbdsFR5VjM8T20RkO7ChEuOYiXpSmEGEOhLj036CzBtbIhwXh8v/E20Vw9v/GUsYsqGN4CF9+p9Jf8AmXl77h8z9S6MRamOZo/MsSYnmK1q4aHuD3me2ptV1jMunzFwOj8c1NcgiefEQ4CzMBhWao1UEVSo7/woe4lAkTYG+g2lcrLzcIny9yi7ddzi7I9g2foQa7cY5l2NZisjKjkgO85isO+pcRGeKQGybR+EdcfEXPX6I9qc0QjqIUYa8QbY1m5oK1MAnslZLJjcIMIQhNv+8pkdvC/jD+oatzZBdZHK7naXUL7P6YnLO4MPriKe5mpfNyhLHF3Ft5m0aKYeKrckVj3hXhw23CdMRVwRbJjcRWcxzFvweZxB8yljR/16Ta7uJt4lMBf1IDJYLt4/7BhpqP7lTDgIE6H7YqS5YN8Z3jiNGCAFs5Bm4iglkEKEEIQh0J/95+B+WZOH9Cf9JYO/0jmYcvIlUqk45I1lrJ5hnebhwqp2MnuPHUHma5lhqYZuLUvKlWMVE0SLTrUADbmWrOuJg8MwauGmccRVXrzHvbqP55i2ebPQVMppjHqIu3RNQFe/BMz6ue6fbx7wOMumK7y6WTPtFHECowsz+2UBKvOLeJuQUYPz0HQbhCaTLLvWVhWhvswUvYY46MxKroPwemGDUt1uCnMaOd/iDjOYDmXRc7mbgHMW8sp3BlfaLPpHRRdRLcWsfMCHaFwbohnVxnBFdjHDnxL8ktmW4otwxp1CV5igXG0QjjqOO60ERsBnPMHvFcNbMmpXQ6nI5hAvn1Chq7gOaxMTKeBhCGIQ6JpVAwUAPzC1OHXzmfREFnxgYbo+SZNOyIXfCArFlzUIIMwK+pmuWb3bFTMV6i4hlgUjiZoNs1/7HQXcWxjZO93cHF8xemI4hD6YkO0u9yy8wnqPnorXHgPIy+d3CVMurlo75+7ywc4WArrC/mP3iKVWJQuRYoWY13YEDpuVFIYhBh01kg+1qMpei+MNxlQ/GJYujiBoGHA7zwyo9mW/DNVq57YSIzvEXbEWosTGRu6qDusNsd5isylgXUOMTJwbIaOamD7gsVcxbx7iqSFjMWL5lGHUbRKWSrZlj5iaODmdtWscJTqtZgtedEBBztSlqly9RqjcbBdp2/EMo36j6nILoYIgxg9EIQhCUZUUnRZb7gtXAucf+vMtpu6cnuOkkz1K3MCkj3remCub6WMdkZruf1Nlx0oIqDsl8QJiq3KVOKb6lZeF7xZvmZqdiZpvymROXpl5jmV0uWm4/uFerH2Y62K0RKquBtArJ8soSidupZFhxXfthSlHbKjZZERcA8xeV4cwCr8DcOhCDNhgD5hFXbIaM/JdMq8U/uV8x8NQYgd1uozathxjp+jEeU/1Fr6gXA3LqSvc4lXiCiui6wjVtxdR5YLgA1iDGZp4g4/qOpAXW4KdRRDM4ylcRiOePEMJDRxKd+aaTOjW26YyvNKv5qOetDAmPoO2sRz0eAZdvQArv3gFZ82ojhRI8cm5oib1qEOh03cg2u1GGdLCJluvqIK2KfucnjcJcayoexirtEe+EJgX3mba3x01PiYjvb+Yw2yiuMEyM3HhC6hfM1ht1BSZyRuLzuHGYOIaY/McQR55qD0CZj7RjRxfxEYVwi9V8lzQCnYgKojy1HT4gPyxCgn0G882uDmo1V0s7iIghamu6LwClmnc/UXHWieBr718wSHQz48QYMOrKP54K/KQhojQ7u0LVAoAE3MwnpafTshFKVeq+FRxx+9V/DGWgrxl9Sjzca/Enqg/OYsFpAslxCBhBMIcdDA8wznKjne1UZdqYM3TccOzo1UuWj0ZEtC1faFWQ7bGLrtHShoPwEL4WMeuWJtV0A+eYxspWwPsj8IFA72h4Xb8doNHIht2f+yugCmgPW7li4GcOjf3g++0DlB+xsidZXKt7/uEIQlzfspzNrB8B9xhnNt28zKZNsvDmEs3bVmqlnW42VmIYM7y6ZisFhrc+VEorc18FzEHYD8R3BkqOg8TFS9kGe8QDxBTE8rlrx38RUrg1eXefMWOyO4qIplLCWRjaWCDCw3EbugF+cyntvi6b5lIVbkYLa1sbvDUZZShfGpQVLd13zCYpVaMu46m+A/9CZfJFeHB9b8rLvQLHHDPklmxw1CEGEMsXHPS5WUfgfcFtNvvz5hVBWw4wGNCJqa1iZENMNxlo/QjA13Mb3lEaD5Y/wCS5s5hWRUSbYbLZS63HUFWiuON3xMCYSJhD5iYhpuDiPMu7T9SxjBlNPXUmVgWd9xiSWpEuJrksbPz4h5FVStHBnjctKttzoP+wh1G4INZO6EshuosMO6pMwUHOr7pAYApfVbE7cQBUJX/AK8whCDFyIxHDlfAMrGWE5oFB9Eoig4iAIRuzRj3yTVz/wCRFRY12rzEkY8nERu6vMYIu0uCkBZRwGf+R5Qc5iJ+5ozZYvmHxLBvMMH5xMjE4Z/aZlTGHeEGWKwZhiKo7lcRI0JpKiK2VqLSap9uJV23RtQdVcgG7honYLqx2mWc2bNcPisSlOhiP/xKAlVGja/Qd6hqhQAPNd3l7sGepZ+kJOYCO2/6qDPmLJmEGbhGioZMDkfwUfLHpOTZqpnVUWyNkrbX6BGBEE1pKgAa8oIwAcEoHMRQvh8ZlKN/YM/k/iPSBpKM9iXEN1MYVcA5vxBBWUaYizMDe5r5hzqo9+JXPbprNMWdR0xayRcXEziaTJBbFS1WTg5KR38wZiYFboIgADl2Yuwa95LakLrf1RwBSnKaHh/7ECIIQPknjPKB/IfudgsujxriX69F8whDcOKghaq0EMLrABSs+b+hO8IxnF/Mdho4vT/U2XTZfeXARXMulMd4XNqvUxR2zuJA94zmJb7ZtBcc8l1x9482wHzFWYFSuHEecOLjpg5qLFTdxHczIlTadkvEGiMYIls14goPzEmfHQneEoEbbrUCGLdWveXt+hpitYhgyMk9zfAMND35YsM0NDGvqVhW0yfi4uBG1zbtZ/yWdLYaJCDLqZp2a+m/yv4iERQJmr4ZTLLFIbAlcRRA0YhUQXIl4lyqLg4zHi4aRr0g7Rrb+A7yq1YPpEVPy1Mkyi6/OYsrMnvDkjdYlnDmGmsQ7GYqLF6ipqaR8TIiViYqbQjm64i7ixHLbAF6QhpFl5uXOS9dh7+oNIohq4gNL4X2jKdIAwXKm2qUDWX1LKyMAKx7yS/git4RSPZ01fqKqS2n5ly+hOFsisGE96t9mOJeXc4inZrPeFgRT3ne/wBTGYhAzw4iQXGDx8ynw7uWenkQhYqoV5pFQ9xZmQ8x+gIm4We9xJpzMuWEMMdOPEwhD5R5mRme01AQxFBmkc9LGCK3c1b4Z+TFQYXIjqJcBFCOF/phNwQ0YBQfYOHvDauZXBfmadnIqLrPfsfeIzD2FyXyve5weoF7Nf3GinArMuEJNr32gNDUZwi8vyvzA0HZeclf/JTatODjvL8dpWMgoX9QrTmHwwkogpO8IWKw7wWMDVnmU17wPWX/ACVfIjuUjvHaz0XmBxN6vLFTLR8TZPeLTOI4YrN9HzNZqBmaTKJKydJaMRF3MX5an5k3iD9xIHn8qYDIM1k8RaciLem9oeMy+Ci0HevkmSznYU7Xlj8KwtnP/iMAIE1UOAL7qu4TmZ8DIsvFl/i4xXZF5+f1LqIXiosQY4pwxlqLe8YoYaHc+ZQxUJ4i0oLDmEOAPu4DzNYe8Xsw9mj8E070QyzI7C5Y3EXPeG2XxHeZpUzRTFx9TvibjzBxNo5qx3NmYKYX0LxHzDcw6wNvEb/hLpxGUi2q8lcTAexyace1xEhEqjB3vv7xAUqrm3+8cQIDbPO/cyWQoRiVDBU3cunTy81qD0QO7ODlFUSIcB/2Gq3I4rf1AUCFju9Sz2aFb5inbYImt1hxEPLK/EaTsl/BE1bdUWi8AfBL1gtlx+JYrl302+4v3POWV2mXfMrFN4TBi7zKJmcdPMGoOJvoBTMYocktfuYe2XmUxZo9uf8A0iAivwZMvi/6jd3TbvUIJoIDgK4RncPLap/VRYyzkov4xuEXKeSk9wPeOW+/+OhP8jxNvcn+t2Z+FNfp/c/W/tn5z9TX0Y/nz/V4J/nd+p/c/U3hH9Ix1NJqzl7msMbTbpbvU4epxGf3juf2hqG0OJy9dG01jT/u5yz8F+mfg/0fwl7f6fc/w+E2T//Z";
 
 const PLANS = [
-  { id: "eval", eyebrow: "Entrada", name: "Evaluación", price: "40", unit: "una vez", featured: false,
+  { id: "eval", eyebrow: "Entrada", name: "Evaluación", price: "39", unit: "una vez", featured: false,
     simple: "Una sesión de 40 minutos para medir por dónde está y qué plan le corresponde. No es un mes de entrenamiento.",
     forWho: "Si es la primera vez con NiuBision o lleva tiempo sin un programa claro.",
     includes: "Metas, horario real, lesiones, equipo y un plan de partida por escrito.",
@@ -9989,6 +9989,12 @@ function lockOutClient(msg) {
   toast(msg || "Acceso cerrado. Pague de nuevo para recibir un código.");
 }
 function lockIfRevokedSeat() {
+  if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) {
+    if (!clientSeatOpen()) {
+      try { seedPreviewDemoSeat(); } catch (e) {}
+    }
+    return false;
+  }
   const p = state.profile || {};
   if (!p.unlocked && state.role !== "client") return false;
   if (clientSeatOpen()) return false;
@@ -10138,8 +10144,70 @@ function isOnline() {
 }
 function isPagesHost() {
   try {
-    return /niubision\.com$/i.test(location.hostname || "") || /github\.io$/i.test(location.hostname || "");
+    const h = location.hostname || "";
+    return /niubision\.com$/i.test(h)
+      || /github\.io$/i.test(h)
+      || /\.pages\.dev$/i.test(h)
+      || /niubision-ui-preview\.pages\.dev$/i.test(h);
   } catch (e) { return true; }
+}
+/** UI look previews on Cloudflare Pages — same prod API, local demo seat for QA. */
+function isUiPreviewHost() {
+  try {
+    const h = location.hostname || "";
+    return /niubision-ui-preview\.pages\.dev$/i.test(h) || /\.pages\.dev$/i.test(h);
+  } catch (e) { return false; }
+}
+const PREVIEW_DEMO_CODE = "240101";
+function previewDemoClient() {
+  const day = (typeof todayKey === "function") ? todayKey() : new Date().toISOString().slice(0, 10);
+  const sig = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  return {
+    id: "c-preview-demo",
+    name: "Cliente demo",
+    plan: "Estándar",
+    routine: "full-inicio",
+    accessCode: PREVIEW_DEMO_CODE,
+    unpaid: false,
+    sex: "",
+    age: 28,
+    phone: "7875550101",
+    waiver: { name: "Cliente demo", date: day, signature: sig, text: "preview" },
+    health: {
+      name: "Cliente demo", date: day, phone: "7875550101", emer: "7875550199",
+      q1: "no", q2: "no", q3: "no", q4: "no", q5: "no", q6: "no", q7: "no"
+    },
+    contract: { name: "Cliente demo", plan: "Estándar", date: day, signature: sig, flagged: false, clientId: "c-preview-demo" }
+  };
+}
+function isPreviewDemoSeat() {
+  if (typeof isUiPreviewHost !== "function" || !isUiPreviewHost()) return false;
+  try { if (store.get("nb_preview_demo", 0)) return true; } catch (e) {}
+  const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+  return code === PREVIEW_DEMO_CODE;
+}
+function seedPreviewDemoSeat() {
+  const hit = previewDemoClient();
+  state.waiver = hit.waiver;
+  state.health = hit.health;
+  state.contracts = latestByPerson((state.contracts || []).filter((k) => !(k && k.clientId === hit.id)).concat([hit.contract]));
+  upsertClientFromAssign({
+    name: hit.name, plan: hit.plan, routine: hit.routine,
+    accessCode: hit.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+  });
+  applyClientAssign({
+    name: hit.name, plan: hit.plan, routine: hit.routine,
+    accessCode: hit.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone,
+    waiver: hit.waiver, health: hit.health, contract: hit.contract
+  });
+  state.splash = false;
+  store.set("nb_seen_cover", true);
+  store.set("nb_seen_intro", true);
+  store.set("nb_preview_demo", 1);
+  store.set("nb_welcome_v43", 1); /* no welcome wall stacking on demo Hoy */
+  state.view = "work";
+  persist();
+  return hit;
 }
 function isCrudId(id) {
   return /^[a-f0-9]{24}$/i.test(String(id || ""));
@@ -10702,6 +10770,13 @@ async function cloudPushClient() {
   const report = clientReportPayload();
   if (!report.accessCode && !report.clientId) return { ok: false };
   if (isRevoked(report.accessCode, report.clientId)) return { ok: false, revoked: true };
+  /* Preview demo seat is local-only — skip /api/report (would 404). */
+  try {
+    if (typeof isUiPreviewHost === "function" && isUiPreviewHost()
+      && String(report.accessCode || "").replace(/\D/g, "") === (typeof PREVIEW_DEMO_CODE !== "undefined" ? PREVIEW_DEMO_CODE : "240101")) {
+      return { ok: true, preview: true };
+    }
+  } catch (e) {}
   if (!isOnline()) return { ok: false, offline: true };
   const token = authHeader();
   const bases = apiBases();
@@ -10908,6 +10983,10 @@ function maybeClientPull() {
   lookupAccess(code).then((hit) => {
     if (state.role !== "client") return;
     if (state.sessStart || state.timer || store.get("nb_live")) return;
+    if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) {
+      if (hit) applyClientAssignment({ clients: [hit] });
+      return;
+    }
     if (!hit || hit.unpaid || isRevoked(hit.accessCode, hit.id)) {
       lockOutClient();
       render();
@@ -11168,6 +11247,7 @@ async function cloudRedeem(code) {
 async function lookupAccess(code) {
   const digits = String(code || "").replace(/\D/g, "");
   if (digits.length !== 6) return null;
+  if (isUiPreviewHost() && digits === PREVIEW_DEMO_CODE) return previewDemoClient();
   if (isRevoked(digits)) return null;
   if (isOnline()) {
     try {
@@ -11515,9 +11595,12 @@ function renewSoon() {
   });
 }
 function sessionAgeDays(c) {
-  const d = (c && c.report && c.report.lastSession && c.report.lastSession.date) || (c && c.lastSession && c.lastSession.date) || (c && c.lastSeen) || "";
-  if (!d) return 999;
-  return Math.round((Date.now() - new Date(d + "T12:00:00").getTime()) / 86400000);
+  /* Only a closed session date counts. Missing date = aún no entrena (−1), not "900 days late". */
+  const d = (c && c.report && c.report.lastSession && c.report.lastSession.date) || (c && c.lastSession && c.lastSession.date) || "";
+  if (!d) return -1;
+  const t = new Date(d + "T12:00:00").getTime();
+  if (!isFinite(t)) return -1;
+  return Math.round((Date.now() - t) / 86400000);
 }
 function silentClients() {
   return (state.clients || []).filter((c) => clientStatus(c) !== "vencido" && sessionAgeDays(c) >= 7);
@@ -11712,6 +11795,7 @@ function bindAssignNotice() {
 }
 function dayOneWelcomeBannerHtml() {
   if (state.role !== "client") return "";
+  if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) return "";
   const flag = store.get("nb_welcome_v43", null);
   if (flag === 1 || flag === true) return "";
   // Only after fresh unlock (armed to 0) — not for every existing client
@@ -12243,35 +12327,121 @@ function programaCardHtml(r) {
 function programasView() {
   if (state.role === "coach" && state.editDraft) return editorView();
   const list = programasFiltered();
-  const bands = [["","Todos"],["principiante","Principiante"],["intermedio","Intermedio"],["avanzado","Avanzado"]];
   const days = [["","Días"],["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]];
   const kinds = [["","Tipo"],["cuerpo","Cuerpo"],["fuerza","Fuerza"],["sup-inf","Sup/inf"],["split","Split"],["gluteos","Glúteos"],["casa","Casa"]];
+  const abc = [["principiante","A","Principiante"],["intermedio","B","Intermedio"],["avanzado","C","Avanzado"]];
+  const hasFilter = !!(state.progBand || state.progDays || state.progKind || (state.progQ || "").trim());
+  const isClient = state.role === "client";
+  const activeId = activeRoutineId();
+  const activeRt = activeId ? findRoutine(activeId) : null;
+  const pending = pendingProgramRequests();
+  const total = allRoutines().length;
+
+  let hero = "";
+  if (isClient) {
+    if (activeRt) {
+      hero = `<article class="card prog-card is-active prog-hero-active">
+        <div class="prog-head"><h3>${escapeHtml(shortName(activeRt) || activeRt.name)}</h3><span class="st-chip ok prog-badge">Activo</span></div>
+        <p class="muted">${activeRt.days || "?"} días · ${activeRt.minutes || "?"} min · ${escapeHtml(activeRt.level || "")}</p>
+        <p>Hoy usa este programa. Pedir otro no lo cambia solo — Miguel aprueba en Bandeja.</p>
+        <div class="work-tools">
+          <button class="btn small ghost" type="button" data-prog-ver="${escAttr(activeRt.id)}">Ver</button>
+          <button class="btn small primary" type="button" id="progAskOther">Pedir otro a Miguel</button>
+        </div>
+      </article>`;
+    } else {
+      hero = `<article class="card prog-card prog-hero-active">
+        <div class="prog-head"><h3>Sin programa activo</h3><span class="st-chip prog-badge">Pedir</span></div>
+        <p class="muted">Elija nivel A/B/C o busque una plantilla, luego Pedir a Miguel.</p>
+      </article>`;
+    }
+    if (pending.length) {
+      hero += `<div class="prog-pending">
+        <p class="tagline">Enviado a Miguel</p>
+        ${pending.slice(0, 4).map((p) => `<div class="list-row prog-pending-row"><div><strong>${escapeHtml(p.routineName || p.routineId || "Programa")}</strong><div class="muted">Pendiente de aprobación</div></div><span class="st-chip ok">Enviado</span></div>`).join("")}
+      </div>`;
+    }
+  }
+
   const coachExtra = state.role === "coach"
     ? `<div class="actions" style="margin-bottom:8px">
         <button class="btn ghost" type="button" id="progNewRt">Nueva rutina</button>
         <button class="btn ghost" type="button" id="progOpenAi">Generar con IA</button>
         <button class="btn ghost" type="button" data-view="rutinas">Editor completo</button>
       </div>`
-    : `<p class="muted" style="margin-bottom:10px">Hoy muestra solo su programa activo. Aquí pide otro a Miguel — él aprueba en Bandeja; no se cambia solo.</p>`;
+    : "";
+
   const shelves = {};
   list.forEach((r) => {
     const k = kindOf(r);
     (shelves[k] = shelves[k] || []).push(r);
   });
   const order = ["cuerpo", "fuerza", "sup-inf", "split", "gluteos", "casa"];
-  const blocks = order.filter((k) => shelves[k] && shelves[k].length).map((k) => {
-    return `<p class="tagline" style="margin:16px 0 8px">${kindLabel(k)}</p>${shelves[k].map(programaCardHtml).join("")}`;
-  }).join("");
-  return `<section class="screen">
-    <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Biblioteca compartida"}</p>
-    <h2 style="font-family:var(--display);font-size:26px">Programas</h2>
-    <p class="muted">${list.length} de ${allRoutines().length} plantillas. Misma estantería para coach y cliente.</p>
+  const catalogList = isClient && activeId
+    ? list.filter((r) => r.id !== activeId)
+    : list;
+  const showCatalog = !isClient || hasFilter || state.progCatalogOpen;
+  // Client: collapse dump until level/search chosen or "Ver plantillas" opened
+  let blocks = "";
+  if (showCatalog) {
+    const limitedShelves = {};
+    catalogList.forEach((r) => {
+      const k = kindOf(r);
+      (limitedShelves[k] = limitedShelves[k] || []).push(r);
+    });
+    blocks = order.filter((k) => limitedShelves[k] && limitedShelves[k].length).map((k) => {
+      const rows = limitedShelves[k];
+      const cap = isClient && !hasFilter ? 3 : rows.length;
+      const shown = rows.slice(0, cap);
+      const more = rows.length > cap
+        ? `<p class="muted prog-shelf-more">+${rows.length - cap} más — busque o filtre por días/tipo</p>`
+        : "";
+      return `<p class="tagline prog-shelf-label">${kindLabel(k)}</p>${shown.map(programaCardHtml).join("")}${more}`;
+    }).join("");
+  }
+
+  const catalogGate = isClient && !showCatalog
+    ? `<div class="prog-catalog-gate">
+        <p class="muted">${total} plantillas en la biblioteca. Elija A, B o C, busque, o abra el catálogo.</p>
+        <button class="btn ghost" type="button" id="progOpenCatalog">Ver plantillas</button>
+      </div>`
+    : "";
+
+  const catalogBody = showCatalog
+    ? (blocks || nbEmpty({
+        icon: "☰",
+        title: "Nada con estos filtros",
+        hint: "La biblioteca sigue ahí. Quite filtros para ver A, B y C de nuevo.",
+        cta: hasFilter
+          ? `<button class="btn primary" type="button" id="progClearFilters">Quitar filtros</button>`
+          : `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>`
+      }))
+    : catalogGate;
+
+  const countLine = isClient
+    ? (hasFilter || state.progCatalogOpen
+      ? `${catalogList.length} plantillas · Hoy solo cambia si Miguel aprueba`
+      : `Activo primero · ${total} plantillas detrás de nivel y búsqueda`)
+    : `${list.length} de ${total} · Hoy solo cambia si Miguel aprueba.`;
+
+  return `<section class="screen programas-screen${isClient ? " programas-client" : ""}">
+    <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Su biblioteca"}</p>
+    <h2 class="prog-title">Programas</h2>
+    <p class="muted prog-count">${escapeHtml(countLine)}</p>
+    ${hero}
+    <div class="prog-abc" role="group" aria-label="Nivel A B C">
+      ${abc.map(([id,letter,lab]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}" aria-pressed="${(state.progBand||"")===id?"true":"false"}">${letter}<small>${lab}</small></button>`).join("")}
+    </div>
     ${coachExtra}
-    <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}">
-    <div class="filters">${bands.map(([id,l]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    <div class="filters">${days.map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    <div class="filters">${kinds.map(([id,l]) => `<button type="button" data-prog-kind="${id}" class="${(state.progKind||"")===id?"on":""}">${l}</button>`).join("")}</div>
-    ${blocks || nbEmpty({ icon: "☰", title: "Sin resultados", hint: "Pruebe otro nivel, días o tipo. La biblioteca sigue ahí; solo cambió el filtro.", cta: `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>` })}
+    <div class="prog-sticky">
+      <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}" aria-label="Buscar programas">
+      <div class="filters" role="group" aria-label="Días">${[["","Todos"],...days.slice(1)].map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
+      <label class="prog-kind-label" for="progKindSel">Tipo de programa</label>
+      <select class="field prog-kind-select" id="progKindSel" aria-label="Tipo de programa">
+        ${kinds.map(([id,l]) => `<option value="${escAttr(id)}"${(state.progKind||"")===id?" selected":""}>${escapeHtml(l)}</option>`).join("")}
+      </select>
+    </div>
+    ${catalogBody}
   </section>`;
 }
 function bindProgramas() {
@@ -12284,18 +12454,47 @@ function bindProgramas() {
     // live filter without full nav rebuild
     render();
   });
-  $$("[data-prog-band]").forEach((b) => b.onclick = () => { state.progBand = b.dataset.progBand || ""; render(); });
-  $$("[data-prog-days]").forEach((b) => b.onclick = () => { state.progDays = b.dataset.progDays || ""; render(); });
-  $$("[data-prog-kind]").forEach((b) => b.onclick = () => { state.progKind = b.dataset.progKind || ""; render(); });
+  $$("[data-prog-band]").forEach((b) => b.onclick = () => {
+    const next = b.dataset.progBand || "";
+    state.progBand = (state.progBand === next) ? "" : next;
+    if (state.progBand) state.progCatalogOpen = true;
+    render();
+  });
+  $$("[data-prog-days]").forEach((b) => b.onclick = () => {
+    const next = b.dataset.progDays || "";
+    state.progDays = (String(state.progDays || "") === String(next)) ? "" : next;
+    if (state.progDays) state.progCatalogOpen = true;
+    render();
+  });
+  $$("[data-prog-kind]").forEach((b) => b.onclick = () => { state.progKind = b.dataset.progKind || ""; state.progCatalogOpen = true; render(); });
+  const kindSel = $("#progKindSel");
+  if (kindSel) kindSel.onchange = () => {
+    state.progKind = kindSel.value || "";
+    if (state.progKind) state.progCatalogOpen = true;
+    render();
+  };
+  const openCat = $("#progOpenCatalog");
+  if (openCat) openCat.onclick = () => { state.progCatalogOpen = true; render(); };
+  const clearF = $("#progClearFilters");
+  if (clearF) clearF.onclick = () => {
+    state.progBand = ""; state.progDays = ""; state.progKind = ""; state.progQ = "";
+    render();
+  };
+  const askOther = $("#progAskOther");
+  if (askOther) askOther.onclick = () => {
+    state.progCatalogOpen = true;
+    render();
+    setTimeout(() => {
+      try {
+        const el = document.querySelector(".prog-catalog-gate") || document.querySelector(".prog-sticky") || document.querySelector(".prog-abc");
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) {}
+      toast("Elija una plantilla y pulse Pedir a Miguel");
+    }, 60);
+  };
   $$("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
   $$("[data-prog-pedir]").forEach((b) => b.onclick = () => {
-    const row = requestProgram(b.dataset.progPedir);
-    if (row) {
-      b.disabled = true;
-      b.textContent = "Enviado a Miguel";
-      b.classList.add("pedir-sent-btn");
-      render();
-    }
+    openPedirBeats(b.dataset.progPedir);
   });
   $$("[data-prog-asignar]").forEach((b) => b.onclick = () => {
     const cur = currentClient();
@@ -12590,12 +12789,18 @@ function inboxView() {
   };
   const rowNotice = (n, actionHtml, matchHtml) => `<div class="list-row inbox-row"><div><strong>${escapeHtml(n.name || "Cliente")}</strong><div class="muted">${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Lead")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(String(n.amount)) + " USD" : ""}</div>${matchHtml || ""}</div><span class="inbox-actions">${actionHtml}</span></div>`;
   const total = b.paidNoCode.length + b.waiting.length + b.legalPend.length + b.silent.length + b.programReqs.length;
+  const chip = state.inboxChip || "nuevo";
   return `<section class="screen">
     <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Bandeja de hoy</h2>
-    <p class="muted">${total ? total + " pendientes. Primero pedidos y pagos; luego firmas y silencios." : "Nada pendiente. Puede revisar Gente o Hoy."}</p>
-    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
-    <div class="card inbox-bucket nb-fade">
+    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Bandeja</h2>
+    <p class="muted">${total ? total + " pendientes · primero lo accionable" : "Nada pendiente ahora"}</p>
+    <div class="inbox-chips" role="tablist">
+      <button type="button" data-chip="nuevo" class="${chip==="nuevo"?"on":""}">Nuevo</button>
+      <button type="button" data-chip="atrasado" class="${chip==="atrasado"?"on":""}">Atrasado</button>
+      <button type="button" data-chip="hecho" class="${chip==="hecho"?"on":""}">Hecho</button>
+    </div>
+    ${!total ? nbEmpty({ icon: "✦", title: "Bandeja limpia", hint: "Cuando un cliente pida un programa o inicie pago, aparece aquí. Mientras, use Gente para fichas y códigos.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    <div class="card inbox-bucket nb-fade ${chip!=="hecho" && chip!=="atrasado" ? "" : "hidden"}">
       <h3>Pedidos de programa <span class="muted">${b.programReqs.length}</span></h3>
       ${b.programReqs.length ? b.programReqs.map((req) => {
         const hit = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
@@ -12605,12 +12810,12 @@ function inboxView() {
         return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : `<p class="muted bucket-empty">Sin pedidos. El cliente pide desde Programas; usted aprueba aquí.</p>`}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
       <h3>Firmas listas · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
       <p class="muted inbox-cue">Cuando el dinero esté en PayPal o ATH, pulse <strong>Pago recibido · dar código</strong>. No se emite solo.</p>
       ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">${payCodeCta()}</button>`)).join("") : "<p class='muted bucket-empty'>Cola vacía. Nadie con firmas listas esperando código.</p>"}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
       <h3>Pagos y leads sin código <span class="muted">${b.waiting.length}</span></h3>
       <p class="muted inbox-cue">Aviso ≠ código. Si coincide con una ficha y ya firmó, confirme el pago. Si no hay ficha, ábrala en Gente.</p>
       ${b.waiting.length ? b.waiting.map((n) => {
@@ -12639,13 +12844,13 @@ function inboxView() {
         return rowNotice(n, act, matchHtml);
       }).join("") : "<p class='muted bucket-empty'>Sin avisos. Los pagos iniciados y leads nuevos salen aquí hasta tener código.</p>"}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
       <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
       ${b.legalPend.length
         ? (b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir ficha</button><button class="btn small ghost" type="button" data-wa-legal="${escAttr(c.id)}">Recordar firmas</button>`)).join("") + `<p class="muted">Falta lo que firma el cliente en la app (relevo, cuestionario de salud, contrato). Sin eso no hay código.</p>`)
         : "<p class='muted bucket-empty'>Al día. Nadie debe firmar relevo, salud o contrato hoy.</p>"}
     </div>
-    <div class="card inbox-bucket">
+    <div class="card inbox-bucket late-rail ${chip==="atrasado" || chip==="nuevo" ? "" : "hidden"}">
       <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
       ${b.silent.length ? b.silent.map((c) => {
         const age = sessionAgeDays(c);
@@ -12653,6 +12858,7 @@ function inboxView() {
         return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")} · ${escapeHtml(label)}</div></div><span class="inbox-actions"><button class="btn small ghost" type="button" data-assignwa="${escAttr(c.id)}">Asignar + WhatsApp</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button></span></div>`;
       }).join("") : "<p class='muted bucket-empty'>Nadie lleva 7 días sin sesión. El piso está activo.</p>"}
     </div>
+    ${chip==="hecho" ? nbEmpty({ icon: "✓", title: "Nada marcado hecho hoy", hint: "Al aprobar pedidos o dar códigos, la bandeja se aligera sola. Siga en Gente si necesita fichas.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
     <div class="actions">
       <button class="btn ghost" data-view="people">Gente y códigos</button>
       <button class="btn ghost" data-view="home">Hoy el piso</button>
@@ -13197,6 +13403,34 @@ function programDayLabel(daySlot0, dayOrTitle) {
   const title = typeof dayOrTitle === "string" ? dayOrTitle : ((dayOrTitle && dayOrTitle.title) || "");
   const focus = programDayFocus(title);
   return focus ? (wd + " · " + focus) : wd;
+}
+function hoyDayGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Buenos días";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+function calendarWeekdayName() {
+  return WEEKDAYS_ES[mondayWeekIndex(new Date())];
+}
+function filePickHtml(id, accept, label) {
+  return `<div class="file-pick"><button type="button" class="btn ghost" data-file-pick="${escAttr(id)}">${escapeHtml(label)}</button><input type="file" id="${escAttr(id)}" accept="${escAttr(accept)}" class="nb-sr-file hidden" tabindex="-1" aria-hidden="true"></div>`;
+}
+function bindFilePicks(root) {
+  root = root || document;
+  $$("[data-file-pick]", root).forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.dataset.filePick;
+      const el = (root.getElementById && root.getElementById(id)) || document.getElementById(id);
+      if (el) el.click();
+    };
+  });
+}
+function hoyRingHtml(pct, doneSets, totalSets) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const done = Number(doneSets) || 0;
+  const tot = Number(totalSets) || 0;
+  return `<div class="hoy-ring" id="hoyRing" style="--pct:${p}" role="img" aria-label="${p} por ciento completado"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="hoy-ring-track" cx="50" cy="50" r="42" pathLength="100"/><circle class="hoy-ring-sun" cx="50" cy="50" r="42" pathLength="100" style="stroke-dasharray:100;stroke-dashoffset:100" data-target="${100 - p}"/></svg><div class="hoy-ring-label"><b>${p}%</b><small>${done}/${tot}</small></div></div>`;
 }
 function dayWhoKey() {
   return state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
@@ -14198,41 +14432,166 @@ function guardLogoMedia(el) {
   }
 }
 
+
+function niuPulseTap() {
+  try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+}
+function openHoySheet(opts) {
+  opts = opts || {};
+  closeModals();
+  const modal = document.createElement("div");
+  modal.className = "nb-sheet-backdrop modal";
+  modal.innerHTML = `<div class="nb-sheet" role="dialog" aria-label="Detalle de Hoy">
+    <div class="handle"></div>
+    <p class="tagline">Hoy</p>
+    <h2 style="font-family:var(--display);font-size:24px;margin:0 0 8px">${escapeHtml(opts.title || "Sesión")}</h2>
+    <p class="muted">${escapeHtml(opts.body || "")}</p>
+    ${opts.extra || ""}
+    <div class="actions" style="margin-top:14px">
+      <button class="btn primary" type="button" id="hoySheetGo">${escapeHtml(opts.cta || "Empezar")}</button>
+      <button class="btn ghost" type="button" id="hoySheetClose">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  const close = () => { try { modal.remove(); } catch (e) {} document.body.classList.remove("modal-open"); };
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  const c = modal.querySelector("#hoySheetClose"); if (c) c.onclick = close;
+  const g = modal.querySelector("#hoySheetGo");
+  if (g) g.onclick = () => { niuPulseTap(); close(); if (typeof opts.onGo === "function") opts.onGo(); };
+}
+function openPedirBeats(routineId) {
+  const r = resolveRoutine(routineId) || findRoutine(routineId);
+  if (!r) { toast("Programa no encontrado"); return; }
+  let draft = {};
+  try { draft = JSON.parse(localStorage.getItem("niu.coachRequest.draft") || "{}") || {}; } catch (e) { draft = {}; }
+  draft.routineId = r.id;
+  draft.routineName = shortName(r) || r.name;
+  let beat = 1;
+  const motivos = [["tecnica","Técnica"],["dolor","Dolor / molestia"],["plan","Cambio de plan"],["otro","Otro"]];
+  const urgs = [["normal","Normal"],["pronto","Esta semana"],["urgente","Urgente"]];
+  closeModals();
+  const modal = document.createElement("div");
+  modal.className = "nb-sheet-backdrop modal";
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  const close = () => { try { modal.remove(); } catch (e) {} document.body.classList.remove("modal-open"); };
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  const paint = () => {
+    const dots = [1,2,3].map((n) => `<span class="${beat>=n?"on":""}"></span>`).join("");
+    let body = "";
+    if (beat === 1) {
+      body = `<p class="muted">¿Para qué pide <strong>${escapeHtml(shortName(r) || r.name)}</strong>?</p>
+        <div class="pedir-chips">${motivos.map(([id,l]) => `<button type="button" data-mot="${id}" class="${draft.motivo===id?"on":""}">${l}</button>`).join("")}</div>
+        <button class="btn primary" type="button" id="pedirNext" ${draft.motivo?"":"disabled"}>Continuar</button>`;
+    } else if (beat === 2) {
+      body = `<p class="muted">Detalle corto para Miguel (opcional) y urgencia.</p>
+        <textarea class="field" id="pedirDet" placeholder="Ej. me cuesta la sentadilla en el último tercio">${escapeHtml(draft.detalle || "")}</textarea>
+        <div class="pedir-chips">${urgs.map(([id,l]) => `<button type="button" data-urg="${id}" class="${(draft.urgencia||"normal")===id?"on":""}">${l}</button>`).join("")}</div>
+        <div class="row two"><button class="btn ghost" type="button" id="pedirBack">Atrás</button>
+        <button class="btn primary" type="button" id="pedirNext">Continuar</button></div>`;
+    } else {
+      const motLab = (motivos.find((x) => x[0]===draft.motivo) || ["","—"])[1];
+      const urgLab = (urgs.find((x) => x[0]===(draft.urgencia||"normal")) || ["","Normal"])[1];
+      body = `<p class="muted">Revise y envíe. Miguel lo ve en Bandeja — respuesta típica 1 día hábil.</p>
+        <div class="card"><p class="tagline">Resumen</p>
+          <h3>${escapeHtml(shortName(r) || r.name)}</h3>
+          <p class="muted">${escapeHtml(motLab)} · ${escapeHtml(urgLab)}</p>
+          ${draft.detalle ? `<p>${escapeHtml(draft.detalle)}</p>` : "<p class='muted'>Sin detalle extra.</p>"}
+        </div>
+        <div class="row two"><button class="btn ghost" type="button" id="pedirBack">Atrás</button>
+        <button class="btn primary" type="button" id="pedirSend">Enviar a Miguel</button></div>`;
+    }
+    modal.innerHTML = `<div class="nb-sheet" role="dialog" aria-label="Pedir programa">
+      <div class="handle"></div>
+      <p class="tagline">Pedir a Miguel</p>
+      <h2 style="font-family:var(--display);font-size:24px;margin:0 0 8px">Paso ${beat} de 3</h2>
+      <div class="pedir-beats">${dots}</div>
+      ${body}
+      <button class="btn ghost" type="button" id="pedirClose" style="margin-top:8px">Cancelar</button>
+    </div>`;
+    const cl = modal.querySelector("#pedirClose"); if (cl) cl.onclick = close;
+    Array.from(modal.querySelectorAll("[data-mot]")).forEach((b) => b.onclick = () => {
+      draft.motivo = b.dataset.mot; try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
+      paint();
+    });
+    Array.from(modal.querySelectorAll("[data-urg]")).forEach((b) => b.onclick = () => {
+      draft.urgencia = b.dataset.urg; try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
+      paint();
+    });
+    const det = modal.querySelector("#pedirDet");
+    if (det) det.oninput = () => { draft.detalle = det.value; };
+    const back = modal.querySelector("#pedirBack");
+    if (back) back.onclick = () => { beat = Math.max(1, beat - 1); paint(); };
+    const next = modal.querySelector("#pedirNext");
+    if (next) next.onclick = () => {
+      if (beat === 2 && det) draft.detalle = det.value;
+      try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
+      if (beat === 1 && !draft.motivo) { toast("Elija un motivo"); return; }
+      beat = Math.min(3, beat + 1); paint();
+    };
+    const send = modal.querySelector("#pedirSend");
+    if (send) send.onclick = () => {
+      niuPulseTap();
+      const row = requestProgram(r.id);
+      try {
+        draft.sentAt = Date.now();
+        localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft));
+      } catch (e) {}
+      close();
+      if (row) {
+        toast("Pedido enviado — Miguel lo ve en Bandeja");
+        render();
+      }
+    };
+  };
+  paint();
+}
 function renderGate() {
   if (state.splash) {
-    $("#app").innerHTML = `<section class="splash" id="splash">
+    $("#app").innerHTML = `<section class="splash splash-hybrid" id="splash">
       <div class="orb" id="orb"></div>
-      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga el logo">
-        <svg class="ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" pathLength="100"/></svg>
+      <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga pulsado el logo hasta completar el anillo">
+        <svg class="ring ring-hold" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52" pathLength="100"/>
+          <circle class="ring-progress" id="holdRing" cx="60" cy="60" r="52" pathLength="100"/>
+        </svg>
         <img src="${MARK}" alt="NiuBision" class="splash-logo">
       </button>
       <h1 class="splash-name">NiuBision</h1>
-      <p class="splash-tag">Mantenga el logo para entrar</p>
-      <div class="hold-bar"><span id="holdFill"></span></div>
+      <p class="splash-tag">Mantenga pulsado el logo</p>
+      <p class="splash-hold-cue">El anillo ámbar se llena · suelte al completar</p>
     </section>`;
     bindSplash();
     guardLogoMedia($("#holdLogo"));
     warmupIntro();
     return;
   }
+  const previewHint = isUiPreviewHost()
+    ? `<p class="cover-preview-hint">Vista previa · código demo <strong>240101</strong> o <code>?demo=hoy</code></p>`
+    : "";
   $("#app").innerHTML = `
-    <section class="screen hero cover">
-      <p class="tagline">NiuBision</p>
+    <section class="screen hero cover cover-hybrid">
       <button class="logo-btn" id="logoPulse" aria-label="NiuBision"><img src="${MARK}" alt="NiuBision" class="splash-logo"></button>
-      <h1>NiuBision</h1>
-      <p>See the work. Enjoy the day.</p>
-      <div class="actions">
-        <button class="btn primary" id="haveCode">Entrar</button>
-        <button class="btn ghost" id="seePlans">Planes</button>
+      <h1 class="cover-brand-name">NiuBision</h1>
+      <p class="cover-pair">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</p>
+      <hr class="cover-rule" aria-hidden="true">
+      <h2 class="cover-headline">Tu sesión de hoy</h2>
+      <p class="lede">Entrenamiento con tu coach</p>
+      <div class="actions cover-actions-row">
+        <button class="btn primary cover-cta" id="haveCode">Entrar <span class="cover-arrow" aria-hidden="true">↗</span></button>
+        <button class="btn ghost cover-plans" id="seePlans" type="button">Planes</button>
+        <button class="btn link cover-secondary" id="studioLock">Soy coach</button>
       </div>
-      <div class="quiet-links">
+      ${previewHint}
+      <div class="quiet-links cover-quiet">
         <button type="button" id="seeAbout">Acerca de</button>
-        <button type="button" id="seeCoach">Entrenador</button>
-        <button type="button" id="seeSocial">Facebook</button>
         <button type="button" id="seePrivacy">Privacidad</button>
-        <button type="button" id="studioLock">Soy el coach</button>
       </div>
-      ${guestTourHtml()}
+      <div class="cover-footer">
+        <hr class="cover-footer-rule" aria-hidden="true">
+        <p class="cover-footer-mark">ENTRENAMIENTO CON TU COACH</p>
+      </div>
       <p class="disclaimer">${APP_DISCLAIMER}</p>
     </section>`;
   bindGuestTour();
@@ -14317,9 +14676,21 @@ function playIntro() {
 }
 function bindSplash() {
   const wrap = $("#holdLogo");
-  const fill = $("#holdFill");
-  const ring = $(".ring circle");
+  const ring = $("#holdRing") || $(".ring-progress") || $(".ring circle");
   let hold = 0, ticking = false, raf, gone = false;
+  const paintRing = (v) => {
+    if (!ring) return;
+    ring.style.strokeDashoffset = String(100 - v);
+    wrap && wrap.style.setProperty("--hold", String(v));
+    wrap && wrap.setAttribute("aria-valuenow", String(Math.round(v)));
+  };
+  if (wrap) {
+    wrap.setAttribute("role", "progressbar");
+    wrap.setAttribute("aria-valuemin", "0");
+    wrap.setAttribute("aria-valuemax", "100");
+    wrap.setAttribute("aria-valuenow", "0");
+  }
+  paintRing(0);
   const go = () => {
     if (gone) return;
     gone = true;
@@ -14339,9 +14710,9 @@ function bindSplash() {
     cancelAnimationFrame(raf);
     const loop = () => {
       hold = Math.max(0, Math.min(100, hold + (ticking ? 2.4 : -3)));
-      if (fill) fill.style.width = hold + "%";
-      if (ring) ring.style.strokeDashoffset = String(100 - hold);
-      wrap.classList.toggle("charged", hold > 20);
+      paintRing(hold);
+      wrap.classList.toggle("charged", hold > 12);
+      wrap.classList.toggle("holding", ticking && hold > 0);
       if (hold >= 100) { go(); return; }
       if (hold > 0 || ticking) raf = requestAnimationFrame(loop);
     };
@@ -14351,7 +14722,7 @@ function bindSplash() {
   const up = () => step(false);
   wrap.addEventListener("pointerdown", down);
   window.addEventListener("pointerup", up);
-  wrap.addEventListener("click", () => { if (hold < 100) toast("Mantenga pulsado el logo"); });
+  wrap.addEventListener("click", () => { if (hold < 100) toast("Mantenga pulsado el logo hasta llenar el anillo"); });
 }
 
 function enterClient(view) {
@@ -14932,7 +15303,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
+    <div class="brand brand-hybrid"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -15004,8 +15375,8 @@ function openStudioSettings() {
       <button class="btn ghost" id="cloudNow">Sincronizar</button>
       <button class="btn ghost" id="exportData">Descargar respaldo</button>
       <button class="btn ghost" id="exportCloud" type="button">Descargar de la nube</button>
-      <input type="file" id="importData" accept="application/json" class="field" style="margin-top:8px">
-      <p class="muted" style="margin-top:6px">Restaurar: elija el archivo JSON arriba.</p>
+      <p class="muted" style="margin-top:10px">Restaurar desde un respaldo</p>
+      ${filePickHtml("importData", "application/json", "Elegir archivo JSON")}
     </div>
     <div class="card">
       <h3>Clave del estudio</h3>
@@ -15115,6 +15486,7 @@ function openStudioSettings() {
     } catch (e) { toast("No se pudo exportar"); }
     finally { expC.disabled = false; }
   };
+  bindFilePicks(modal);
   const imp = $("#importData", modal);
   if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0], () => { modal.remove(); render(); });
 }
@@ -15173,7 +15545,7 @@ function homeView() {
       today[0] ? { k: "agenda", id: today[0].clientId, t: "Agenda hoy", n: today[0].name, d: (today[0].time || "") + " · " + (today[0].type || ""), extra: today.length > 1 ? "+" + (today.length - 1) : "" } : null,
       soon[0] ? { k: "soon", id: soon[0].id, t: "Por vencer", n: soon[0].name, d: vigencyHtml(soon[0]), extra: soon.length > 1 ? "+" + (soon.length - 1) : "" } : null,
       vids[0] ? { k: "vid", id: vids[0].clientId, t: "Video pendiente", n: vids[0].name, d: (vids[0].exercise || "") + " · " + (vids[0].date || ""), extra: vids.length > 1 ? "+" + (vids.length - 1) : "" } : null,
-      silent[0] ? { k: "late", id: silent[0].id, t: "Sin sesión", n: silent[0].name, d: sessionAgeDays(silent[0]) >= 900 ? "Aún no cierra un día" : sessionAgeDays(silent[0]) + " días", extra: silent.length > 1 ? "+" + (silent.length - 1) : "" } : null
+      silent[0] ? { k: "late", id: silent[0].id, t: "Sin sesión", n: silent[0].name, d: sessionAgeDays(silent[0]) < 0 ? "Aún no cierra un día" : sessionAgeDays(silent[0]) + " días", extra: silent.length > 1 ? "+" + (silent.length - 1) : "" } : null
     ].filter(Boolean);
     const bandejaN = inboxBucketCount();
     return `<section class="screen">
@@ -15187,16 +15559,21 @@ function homeView() {
         const stc = clientStatus(c);
         const late = sessionAgeDays(c) >= 7;
         return `<div class="list-row" data-pick="${c.id}" style="cursor:pointer"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")}${c.lastSession ? " · " + escapeHtml(c.lastSession.day || "sesión") : ""}</div></div>${late && stc === "activo" ? statusChip("sin sesión") : statusChip(stc)}</div>`;
-      }).join("")}</div>` : nbEmpty({ icon: "◎", title: "El piso está vacío", hint: "Añada el primer cliente en Gente, o espere un lead de WhatsApp. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
+      }).join("")}</div>` : nbEmpty({ icon: "◎", title: "Sin clientes aún", hint: "Añada el primer cliente en Gente. El código sale al confirmar el pago.", cta: `<button class="btn primary" type="button" data-view="people">Ir a Gente</button>` })}
       ${cur ? lastWorkHtml(cur) : ""}
-      <div class="actions">
+      <div class="coach-hoy-primary">
         <button class="btn primary" data-view="work">Abrir sesión</button>
-        <button class="btn ghost" data-view="inbox">Bandeja de hoy</button>
-        <button class="btn ghost" data-view="programas">Programas</button>
-        <button class="btn ghost" data-view="people">Gente y códigos</button>
-        <button class="btn ghost" data-view="book">Ejercicios</button>
-        <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
+        <button class="btn ghost" data-view="inbox">Bandeja${bandejaN ? " · " + bandejaN : ""}</button>
       </div>
+      <details class="more-fold">
+        <summary>Más del estudio</summary>
+        <div class="actions">
+          <button class="btn ghost" data-view="programas">Programas</button>
+          <button class="btn ghost" data-view="people">Gente y códigos</button>
+          <button class="btn ghost" data-view="book">Ejercicios</button>
+          <button class="btn ghost" id="studioSettings">Ajustes del estudio</button>
+        </div>
+      </details>
     </section>`;
   }
   const dots = weekDots();
@@ -15256,7 +15633,7 @@ function homeView() {
       <div class="card">
         <h3>Fotos de progreso</h3>
         <p class="muted">Hasta 6 fotos en este teléfono. Se comprimen. No se publican.</p>
-        <input type="file" id="progPhoto" accept="image/*" class="field">
+        ${filePickHtml("progPhoto", "image/*", "Elegir foto")}
         <div class="photo-row">${(state.photos || []).map((p, i) => `<button class="photo" data-delph="${i}"><img src="${p}" alt=""></button>`).join("")}</div>
       </div>
     </div>
@@ -15444,8 +15821,8 @@ function workView() {
     const emptyClient = state.role === "client"
       ? nbEmpty({
           icon: "◆",
-          title: "Miguel te asigna pronto",
-          hint: "Aún no hay programa activo. Puede pedir uno; Miguel lo aprueba en Bandeja. No se cambia solo.",
+          title: "Sin sesión hoy",
+          hint: "Todavía no hay rutina activa. Pida un programa; cuando Miguel apruebe, aparece aquí.",
           cta: `<button class="btn primary" type="button" data-view="programas">Pedir programa</button>`
         })
       : nbEmpty({
@@ -15454,10 +15831,41 @@ function workView() {
           hint: "Aún no hay rutina activa. Elija una abajo o asigne desde Programas.",
           cta: `<button class="btn primary" type="button" data-view="programas">Ver Programas</button>`
         });
-    return `<section class="screen"><p class="tagline">Hoy</p>
+    const dayName = escapeHtml(calendarWeekdayName());
+    const emptyCls = state.role === "client" ? "screen session-start client-hoy client-hoy-hybrid" : "screen session-start";
+    return `<section class="${emptyCls}">
       ${syncBannerHtml()}
       ${assignNoticeHtml()}
       ${dayOneWelcomeBannerHtml()}
+      <div class="hoy-hero${state.role === "client" ? " hoy-hero-hybrid" : ""}">
+        ${state.role === "client" ? `
+          <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-soft"><span class="mint-dot" aria-hidden="true">◆</span> Su día, con calma</p>
+          <div class="session-card-look empty">
+            <p class="session-label">SESIÓN DE HOY <span class="mint-chip">Libre</span></p>
+            <div class="session-card-body">
+              <div class="session-card-main">
+                <p class="session-time">${dayName}</p>
+                <div class="session-who">
+                  <span class="session-avatar" aria-hidden="true"></span>
+                  <div>
+                    <strong>Sin rutina</strong>
+                    <span>Pida un programa para empezar</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="hoy-interp">Sin rutina activa. Puede pedir un programa cuando quiera.</p>
+        ` : `
+        <div>
+          <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
+          <h2>${dayName}</h2>
+          <p class="hoy-interp">Sin rutina activa.</p>
+        </div>
+        ${hoyRingHtml(0, 0, 0)}
+        `}
+      </div>
       ${emptyClient}
       ${state.role === "client" ? "" : workPickerHtml(band, list, "")}
     </section>`;
@@ -15485,33 +15893,101 @@ function workView() {
       ? (`Hoy toca ${escapeHtml(dayLab)} · empecemos`)
       : escapeHtml(dayLab);
     const restNote = isProgramRestDay(rt) ? `<p class="muted">Hoy es descanso en el calendario (Día 1 = Lunes). Puede saltar a otro día abajo.</p>` : "";
-    return `<section class="screen session-start">
-      ${syncBannerHtml()}
-      ${assignNoticeHtml()}
-      ${dayOneWelcomeBannerHtml()}
-      <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)}</p>${voiceBtn}</div>
-      <h2>${hoyLine}</h2>
-      ${restNote}
-      <p class="muted">${escapeHtml(shortName(rt) || rt.name)} · ${ses.items.length} ejercicios · ${totalSets} series · ~${rt.minutes || 45} min</p>
+    const prio = [];
+    if (state.role === "client") {
+      /* Hybrid session card already carries the primary CTA — skip redundant "Sesión de hoy" wall. */
+      if (selfClient() && selfClient().cue) prio.push({ late: false, t: "De Miguel", d: String(selfClient().cue).slice(0, 90) });
+      const pack = selfClient();
+      const age = pack ? sessionAgeDays(pack) : -1;
+      if (pack && age >= 7) prio.push({ late: true, t: "Lleva días sin cerrar", d: "No pasa nada — Empiece cuando pueda. Hoy cuenta." });
+    } else {
+      prio.push({ late: false, t: who.replace(" · ","") || "Cliente", d: dayLab + " · " + (shortName(rt) || rt.name || "") });
+    }
+    while (prio.length > 3) prio.pop();
+    const interp = closed
+      ? "Día cerrado. El trabajo se vio."
+      : (isProgramRestDay(rt) ? "Hoy es descanso en el calendario. Puede mirar la sesión o saltar de día." : ("Hoy toca " + dayLab + " — un solo toque para empezar."));
+    const greet = hoyDayGreeting();
+    const dayBig = programWeekdayName(di);
+    const isClient = state.role === "client";
+    const prioTop = isClient ? prio.slice(0, 2) : prio;
+    const ctaLabel = closed ? "Ver la sesión" : (pct > 0 && pct < 100 ? "Continuar" : "Empezar");
+    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-hybrid" : "screen session-start";
+    const prioBlock = prioTop.length
+      ? (isClient
+          ? `<ul class="prioridad prioridad-hero">${prioTop.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>`
+          : `<p class="tagline">Prioridad</p><ul class="prioridad">${prioTop.map((p) => `<li class="${p.late?"late":""}"><i class="prio-dot"></i><div><strong>${escapeHtml(p.t)}</strong><span>${escapeHtml(p.d)}</span></div></li>`).join("")}</ul>`)
+      : "";
+    const clientBelow = isClient ? `
+      ${prioBlock}
       ${packChip(selfClient())}
-      ${floorLine()}
       ${renewBannerHtml()}
-      ${(selfClient() && selfClient().cue) ? `<div class="card"><h3>De Miguel</h3><p>${escapeHtml(selfClient().cue)}</p></div>` : ""}
-      <p class="tagline" style="margin:14px 0 0">Hoy va a hacer esto</p>
-      ${dayPreviewHtml(day)}
-      <p class="muted">Un toque abre el primer ejercicio. Series y reps quedan claros; marque Listo al cerrar cada serie.</p>
+      <button type="button" class="hoy-sheet-trigger hoy-more-trigger" id="hoyDetail">Ver sesión y más</button>
+      <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
+        <summary>Cambiar día o rutina</summary>
+        ${workClientAskHtml()}
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
+      </details>` : `
+      ${restNote}
+      ${prioBlock}
+      ${packChip(selfClient())}
+      ${renewBannerHtml()}
+      <div class="hoy-daylist">
+        <p class="tagline">Hoy va a hacer esto</p>
+        ${dayPreviewHtml(day)}
+      </div>
       ${weekPeekHtml(rt, di)}
-      ${closed ? `<p class="ok">Día cerrado. El trabajo se vio.</p><button class="btn primary go" id="goLive">Ver la sesión</button>` : `<p class="muted">Empezar abre el primer ejercicio y arranca el reloj. Dentro puede pausar.</p><button class="btn primary go" id="goLive">Empezar</button>`}
       <div class="actions" style="margin-top:8px">
         <button type="button" class="btn ghost" id="seeRoutinesHoy">Ver Programas</button>
-        <button type="button" class="btn ghost" data-view="book">Biblioteca de ejercicios</button>
+        ${voiceBtn}
       </div>
       ${state.role === "coach" && state.clients.length ? `<div class="filters" style="margin-top:16px">${state.clients.map((c) => `<button data-pick="${c.id}" class="${currentClient() && currentClient().id===c.id?"on":""}">${escapeHtml(c.name)}</button>`).join("")}</div>` : ""}
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
-        ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
+        ${workPickerHtml(band, list, rt.id)}
         <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
-      </details>
+      </details>`;
+    return `<section class="${hoySectionCls}">
+      ${syncBannerHtml()}
+      ${assignNoticeHtml()}
+      ${dayOneWelcomeBannerHtml()}
+      <div class="hoy-hero${isClient ? " hoy-hero-hybrid" : ""}">
+        ${isClient ? `
+          <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-soft"><span class="mint-dot" aria-hidden="true">◆</span> Un toque para empezar</p>
+          <div class="session-card-look">
+            <p class="session-label">SESIÓN DE HOY${closed ? ' <span class="mint-chip">Cerrado</span>' : ""}</p>
+            <div class="session-card-body">
+              <div class="session-card-main">
+                <p class="session-time">${escapeHtml(dayBig)}</p>
+                <div class="session-who">
+                  <span class="session-avatar" aria-hidden="true"></span>
+                  <div>
+                    <strong>Miguel</strong>
+                    <span>${escapeHtml(dayLab)}${closed ? " · cerrado" : ""}</span>
+                  </div>
+                </div>
+              </div>
+              <button class="btn primary session-empezar go" id="goLive">${ctaLabel === "Empezar" ? "EMPEZAR →" : escapeHtml(ctaLabel)}</button>
+            </div>
+          </div>
+          ${pct > 0 || closed ? `<p class="hoy-interp">${escapeHtml(interp)}</p>` : ""}
+          ${pct > 0 ? `<div class="hoy-ring-quiet">${hoyRingHtml(pct, doneSets, totalSets)}</div>` : ""}
+        ` : `
+        <div>
+          <p class="hoy-greet">${who}${escapeHtml(greet)}</p>
+          <h2>${escapeHtml(dayBig)}</h2>
+          <p class="hoy-meta">${escapeHtml(band)}${closed ? " · cerrado" : ""}</p>
+          <p class="hoy-interp">${escapeHtml(interp)}</p>
+          <button type="button" class="hoy-sheet-trigger" id="hoyDetail">Ver detalle de la sesión</button>
+        </div>
+        ${hoyRingHtml(pct, doneSets, totalSets)}
+        <div class="hoy-cta-wrap">
+          <button class="btn primary go" id="goLive">${ctaLabel}</button>
+        </div>
+        `}
+      </div>
+      ${clientBelow}
     </section>`;
   }
   return `<section class="screen focus-session">
@@ -15605,6 +16081,51 @@ function beep(freq, ms) {
 }
 
 function bindWork() {
+  const hoyDet = $("#hoyDetail");
+  if (hoyDet) {
+    hoyDet.onclick = () => {
+      const rt0 = activeRoutine();
+      const di0 = rt0 ? dayIndex(rt0) % ((rt0.daysPlan || []).length || 1) : 0;
+      const day0 = rt0 && rt0.daysPlan ? rt0.daysPlan[di0] : null;
+      openHoySheet({
+        title: day0 ? programDayLabel(di0, day0) : "Sesión",
+        body: (rt0 ? ((shortName(rt0) || rt0.name) + " · " + ((day0 && day0.items) || []).length + " ejercicios · ~" + (rt0.minutes || 45) + " min") : ""),
+        extra: (day0 ? (`<div class="hoy-daylist"><p class="tagline">Hoy va a hacer esto</p>${dayPreviewHtml(day0)}</div>` + (rt0 ? weekPeekHtml(rt0, di0) : "")) : "") +
+          (state.role === "client" ? `<div class="actions" style="margin-top:10px"><button type="button" class="btn ghost" id="hoySheetProgramas">Ver Programas</button></div>` : ""),
+        cta: ($("#goLive") && $("#goLive").textContent) || "Empezar",
+        onGo: () => {
+          const g = $("#goLive");
+          if (g) g.click();
+          else { store.set("nb_live", 1); render(); }
+        }
+      });
+      const hp = document.querySelector("#hoySheetProgramas");
+      if (hp) hp.onclick = () => {
+        const bd = document.querySelector(".nb-sheet-backdrop");
+        try { if (bd) bd.remove(); } catch (e) {}
+        document.body.classList.remove("modal-open");
+        state.view = "programas"; persist(); render();
+      };
+    };
+  }
+  const goPulse = $("#goLive");
+  if (goPulse) {
+    const prev = goPulse.onclick;
+    goPulse.addEventListener("click", () => niuPulseTap(), { once: false });
+  }
+  const ringSun = document.querySelector("#hoyRing .hoy-ring-sun");
+  if (ringSun) {
+    const target = Number(ringSun.getAttribute("data-target") || "100");
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) ringSun.style.strokeDashoffset = String(target);
+    else {
+      ringSun.style.strokeDashoffset = "100";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { ringSun.style.strokeDashoffset = String(target); });
+      });
+    }
+  }
+
   bindWelcomeDayone();
   bindAssignNotice();
   const rt = activeRoutine();
@@ -16107,7 +16628,7 @@ function founderHtml() {
         <b>Miguel Morales</b>
         <span>Entrenador y fundador</span>
       </div>
-      <p>Miguel Morales es entrenador personal certificado por el Departamento de Recreación y Deportes de Puerto Rico, con más de diez años de experiencia. Veterano del Ejército de los Estados Unidos, obtuvo formación en liderazgo y supervisión.</p>
+      <p>Miguel Morales es entrenador personal certificado por el Departamento de Recreación y Deportes de Puerto Rico, licencia 9798-3322359, con más de diez años de experiencia. Veterano del Ejército de los Estados Unidos, obtuvo formación en liderazgo y supervisión.</p>
       <p>Su método combina ciencia del ejercicio, disciplina militar y una base universitaria en psicología industrial. Diseña programas claros, medibles y sostenibles, orientados a resultados y a la constancia del cliente.</p>
     </article>`;
 }
@@ -16126,16 +16647,14 @@ function aboutView() {
       <img src="${MARK}" alt="Logo NiuBision">
       <div>
         <h2 class="about-creed" style="margin:0">NiuBision</h2>
-        <p class="muted" style="margin-top:4px">See the work. Enjoy the day.</p>
+        <p class="muted" style="margin-top:4px">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</p>
       </div>
     </div>
 
-    <p style="margin-bottom:14px">NiuBision no es un nombre para sonar nuevo. Niubi es el fuego que queda cuando ya entrenaste. El trabajo está hecho, se ve, y no hay nada que fingir.</p>
-    <p style="margin-bottom:14px">Bision es atreverse a mirarlo. El ojo de la marca.</p>
-    <p style="margin-bottom:16px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
-    <p style="margin-bottom:14px">Entrenamiento personal y coaching en línea en Puerto Rico. Lo dirige Miguel Morales, veterano del Ejército de los Estados Unidos, certificado por el DRD. Programas a la medida para hombres y mujeres que quieren cerrar el día, no soñarlo.</p>
-    <p style="margin-bottom:8px">Abre la app. Mira lo que hiciste. Después vive.</p>
-    <p style="margin-bottom:16px">See the work. Enjoy the day.</p>
+    <p style="margin-bottom:14px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
+    <p style="margin-bottom:14px">Abre la app. Mira lo que hiciste. Después vive.</p>
+    <p style="margin-bottom:14px">El nombre no es un adorno. Niubi es el fuego que queda cuando ya entrenaste: el trabajo está hecho, se ve, y no hay nada que fingir. Bision es atreverse a mirarlo.</p>
+    <p style="margin-bottom:16px">Lo dirige Miguel Morales, entrenador personal en Puerto Rico, certificado por el DRD, licencia 9798-3322359. Precio final. Lo que no incluye, se dice.</p>
 
     <div class="actions">
       <button class="btn primary" data-view="price">Ver planes</button>
@@ -16284,10 +16803,33 @@ function peopleView() {
     if (!qPeople) return true;
     return cleanName(c.name).indexOf(qPeople) >= 0 || String(c.phone || "").indexOf(qPeople.replace(/\D/g, "")) >= 0;
   });
+  const railDemo = (() => {
+    const all = state.clients || [];
+    let activo = 0, atrasado = 0, nuevo = 0, pausado = 0;
+    all.forEach((c) => {
+      normalizeClient(c);
+      const st = clientStatus(c);
+      const late = sessionAgeDays(c) >= 7;
+      if (st === "pausado" || st === "vencido") pausado++;
+      else if (!c.accessCode) nuevo++;
+      else if (late) atrasado++;
+      else activo++;
+    });
+    // local demo rails if empty roster — visual only, does not write clients
+    if (!all.length) { activo = 3; atrasado = 1; nuevo = 2; pausado = 1; }
+    return { activo, atrasado, nuevo, pausado, demo: !all.length };
+  })();
   return `<section class="screen">
     <p class="tagline">Estudio</p>
-    <h2 style="font-family:var(--display);font-size:26px">Gente</h2>
-    <p class="muted">Añada el cliente. El código de 6 dígitos sale cuando hay relevo, contrato y pago confirmado.</p>
+    <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Gente</h2>
+    <p class="muted">Fichas y códigos. El código sale con relevo, contrato y pago confirmado.</p>
+    ${railDemo.demo ? `<p class="demo-rails-note">Vista previa local de rieles — no escribe clientes ni nube.</p>` : ""}
+    <div class="people-rails" aria-label="Estados">
+      <div class="rail activo"><b>${railDemo.activo}</b><span>Activo</span></div>
+      <div class="rail atrasado"><b>${railDemo.atrasado}</b><span>Atrasado</span></div>
+      <div class="rail nuevo"><b>${railDemo.nuevo}</b><span>Nuevo</span></div>
+      <div class="rail pausado"><b>${railDemo.pausado}</b><span>Pausado</span></div>
+    </div>
     <button class="btn ghost" type="button" data-view="inbox" style="margin-bottom:10px">Abrir bandeja de hoy</button>
     <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
     ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button></div>`).join("")}<p class="muted">Quitar aviso no borra al cliente. Si ya tiene código, el aviso no vuelve.</p></div>` : ""}
@@ -16320,7 +16862,8 @@ function peopleView() {
       normalizeClient(c);
       const st = clientStatus(c);
       const late = sessionAgeDays(c) >= 7;
-      return `<div class="card people-card">
+      const railCls = (!c.accessCode) ? "rail-nuevo" : (st === "pausado" || st === "vencido") ? "rail-pausado" : (late ? "rail-atrasado" : "rail-activo");
+      return `<div class="card people-card ${railCls}">
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
@@ -16358,7 +16901,8 @@ function peopleView() {
       <button class="btn ghost" id="exportData">Descargar JSON</button>
       <button class="btn ghost" id="emailBackup">Enviar a mi correo</button>
       <button class="btn primary" id="exportPdf">Expediente PDF para archivo</button>
-      <input type="file" id="importData" accept="application/json" class="field">
+      <p class="muted" style="margin-top:10px">Restaurar desde un respaldo</p>
+      ${filePickHtml("importData", "application/json", "Elegir archivo JSON")}
     </div>
   </section>`;
 }
@@ -16941,7 +17485,12 @@ function applyClientAssign(a) {
     }
   } catch (e) {}
   persist();
-  if (a.accessCode) authLogin("client", a.accessCode).catch(() => {});
+  if (a.accessCode) {
+    const dig = String(a.accessCode || "").replace(/\D/g, "");
+    if (!(typeof isUiPreviewHost === "function" && isUiPreviewHost() && dig === PREVIEW_DEMO_CODE)) {
+      authLogin("client", a.accessCode).catch(() => {});
+    }
+  }
   return true;
 }
 function copyText(text) {
@@ -17256,7 +17805,8 @@ function openCodeEntry() {
       if (hit) {
         a = {
           name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
-          accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
+          accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone,
+          waiver: hit.waiver, health: hit.health, contract: hit.contract
         };
         if (hit.waiver) state.waiver = hit.waiver;
         if (hit.health) state.health = hit.health;
@@ -17266,7 +17816,9 @@ function openCodeEntry() {
       }
     }
     if (!a || a.pending) {
-      setErr("Código no válido o aún no está pagado. Revise los 6 dígitos o espere la confirmación de Miguel.");
+      setErr(isUiPreviewHost()
+        ? "Código no válido. En esta vista previa use 240101 o abra ?demo=hoy."
+        : "Código no válido o aún no está pagado. Revise los 6 dígitos o espere la confirmación de Miguel.");
       return;
     }
     if (isRevoked(a.accessCode, a.clientId)) {
@@ -17774,6 +18326,7 @@ function bindChrome() {
     }
     persist(); toast("Medidas guardadas"); render();
   };
+  bindFilePicks();
   const ph = $("#progPhoto");
   if (ph) ph.onchange = () => {
     const f = ph.files && ph.files[0];
@@ -18054,6 +18607,7 @@ function bindChrome() {
   if (exp) exp.onclick = () => { downloadBackup(); toast("Respaldo descargado"); };
   const em = $("#emailBackup");
   if (em) em.onclick = () => emailBackup();
+  bindFilePicks();
   const imp = $("#importData");
   if (imp) imp.onchange = () => restoreBackupFromFile(imp.files[0]);
   bindStudioOps();
@@ -18068,9 +18622,8 @@ function routinesCoachView() {
     <div class="actions">
       <button class="btn primary" id="newRt">Nueva rutina</button>
       <button class="btn ghost" id="openAiCoach">Generar con IA</button>
-      <button class="btn ghost" id="uploadRt">Subir rutina JSON</button>
+      ${filePickHtml("rtFile", "application/json", "Elegir archivo JSON")}
       <button class="btn ghost" data-view="home">Volver a Hoy</button>
-      <input type="file" id="rtFile" accept="application/json" class="hidden">
     </div>
     ${allRoutines().map((r) => {
       const custom = (state.customRoutines || []).some((x) => x.id === r.id);
@@ -18207,9 +18760,11 @@ function bindRoutinesCoach() {
     };
     render();
   };
-  $("#uploadRt").onclick = () => $("#rtFile").click();
-  $("#rtFile").onchange = () => {
-    const f = $("#rtFile").files[0]; if (!f) return;
+  bindFilePicks();
+  const rtFileEl = $("#rtFile");
+  if (rtFileEl) rtFileEl.onchange = () => {
+    const f = rtFileEl.files[0]; if (!f) return;
+    
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -18268,6 +18823,7 @@ function afterPaint() {
   if (state.view === "rutinas") bindRoutinesCoach();
   if (state.view === "programas") bindProgramas();
   if (state.view === "inbox") {
+    $$("[data-chip]").forEach((b) => b.onclick = () => { state.inboxChip = b.dataset.chip || "nuevo"; render(); });
     $$("[data-req-approve]").forEach((b) => b.onclick = () => { approveProgramRequest(b.dataset.reqApprove); render(); });
     $$("[data-req-ignore]").forEach((b) => b.onclick = () => { ignoreProgramRequest(b.dataset.reqIgnore); render(); });
     $$("[data-req-otra]").forEach((b) => b.onclick = () => openProgramOtra(b.dataset.reqOtra));
@@ -18315,7 +18871,7 @@ function render() {
     document.body.classList.remove("in-app");
     return renderGate();
   }
-  if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
+  if (state.role === "client" && !(state.profile && state.profile.unlocked) && !(typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat())) {
     state.role = null;
   }
   if (state.role === "guest" && state.view !== "price" && state.view !== "about" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy" && state.view !== "terms") state.view = "price";
@@ -18407,6 +18963,22 @@ async function boot() {
   try { await loadStudioPointer(); } catch (e) {}
   try { await hydrateVault(); } catch (e) {}
   try {
+    const qDemo = new URLSearchParams(location.search || "");
+    const qWant = qDemo.get("demo") === "hoy" || qDemo.get("preview") === "hoy";
+    const flagged = !!store.get("nb_preview_demo", 0);
+    const codeWant = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "") === PREVIEW_DEMO_CODE;
+    if (isUiPreviewHost() && (qWant || flagged || codeWant)) {
+      state.splash = false;
+      seedPreviewDemoSeat();
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete("demo");
+        u.searchParams.delete("preview");
+        history.replaceState({}, "", u.pathname + (u.search || "") + (u.hash || ""));
+      } catch (e2) {}
+    }
+  } catch (e) {}
+  try {
     const q = new URLSearchParams(location.search || "");
     if (q.get("pago") === "ok") {
       toast("Pago enviado. Esperando confirmación…");
@@ -18421,12 +18993,16 @@ async function boot() {
   applyHash();
   /* Keep paid client seat across reloads when unlocked + 6-digit code still local. */
   if (state.role === "client") {
-    const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
-    const unlocked = !!(state.profile && state.profile.unlocked);
-    const dead = unlocked && code.length === 6 && typeof isRevoked === "function" && isRevoked(code, state.profile && state.profile.clientId);
-    if (!unlocked || code.length !== 6 || dead) {
-      state.role = null;
-      if (state.profile) state.profile.unlocked = false;
+    if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) {
+      /* Preview demo seat survives reload on pages.dev only. */
+    } else {
+      const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+      const unlocked = !!(state.profile && state.profile.unlocked);
+      const dead = unlocked && code.length === 6 && typeof isRevoked === "function" && isRevoked(code, state.profile && state.profile.clientId);
+      if (!unlocked || code.length !== 6 || dead) {
+        state.role = null;
+        if (state.profile) state.profile.unlocked = false;
+      }
     }
   }
   if (state.role === "guest") state.role = null;
@@ -18512,7 +19088,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=53", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v6", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

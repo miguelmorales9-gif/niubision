@@ -1,0 +1,12 @@
+# Look Hybrid v6
+Branch: eng/ui-look-hybrid
+Commit: 24e11e4
+Primary alias:
+  https://hybrid.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://a460509c.niubision-ui-preview.pages.dev
+Hard-refresh (hybrid-v6 / nb-offline-hybrid-v6).
+Hero: El trabajo se ve. No se finge. / See the work. Enjoy the day.
+Acerca: four paragraphs, license 9798-3322359 on the last.
+Evaluación 39. Schema language Spanish only.
+NO merge · NO niubision.com

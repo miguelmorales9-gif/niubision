@@ -1,0 +1,8 @@
+# v60-preview — Pulso cálido
+Branch: eng/ui-surprise-v60
+Primary alias (HTTP 200):
+  https://eng-ui-redesign-preview.niubision-ui-preview.pages.dev
+Latest deploy:
+  https://6454fec2.niubision-ui-preview.pages.dev
+Hard-refresh once (v60-preview / nb-offline-v60-preview).
+NO merge · NO niubision.com · logo untouched
