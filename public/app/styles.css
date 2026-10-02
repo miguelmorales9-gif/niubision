@@ -1914,3 +1914,13 @@ input[type=file].hidden {
 .session-start.client-hoy-hybrid .prioridad-hero { margin-top: 8px; }
 .session-start.client-hoy-hybrid .hoy-more-trigger { margin-top: 6px; }
 .session-start.client-hoy-hybrid .sync-banner { margin-bottom: 6px; font-size: 12px; }
+
+/* Hybrid v6 — brand pair under the name. Colors stay Obsidiana / cream. */
+.screen.hero.cover.cover-hybrid .cover-pair {
+  color: rgba(243,237,227,.78);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: -6px auto 16px;
+  max-width: 26ch;
+  text-align: center;
+}
