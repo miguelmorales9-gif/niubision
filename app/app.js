@@ -15302,7 +15302,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand brand-hybrid"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">Mira el trabajo. Disfruta el día.</span></div></div>
+    <div class="brand brand-hybrid"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">See the work. Enjoy the day.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
