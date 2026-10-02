@@ -14932,7 +14932,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>See the work. Enjoy the day.</span></div></div>
+    <div class="brand"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span>El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -16126,16 +16126,14 @@ function aboutView() {
       <img src="${MARK}" alt="Logo NiuBision">
       <div>
         <h2 class="about-creed" style="margin:0">NiuBision</h2>
-        <p class="muted" style="margin-top:4px">See the work. Enjoy the day.</p>
+        <p class="muted" style="margin-top:4px">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</p>
       </div>
     </div>
 
-    <p style="margin-bottom:14px">NiuBision no es un nombre para sonar nuevo. Niubi es el fuego que queda cuando ya entrenaste. El trabajo está hecho, se ve, y no hay nada que fingir.</p>
-    <p style="margin-bottom:14px">Bision es atreverse a mirarlo. El ojo de la marca.</p>
-    <p style="margin-bottom:16px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
-    <p style="margin-bottom:14px">Entrenamiento personal y coaching en línea en Puerto Rico. Lo dirige Miguel Morales, veterano del Ejército de los Estados Unidos, certificado por el DRD, licencia 9798-3322359. Programas a la medida para hombres y mujeres que quieren cerrar el día, no soñarlo.</p>
-    <p style="margin-bottom:8px">Abre la app. Mira lo que hiciste. Después vive.</p>
-    <p style="margin-bottom:16px">See the work. Enjoy the day.</p>
+    <p style="margin-bottom:14px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
+    <p style="margin-bottom:14px">Abre la app. Mira lo que hiciste. Después vive.</p>
+    <p style="margin-bottom:14px">El nombre no es un adorno. Niubi es el fuego que queda cuando ya entrenaste: el trabajo está hecho, se ve, y no hay nada que fingir. Bision es atreverse a mirarlo.</p>
+    <p style="margin-bottom:16px">Lo dirige Miguel Morales, entrenador personal en Puerto Rico, certificado por el DRD, licencia 9798-3322359. Precio final. Lo que no incluye, se dice.</p>
 
     <div class="actions">
       <button class="btn primary" data-view="price">Ver planes</button>
