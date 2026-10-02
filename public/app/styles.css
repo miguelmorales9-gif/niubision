@@ -1594,7 +1594,8 @@ input[type=file].hidden {
 }
 
 /* Client Hoy Hybrid — editorial card + dense amber Empezar */
-.session-start.client-hoy-hybrid { padding-top: 8px; overflow-x: hidden; }
+.session-start.client-hoy-hybrid { padding-top: 4px; overflow-x: hidden; }
+.session-start.client-hoy-hybrid .welcome-dayone { display: none !important; }
 .session-start.client-hoy-hybrid .hoy-hero.hoy-hero-hybrid {
   display: flex; flex-direction: column; align-items: stretch;
   text-align: left; max-height: none; margin: 0 0 18px;
@@ -1672,7 +1673,9 @@ input[type=file].hidden {
   transform: scale(.98);
 }
 .session-start.client-hoy-hybrid .hoy-interp {
-  margin: 14px 0 0; font-size: 13px; color: var(--mute); max-width: 36ch;
+  margin: 8px 0 4px;
+  font-size: 13px;
+  color: rgba(243,237,227,.72);
 }
 .session-start.client-hoy-hybrid .hoy-ring-quiet {
   margin-top: 16px; display: flex; justify-content: center; opacity: .9;
@@ -1902,3 +1905,12 @@ input[type=file].hidden {
 }
 .programas-screen .prog-shelf-label { margin: 16px 0 8px; }
 .programas-screen .prog-shelf-more { font-size: 12px; margin: -4px 0 12px; }
+
+
+/* Hybrid v5 — tighter client Hoy primary CTA, no wall */
+.session-start.client-hoy-hybrid .hoy-title-look { margin-bottom: 2px; }
+.session-start.client-hoy-hybrid .hoy-tagline-soft { margin: 0 0 10px; }
+.session-start.client-hoy-hybrid .session-card-look { margin-bottom: 8px; }
+.session-start.client-hoy-hybrid .prioridad-hero { margin-top: 8px; }
+.session-start.client-hoy-hybrid .hoy-more-trigger { margin-top: 6px; }
+.session-start.client-hoy-hybrid .sync-banner { margin-bottom: 6px; font-size: 12px; }

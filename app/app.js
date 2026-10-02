@@ -9989,6 +9989,12 @@ function lockOutClient(msg) {
   toast(msg || "Acceso cerrado. Pague de nuevo para recibir un código.");
 }
 function lockIfRevokedSeat() {
+  if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) {
+    if (!clientSeatOpen()) {
+      try { seedPreviewDemoSeat(); } catch (e) {}
+    }
+    return false;
+  }
   const p = state.profile || {};
   if (!p.unlocked && state.role !== "client") return false;
   if (clientSeatOpen()) return false;
@@ -10174,6 +10180,12 @@ function previewDemoClient() {
     contract: { name: "Cliente demo", plan: "Estándar", date: day, signature: sig, flagged: false, clientId: "c-preview-demo" }
   };
 }
+function isPreviewDemoSeat() {
+  if (typeof isUiPreviewHost !== "function" || !isUiPreviewHost()) return false;
+  try { if (store.get("nb_preview_demo", 0)) return true; } catch (e) {}
+  const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+  return code === PREVIEW_DEMO_CODE;
+}
 function seedPreviewDemoSeat() {
   const hit = previewDemoClient();
   state.waiver = hit.waiver;
@@ -10191,6 +10203,8 @@ function seedPreviewDemoSeat() {
   state.splash = false;
   store.set("nb_seen_cover", true);
   store.set("nb_seen_intro", true);
+  store.set("nb_preview_demo", 1);
+  store.set("nb_welcome_v43", 1); /* no welcome wall stacking on demo Hoy */
   state.view = "work";
   persist();
   return hit;
@@ -10969,6 +10983,10 @@ function maybeClientPull() {
   lookupAccess(code).then((hit) => {
     if (state.role !== "client") return;
     if (state.sessStart || state.timer || store.get("nb_live")) return;
+    if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) {
+      if (hit) applyClientAssignment({ clients: [hit] });
+      return;
+    }
     if (!hit || hit.unpaid || isRevoked(hit.accessCode, hit.id)) {
       lockOutClient();
       render();
@@ -11577,9 +11595,12 @@ function renewSoon() {
   });
 }
 function sessionAgeDays(c) {
-  const d = (c && c.report && c.report.lastSession && c.report.lastSession.date) || (c && c.lastSession && c.lastSession.date) || (c && c.lastSeen) || "";
-  if (!d) return 999;
-  return Math.round((Date.now() - new Date(d + "T12:00:00").getTime()) / 86400000);
+  /* Only a closed session date counts. Missing date = aún no entrena (−1), not "900 days late". */
+  const d = (c && c.report && c.report.lastSession && c.report.lastSession.date) || (c && c.lastSession && c.lastSession.date) || "";
+  if (!d) return -1;
+  const t = new Date(d + "T12:00:00").getTime();
+  if (!isFinite(t)) return -1;
+  return Math.round((Date.now() - t) / 86400000);
 }
 function silentClients() {
   return (state.clients || []).filter((c) => clientStatus(c) !== "vencido" && sessionAgeDays(c) >= 7);
@@ -11774,6 +11795,7 @@ function bindAssignNotice() {
 }
 function dayOneWelcomeBannerHtml() {
   if (state.role !== "client") return "";
+  if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) return "";
   const flag = store.get("nb_welcome_v43", null);
   if (flag === 1 || flag === true) return "";
   // Only after fresh unlock (armed to 0) — not for every existing client
@@ -12461,11 +12483,14 @@ function bindProgramas() {
   const askOther = $("#progAskOther");
   if (askOther) askOther.onclick = () => {
     state.progCatalogOpen = true;
-    try {
-      const el = document.querySelector(".prog-sticky") || document.querySelector(".prog-abc");
-      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (e) {}
-    toast("Elija una plantilla y pulse Pedir a Miguel");
+    render();
+    setTimeout(() => {
+      try {
+        const el = document.querySelector(".prog-catalog-gate") || document.querySelector(".prog-sticky") || document.querySelector(".prog-abc");
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) {}
+      toast("Elija una plantilla y pulse Pedir a Miguel");
+    }, 60);
   };
   $$("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
   $$("[data-prog-pedir]").forEach((b) => b.onclick = () => {
@@ -12749,7 +12774,7 @@ function printWeekPdf(c) {
   const missed = wr.days.filter((d) => d <= todayKey() && !doneDates.has(d));
   const rows = sessions.map((s) => "<tr><td>" + escapeHtml(s.date) + "</td><td>" + escapeHtml(s.day || "Sesión") + "</td><td>" + escapeHtml(String(s.doneSets != null ? s.doneSets + "/" + (s.total || "?") : "—")) + "</td></tr>").join("");
   const missLine = missed.length ? missed.map(escapeHtml).join(", ") : "Ninguno registrado";
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>NiuBision · semana</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:480px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} table{width:100%;margin-top:16px;border-collapse:collapse} td,th{padding:6px 0;border-bottom:1px solid #eee;font-size:14px;text-align:left} td:last-child,th:last-child{text-align:right}</style></head><body><h1>NiuBision · semana</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>" + escapeHtml(c.name) + "</strong></p><p class='muted'>" + escapeHtml(wr.start) + " → " + escapeHtml(wr.end) + "<br>Plan: " + escapeHtml(c.plan || "—") + "<br>Rutina: " + escapeHtml(rt ? rt.name : (c.routine || "—")) + "</p><p><strong>Sesiones esta semana:</strong> " + sessions.length + "</p><table><tr><th>Fecha</th><th>Día</th><th>Series</th></tr>" + (rows || "<tr><td colspan='3'>Sin sesiones registradas</td></tr>") + "</table><p class='muted' style='margin-top:16px'><strong>Días sin sesión (hasta hoy):</strong> " + missLine + "</p><p class='muted'>Resumen local del estudio. No es diagnóstico médico.</p></body></html>";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>NiuBision · semana</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:480px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} table{width:100%;margin-top:16px;border-collapse:collapse} td,th{padding:6px 0;border-bottom:1px solid #eee;font-size:14px;text-align:left} td:last-child,th:last-child{text-align:right}</style></head><body><h1>NiuBision · semana</h1><p class='muted'>Mira el trabajo. Disfruta el día.</p><p><strong>" + escapeHtml(c.name) + "</strong></p><p class='muted'>" + escapeHtml(wr.start) + " → " + escapeHtml(wr.end) + "<br>Plan: " + escapeHtml(c.plan || "—") + "<br>Rutina: " + escapeHtml(rt ? rt.name : (c.routine || "—")) + "</p><p><strong>Sesiones esta semana:</strong> " + sessions.length + "</p><table><tr><th>Fecha</th><th>Día</th><th>Series</th></tr>" + (rows || "<tr><td colspan='3'>Sin sesiones registradas</td></tr>") + "</table><p class='muted' style='margin-top:16px'><strong>Días sin sesión (hasta hoy):</strong> " + missLine + "</p><p class='muted'>Resumen local del estudio. No es diagnóstico médico.</p></body></html>";
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
@@ -12959,7 +12984,7 @@ function emailReceipt(row) {
   }
 }
 function printReceipt(row) {
-  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>See the work. Enjoy the day.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
+  const html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Recibo NiuBision</title><style>body{font-family:Georgia,serif;padding:28px;color:#121018;max-width:420px} h1{font-size:22px;margin:0 0 4px} .muted{color:#666;font-size:13px} .code{font-size:32px;letter-spacing:.12em;text-align:center;margin:16px 0} table{width:100%;margin-top:16px;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid #eee;font-size:14px} td:last-child{text-align:right}</style></head><body><h1>NiuBision</h1><p class='muted'>Mira el trabajo. Disfruta el día.</p><p><strong>Recibo</strong></p><table><tr><td>Fecha</td><td>" + escapeHtml(row.date) + "</td></tr><tr><td>Cliente</td><td>" + escapeHtml(row.name || "Cliente") + "</td></tr><tr><td>Concepto</td><td>" + escapeHtml(row.plan) + "</td></tr><tr><td>Monto</td><td>" + escapeHtml(String(row.amount || "—")) + " USD</td></tr><tr><td>Método</td><td>" + escapeHtml(row.method) + "</td></tr><tr><td>Estado</td><td>" + escapeHtml(row.status || "iniciado") + "</td></tr>" + (row.accessCode ? "<tr><td>Código</td><td>" + escapeHtml(row.accessCode) + "</td></tr>" : "") + "</table>" + (row.accessCode ? "<p class='code'>" + escapeHtml(row.accessCode) + "</p><p class='muted'>Código de acceso de 6 dígitos. Válido cuando el pago está hecho.</p>" : "") + "<p class='muted' style='margin-top:18px'>Precio final. NiuBision no cobra tarjetas. El dinero sale por PayPal o ATH Móvil. Este recibo confirma el registro en el estudio.</p></body></html>";
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
@@ -15519,7 +15544,7 @@ function homeView() {
       today[0] ? { k: "agenda", id: today[0].clientId, t: "Agenda hoy", n: today[0].name, d: (today[0].time || "") + " · " + (today[0].type || ""), extra: today.length > 1 ? "+" + (today.length - 1) : "" } : null,
       soon[0] ? { k: "soon", id: soon[0].id, t: "Por vencer", n: soon[0].name, d: vigencyHtml(soon[0]), extra: soon.length > 1 ? "+" + (soon.length - 1) : "" } : null,
       vids[0] ? { k: "vid", id: vids[0].clientId, t: "Video pendiente", n: vids[0].name, d: (vids[0].exercise || "") + " · " + (vids[0].date || ""), extra: vids.length > 1 ? "+" + (vids.length - 1) : "" } : null,
-      silent[0] ? { k: "late", id: silent[0].id, t: "Sin sesión", n: silent[0].name, d: sessionAgeDays(silent[0]) >= 900 ? "Aún no cierra un día" : sessionAgeDays(silent[0]) + " días", extra: silent.length > 1 ? "+" + (silent.length - 1) : "" } : null
+      silent[0] ? { k: "late", id: silent[0].id, t: "Sin sesión", n: silent[0].name, d: sessionAgeDays(silent[0]) < 0 ? "Aún no cierra un día" : sessionAgeDays(silent[0]) + " días", extra: silent.length > 1 ? "+" + (silent.length - 1) : "" } : null
     ].filter(Boolean);
     const bandejaN = inboxBucketCount();
     return `<section class="screen">
@@ -15869,10 +15894,11 @@ function workView() {
     const restNote = isProgramRestDay(rt) ? `<p class="muted">Hoy es descanso en el calendario (Día 1 = Lunes). Puede saltar a otro día abajo.</p>` : "";
     const prio = [];
     if (state.role === "client") {
-      if (!(selfClient() && selfClient().cue) && !closed) prio.push({ late: false, t: "Sesión de hoy", d: (shortName(rt) || rt.name || "Programa") + " · ~" + (rt.minutes || 45) + " min" });
+      /* Hybrid session card already carries the primary CTA — skip redundant "Sesión de hoy" wall. */
       if (selfClient() && selfClient().cue) prio.push({ late: false, t: "De Miguel", d: String(selfClient().cue).slice(0, 90) });
       const pack = selfClient();
-      if (pack && sessionAgeDays(pack) >= 7) prio.push({ late: true, t: "Lleva días sin cerrar", d: "No pasa nada — Empiece cuando pueda. Hoy cuenta." });
+      const age = pack ? sessionAgeDays(pack) : -1;
+      if (pack && age >= 7) prio.push({ late: true, t: "Lleva días sin cerrar", d: "No pasa nada — Empiece cuando pueda. Hoy cuenta." });
     } else {
       prio.push({ late: false, t: who.replace(" · ","") || "Cliente", d: dayLab + " · " + (shortName(rt) || rt.name || "") });
     }
@@ -15944,8 +15970,8 @@ function workView() {
               <button class="btn primary session-empezar go" id="goLive">${ctaLabel === "Empezar" ? "EMPEZAR →" : escapeHtml(ctaLabel)}</button>
             </div>
           </div>
-          <p class="hoy-interp">${escapeHtml(interp)}</p>
-          <div class="hoy-ring-quiet">${hoyRingHtml(pct, doneSets, totalSets)}</div>
+          ${pct > 0 || closed ? `<p class="hoy-interp">${escapeHtml(interp)}</p>` : ""}
+          ${pct > 0 ? `<div class="hoy-ring-quiet">${hoyRingHtml(pct, doneSets, totalSets)}</div>` : ""}
         ` : `
         <div>
           <p class="hoy-greet">${who}${escapeHtml(greet)}</p>
@@ -16620,7 +16646,7 @@ function aboutView() {
       <img src="${MARK}" alt="Logo NiuBision">
       <div>
         <h2 class="about-creed" style="margin:0">NiuBision</h2>
-        <p class="muted" style="margin-top:4px">See the work. Enjoy the day.</p>
+        <p class="muted" style="margin-top:4px">Mira el trabajo. Disfruta el día.</p>
       </div>
     </div>
 
@@ -16629,7 +16655,7 @@ function aboutView() {
     <p style="margin-bottom:16px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
     <p style="margin-bottom:14px">Entrenamiento personal y coaching en línea en Puerto Rico. Lo dirige Miguel Morales, veterano del Ejército de los Estados Unidos, certificado por el DRD. Programas a la medida para hombres y mujeres que quieren cerrar el día, no soñarlo.</p>
     <p style="margin-bottom:8px">Abre la app. Mira lo que hiciste. Después vive.</p>
-    <p style="margin-bottom:16px">See the work. Enjoy the day.</p>
+    <p style="margin-bottom:16px">Mira el trabajo. Disfruta el día.</p>
 
     <div class="actions">
       <button class="btn primary" data-view="price">Ver planes</button>
@@ -17460,7 +17486,12 @@ function applyClientAssign(a) {
     }
   } catch (e) {}
   persist();
-  if (a.accessCode) authLogin("client", a.accessCode).catch(() => {});
+  if (a.accessCode) {
+    const dig = String(a.accessCode || "").replace(/\D/g, "");
+    if (!(typeof isUiPreviewHost === "function" && isUiPreviewHost() && dig === PREVIEW_DEMO_CODE)) {
+      authLogin("client", a.accessCode).catch(() => {});
+    }
+  }
   return true;
 }
 function copyText(text) {
@@ -18841,7 +18872,7 @@ function render() {
     document.body.classList.remove("in-app");
     return renderGate();
   }
-  if (state.role === "client" && !(state.profile && state.profile.unlocked)) {
+  if (state.role === "client" && !(state.profile && state.profile.unlocked) && !(typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat())) {
     state.role = null;
   }
   if (state.role === "guest" && state.view !== "price" && state.view !== "about" && state.view !== "coach" && state.view !== "social" && state.view !== "privacy" && state.view !== "terms") state.view = "price";
@@ -18934,7 +18965,10 @@ async function boot() {
   try { await hydrateVault(); } catch (e) {}
   try {
     const qDemo = new URLSearchParams(location.search || "");
-    if (isUiPreviewHost() && (qDemo.get("demo") === "hoy" || qDemo.get("preview") === "hoy")) {
+    const qWant = qDemo.get("demo") === "hoy" || qDemo.get("preview") === "hoy";
+    const flagged = !!store.get("nb_preview_demo", 0);
+    const codeWant = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "") === PREVIEW_DEMO_CODE;
+    if (isUiPreviewHost() && (qWant || flagged || codeWant)) {
       state.splash = false;
       seedPreviewDemoSeat();
       try {
@@ -18960,12 +18994,16 @@ async function boot() {
   applyHash();
   /* Keep paid client seat across reloads when unlocked + 6-digit code still local. */
   if (state.role === "client") {
-    const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
-    const unlocked = !!(state.profile && state.profile.unlocked);
-    const dead = unlocked && code.length === 6 && typeof isRevoked === "function" && isRevoked(code, state.profile && state.profile.clientId);
-    if (!unlocked || code.length !== 6 || dead) {
-      state.role = null;
-      if (state.profile) state.profile.unlocked = false;
+    if (typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat()) {
+      /* Preview demo seat survives reload on pages.dev only. */
+    } else {
+      const code = String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "");
+      const unlocked = !!(state.profile && state.profile.unlocked);
+      const dead = unlocked && code.length === 6 && typeof isRevoked === "function" && isRevoked(code, state.profile && state.profile.clientId);
+      if (!unlocked || code.length !== 6 || dead) {
+        state.role = null;
+        if (state.profile) state.profile.unlocked = false;
+      }
     }
   }
   if (state.role === "guest") state.role = null;
@@ -19051,7 +19089,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v4", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v5", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
