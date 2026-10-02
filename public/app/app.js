@@ -11803,9 +11803,20 @@ function dayOneWelcomeBannerHtml() {
   const rt = activeRoutine();
   const has = rt && rt.daysPlan && rt.daysPlan.length;
   if (has) {
-    const di = dayIndex(rt) % rt.daysPlan.length;
+    if (isProgramRestDay(rt)) {
+      return `<div class="card welcome-dayone nb-fade" id="welcomeDayone">
+      <p class="tagline">Bienvenido</p>
+      <h3>Hoy es ${escapeHtml(calendarWeekdayName())} · descanso</h3>
+      <p class="muted">Este plan no entrena hoy. No lo llamamos lunes. Puede mirar otro día en Hoy si quiere.</p>
+      <div class="actions">
+        <button class="btn ghost" type="button" id="welcomeDismiss">Entendido</button>
+      </div>
+    </div>`;
+    }
+    const nW = rt.daysPlan.length;
+    const di = ((dayIndex(rt) % nW) + nW) % nW;
     const day = rt.daysPlan[di];
-    const title = day ? programDayLabel(di, day) : "su sesión";
+    const title = day ? programDayLabel(di, day, nW) : "su sesión";
     return `<div class="card welcome-dayone nb-fade" id="welcomeDayone">
       <p class="tagline">Bienvenido</p>
       <h3>Hoy toca ${escapeHtml(title)} · empecemos</h3>
@@ -13390,16 +13401,46 @@ function mondayWeekIndex(d) {
   const x = d instanceof Date ? d : new Date();
   return (x.getDay() + 6) % 7;
 }
-/** Program Día 1 (slot 0) = Lunes, Día 2 = Martes, … Día 7 = Domingo. */
-function programWeekdayName(daySlot0) {
+/**
+ * Training weekdays, Monday = 0 … Sunday = 6, by plan length.
+ * 1 Mon · 2 Mon/Wed · 3 Mon/Wed/Fri · 4 Mon–Thu · 5 Mon–Fri · 6 Mon–Sat · 7+ every day.
+ * Día 1 is still Monday, the first training day — not "ignore the real date".
+ */
+function trainingWeekdays(n) {
+  const len = Math.max(0, Number(n) || 0);
+  if (len <= 0) return [];
+  if (len === 1) return [0];
+  if (len === 2) return [0, 2];
+  if (len === 3) return [0, 2, 4];
+  if (len === 4) return [0, 1, 2, 3];
+  if (len === 5) return [0, 1, 2, 3, 4];
+  if (len === 6) return [0, 1, 2, 3, 4, 5];
+  return [0, 1, 2, 3, 4, 5, 6];
+}
+/** Slot for this weekday, or null when today is rest for that plan. */
+function slotForCalendarDay(n, monIdx) {
+  const map = trainingWeekdays(n);
+  const wd = ((Number(monIdx) % 7) + 7) % 7;
+  const i = map.indexOf(wd);
+  return i >= 0 ? i : null;
+}
+/** Real weekday of that slot. 3-day: 0 Lunes, 1 Miércoles, 2 Viernes. */
+function programWeekdayName(daySlot0, dayCount) {
+  const slot = Number(daySlot0);
+  const n = Number(dayCount);
+  if (Number.isFinite(slot) && Number.isFinite(n) && n > 0) {
+    const map = trainingWeekdays(n);
+    if (slot >= 0 && slot < map.length) return WEEKDAYS_ES[map[slot]];
+    if (slot >= map.length) return "Extra";
+  }
   return WEEKDAYS_ES[((Number(daySlot0) || 0) % 7 + 7) % 7];
 }
 function programDayFocus(title) {
   return String(title || "").replace(/^Día\s*[0-9A-Za-zÁÉÍÓÚáéíóúñÑ]+\s*(·\s*)?/i, "").trim();
 }
-/** Display label: "Lunes" or "Lunes · Sentadilla y empuje" — does not mutate stored titles. */
-function programDayLabel(daySlot0, dayOrTitle) {
-  const wd = programWeekdayName(daySlot0);
+/** Display label: "Viernes" or "Viernes · Unilateral" — does not mutate stored titles. */
+function programDayLabel(daySlot0, dayOrTitle, dayCount) {
+  const wd = programWeekdayName(daySlot0, dayCount);
   const title = typeof dayOrTitle === "string" ? dayOrTitle : ((dayOrTitle && dayOrTitle.title) || "");
   const focus = programDayFocus(title);
   return focus ? (wd + " · " + focus) : wd;
@@ -13437,45 +13478,45 @@ function dayWhoKey() {
 }
 function dayIndex(rt) {
   if (!rt || !rt.id) return 0;
+  const n = (rt.daysPlan && rt.daysPlan.length) || 1;
   const who = dayWhoKey();
   const jump = store.get("nb_day_jump_" + who + "_" + rt.id, null);
-  if (jump && jump.date === todayKey() && jump.i != null) {
-    const n = (rt.daysPlan && rt.daysPlan.length) || 1;
+  // Manual pick today only. A jump without pick (old redeem wrote i:0) must not
+  // pull Friday back to Lunes.
+  if (jump && jump.pick && jump.date === todayKey() && jump.i != null) {
     return ((Number(jump.i) % n) + n) % n;
   }
-  const n = (rt.daysPlan && rt.daysPlan.length) || 1;
-  const stored = store.get("nb_day_" + who + "_" + rt.id, store.get("nb_day_" + rt.id, null));
-  // Fresh redeem / never picked a day: start at slot 0 (Lunes / Día 1 content).
-  // Week-strip "today" highlight still uses mondayWeekIndex elsewhere.
-  if (stored == null || stored === "") return 0;
-  const monIdx = mondayWeekIndex();
-  // After first session/choice: calendar Mon→slot 0 …; beyond plan length = rest → stored slot
-  if (monIdx < n) return monIdx;
-  return ((Number(stored) % n) + n) % n;
+  const slot = slotForCalendarDay(n, mondayWeekIndex());
+  if (slot == null) return -1;
+  return slot;
 }
 function setDayIndex(rt, n) {
   const who = dayWhoKey();
   const days = (rt.daysPlan && rt.daysPlan.length) || 1;
   const i = ((Number(n) % days) + days) % days;
   store.set("nb_day_" + who + "_" + rt.id, i);
-  store.set("nb_day_jump_" + who + "_" + rt.id, { date: todayKey(), i: i });
+  store.set("nb_day_jump_" + who + "_" + rt.id, { date: todayKey(), i: i, pick: 1 });
 }
 function isProgramRestDay(rt) {
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) return false;
   const jump = store.get("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
-  if (jump && jump.date === todayKey()) return false;
-  return mondayWeekIndex() >= rt.daysPlan.length;
+  if (jump && jump.pick && jump.date === todayKey() && jump.i != null) return false;
+  return slotForCalendarDay(rt.daysPlan.length, mondayWeekIndex()) == null;
 }
 function sessionKey(rt) {
   const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
   const days = (rt.daysPlan && rt.daysPlan.length) || 1;
-  return "nb_ses_" + who + "_" + rt.id + "_" + (dayIndex(rt) % days);
+  const di = dayIndex(rt);
+  const slot = di < 0 ? "rest" : (((di % days) + days) % days);
+  return "nb_ses_" + who + "_" + rt.id + "_" + slot;
 }
 function loadSession(rt) {
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
     return { items: [] };
   }
-  const day = rt.daysPlan[dayIndex(rt) % rt.daysPlan.length];
+  const di = dayIndex(rt);
+  if (di < 0) return { items: [] };
+  const day = rt.daysPlan[((di % rt.daysPlan.length) + rt.daysPlan.length) % rt.daysPlan.length];
   const saved = store.get(sessionKey(rt), null);
   const by = {};
   ((saved && saved.items) || []).forEach((it, i) => {
@@ -15532,7 +15573,9 @@ function maybeWeekRecap(force) {
 function homeView() {
   const rt = activeRoutine();
   const daysPlan = (rt && rt.daysPlan) || [];
-  const day = daysPlan.length ? daysPlan[dayIndex(rt) % daysPlan.length] : null;
+  const restHome = !!(rt && daysPlan.length && isProgramRestDay(rt));
+  const diHome = (!restHome && daysPlan.length) ? (((dayIndex(rt) % daysPlan.length) + daysPlan.length) % daysPlan.length) : null;
+  const day = diHome == null ? null : daysPlan[diHome];
   const st = streak();
   if (state.role === "coach") {
     const cur = currentClient();
@@ -15606,7 +15649,7 @@ function homeView() {
       <span>Videos <b>${vids}/2</b></span>
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
-    ${day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(dayIndex(rt) % daysPlan.length, day))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios${isProgramRestDay(rt) ? " · hoy descanso del plan" : ""}</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : ""}
+    ${restHome ? `<div class="card"><h3>Hoy · ${escapeHtml(calendarWeekdayName())}</h3><p class="muted">${escapeHtml(rt.name)} · hoy descanso del plan. No hay sesión.</p><div class="actions"><button class="btn ghost" data-view="work">Ver la semana</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : (day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(diHome, day, daysPlan.length))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : "")}
     ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     ${(state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
@@ -15702,8 +15745,8 @@ function weekPeekHtml(rt, di) {
   if (!rt || !rt.daysPlan) return "";
   return `<details class="more-fold week-peek">
     <summary>Ver los ${rt.daysPlan.length} días de esta rutina</summary>
-    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")} · Día 1 = Lunes</p>
-    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${i === di ? "Hoy · " : ""}${escapeHtml(programDayLabel(i, d))}</h3>
+    <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")} · Día 1 = Lunes, el resto sigue el calendario</p>
+    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${di != null && i === di ? "Hoy · " : ""}${escapeHtml(programDayLabel(i, d, rt.daysPlan.length))}</h3>
       ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(displayName(it))}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
     </div>`).join("")}
     <button type="button" class="btn ghost" id="seeWeekRt">Abrir ficha de la rutina</button>
@@ -15876,7 +15919,63 @@ function workView() {
       ${state.role === "client" ? "" : workPickerHtml(band, list, "")}
     </section>`;
   }
-  const di = dayIndex(rt) % rt.daysPlan.length;
+  if (isProgramRestDay(rt)) {
+    const dayBig = calendarWeekdayName();
+    const n = rt.daysPlan.length;
+    const jumps = rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}">${escapeHtml(programWeekdayName(i, n))}</button>`).join("");
+    const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
+    const isClient = state.role === "client";
+    const restCopy = "Hoy no hay sesión. Descanso del plan.";
+    const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-hybrid" : "screen session-start";
+    const week = weekDots();
+    const strip = `<div class="week">${week.map((d) => `<span class="dot ${d.on?"on":""} ${d.today?"today":""}">${d.label}</span>`).join("")}</div>`;
+    const fold = `<details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
+        <summary>Cambiar día o rutina</summary>
+        ${isClient ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
+        <div class="day-jump">${jumps}</div>
+      </details>`;
+    return `<section class="${hoySectionCls}">
+      ${syncBannerHtml()}
+      ${assignNoticeHtml()}
+      ${dayOneWelcomeBannerHtml()}
+      <div class="hoy-hero${isClient ? " hoy-hero-hybrid" : ""}">
+        ${isClient ? `
+          <h2 class="hoy-title-look">Hoy</h2>
+          <p class="hoy-tagline-soft"><span class="mint-dot" aria-hidden="true">◆</span> Hoy no toca entrenar</p>
+          <div class="session-card-look empty">
+            <p class="session-label">SESIÓN DE HOY <span class="mint-chip">Descanso</span></p>
+            <div class="session-card-body">
+              <div class="session-card-main">
+                <p class="session-time">${escapeHtml(dayBig)}</p>
+                <div class="session-who">
+                  <span class="session-avatar" aria-hidden="true"></span>
+                  <div>
+                    <strong>Sin sesión</strong>
+                    <span>${escapeHtml(dayBig)} · descanso</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="hoy-interp">${escapeHtml(restCopy)}</p>
+          ${strip}
+        ` : `
+        <div>
+          <p class="hoy-greet">${who}${escapeHtml(hoyDayGreeting())}</p>
+          <h2>${escapeHtml(dayBig)}</h2>
+          <p class="hoy-meta">${escapeHtml(band)} · descanso</p>
+          <p class="hoy-interp">${escapeHtml(restCopy)} No es lunes.</p>
+          ${strip}
+        </div>
+        ${hoyRingHtml(0, 0, 0)}
+        `}
+      </div>
+      ${fold}
+      ${weekPeekHtml(rt, null)}
+    </section>`;
+  }
+  const nPlan = rt.daysPlan.length;
+  const di = ((dayIndex(rt) % nPlan) + nPlan) % nPlan;
   const day = rt.daysPlan[di];
   const prog = sessionProgress(rt);
   const ses = prog.ses;
@@ -15894,11 +15993,11 @@ function workView() {
   const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
   const voiceBtn = `<button type="button" class="voice-chip ${voiceOn()?"on":""}" id="voiceToggle">${voiceOn()?"Voz sí":"Voz no"}</button>`;
   if (!live) {
-    const dayLab = programDayLabel(di, day);
+    const dayLab = programDayLabel(di, day, nPlan);
     const hoyLine = state.role === "client"
       ? (`Hoy toca ${escapeHtml(dayLab)} · empecemos`)
       : escapeHtml(dayLab);
-    const restNote = isProgramRestDay(rt) ? `<p class="muted">Hoy es descanso en el calendario (Día 1 = Lunes). Puede saltar a otro día abajo.</p>` : "";
+    const restNote = "";
     const prio = [];
     if (state.role === "client") {
       /* Hybrid session card already carries the primary CTA — skip redundant "Sesión de hoy" wall. */
@@ -15914,7 +16013,7 @@ function workView() {
       ? "Día cerrado. El trabajo se vio."
       : (isProgramRestDay(rt) ? "Hoy es descanso en el calendario. Puede mirar la sesión o saltar de día." : ("Hoy toca " + dayLab + " — un solo toque para empezar."));
     const greet = hoyDayGreeting();
-    const dayBig = programWeekdayName(di);
+    const dayBig = programWeekdayName(di, nPlan);
     const isClient = state.role === "client";
     const prioTop = isClient ? prio.slice(0, 2) : prio;
     const ctaLabel = closed ? "Ver la sesión" : (pct > 0 && pct < 100 ? "Continuar" : "Empezar");
@@ -15932,7 +16031,7 @@ function workView() {
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${workClientAskHtml()}
-        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i, rt.daysPlan.length))}</button>`).join("")}</div>
       </details>` : `
       ${restNote}
       ${prioBlock}
@@ -15951,7 +16050,7 @@ function workView() {
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${workPickerHtml(band, list, rt.id)}
-        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
+        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i, rt.daysPlan.length))}</button>`).join("")}</div>
       </details>`;
     return `<section class="${hoySectionCls}">
       ${syncBannerHtml()}
@@ -15998,8 +16097,8 @@ function workView() {
   }
   return `<section class="screen focus-session">
     ${assignNoticeHtml()}
-    <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di))} · ${escapeHtml(band)} · ${escapeHtml(shortName(rt) || rt.name)}</p>${voiceBtn}</div>
-    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(programDayLabel(di, day))}</h2>
+    <div class="sess-top"><p class="tagline">${who}${escapeHtml(programWeekdayName(di, rt.daysPlan.length))} · ${escapeHtml(band)} · ${escapeHtml(shortName(rt) || rt.name)}</p>${voiceBtn}</div>
+    <h2 style="font-family:var(--display);font-size:26px">${escapeHtml(programDayLabel(di, day, rt.daysPlan.length))}</h2>
     <p class="muted"><span id="setLive">${doneSets} de ${totalSets} series</span> · ejercicio ${open + 1} de ${ses.items.length} · Tiempo <span id="sessClock">00:00</span></p>
     <div class="work-tools" style="margin:8px 0 12px"><button type="button" class="btn small ${state.sessStart ? "ghost" : "mint"}" id="startSess">${state.sessStart ? "Pausar" : (state.sessElapsed ? "Seguir" : "Empezar")}</button></div>
     <div class="progress"><span id="setBar" style="width:${pct}%"></span></div>
@@ -16007,7 +16106,7 @@ function workView() {
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
       ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i))}</button>`).join("")}</div>
+      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i, rt.daysPlan.length))}</button>`).join("")}</div>
     </details>
     ${ses.items.map((it, i) => {
       const ex = findEx(it.exId);
@@ -16091,12 +16190,14 @@ function bindWork() {
   if (hoyDet) {
     hoyDet.onclick = () => {
       const rt0 = activeRoutine();
-      const di0 = rt0 ? dayIndex(rt0) % ((rt0.daysPlan || []).length || 1) : 0;
-      const day0 = rt0 && rt0.daysPlan ? rt0.daysPlan[di0] : null;
+      const n0 = (rt0 && rt0.daysPlan && rt0.daysPlan.length) || 0;
+      const rest0 = !!(rt0 && isProgramRestDay(rt0));
+      const di0 = (!rest0 && n0) ? (((dayIndex(rt0) % n0) + n0) % n0) : -1;
+      const day0 = di0 >= 0 && rt0.daysPlan ? rt0.daysPlan[di0] : null;
       openHoySheet({
-        title: day0 ? programDayLabel(di0, day0) : "Sesión",
+        title: rest0 ? (calendarWeekdayName() + " · descanso") : (day0 ? programDayLabel(di0, day0, n0) : "Sesión"),
         body: (rt0 ? ((shortName(rt0) || rt0.name) + " · " + ((day0 && day0.items) || []).length + " ejercicios · ~" + (rt0.minutes || 45) + " min") : ""),
-        extra: (day0 ? (`<div class="hoy-daylist"><p class="tagline">Hoy va a hacer esto</p>${dayPreviewHtml(day0)}</div>` + (rt0 ? weekPeekHtml(rt0, di0) : "")) : "") +
+        extra: (day0 ? (`<div class="hoy-daylist"><p class="tagline">Hoy va a hacer esto</p>${dayPreviewHtml(day0)}</div>` + (rt0 ? weekPeekHtml(rt0, di0 >= 0 ? di0 : null) : "")) : "") +
           (state.role === "client" ? `<div class="actions" style="margin-top:10px"><button type="button" class="btn ghost" id="hoySheetProgramas">Ver Programas</button></div>` : ""),
         cta: ($("#goLive") && $("#goLive").textContent) || "Empezar",
         onGo: () => {
@@ -16390,7 +16491,10 @@ function bindWork() {
     const total = ses.items.reduce((n, it) => n + it.sets.length, 0);
     if (!doneSets) return toast("Cierre al menos una serie");
     const lb = sessionLoad(ses);
-    const rec = { date: todayKey(), routine: rt.id, day: rt.daysPlan[dayIndex(rt) % rt.daysPlan.length].title, doneSets, total, load: lb };
+    const nFin = rt.daysPlan.length;
+    const diFin = dayIndex(rt);
+    const dayTitle = diFin < 0 ? calendarWeekdayName() : rt.daysPlan[((diFin % nFin) + nFin) % nFin].title;
+    const rec = { date: todayKey(), routine: rt.id, day: dayTitle, doneSets, total, load: lb };
     const i = (state.history || []).findIndex((h) => h.date === rec.date && h.routine === rec.routine);
     if (i >= 0) state.history[i] = rec;
     else state.history.push(rec);
@@ -16958,7 +17062,7 @@ function openRoutine(id) {
     <p class="tagline">${escapeHtml(r.level || "")} · ${escapeHtml(r.place || "")}</p><h2>${escapeHtml(r.name)}</h2><p>${escapeHtml(r.goal || "")}</p>
     ${r.evidence ? `<p class="muted" style="margin:8px 0 12px">${escapeHtml(r.evidence)}</p>` : ""}
     ${state.role === "client" ? `<p class="muted pedir-note">Pedir no cambia Hoy. Miguel aprueba en Bandeja; entonces pasa a ser su programa activo.</p>` : ""}
-    ${r.daysPlan.map((d, i) => `<div class="card"><h3>${escapeHtml(programDayLabel(i, d))}</h3>${d.items.map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}</div>`).join("")}
+    ${r.daysPlan.map((d, i) => `<div class="card"><h3>${escapeHtml(programDayLabel(i, d, r.daysPlan.length))}</h3>${d.items.map((it) => `<div class="list-row"><span>${escapeHtml(it.name)}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}</div>`).join("")}
     <div class="actions">${state.role === "client"
       ? (/^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""))
         ? `<button class="btn primary" type="button" id="pedirRt">Pedir a Miguel</button><button class="btn ghost" type="button" id="closeSheet">Cerrar</button>`
@@ -17479,17 +17583,7 @@ function applyClientAssign(a) {
   }
   state.profile.unlocked = true;
   state.view = "work";
-  try {
-    const rt0 = typeof activeRoutine === "function" ? activeRoutine() : null;
-    if (rt0 && rt0.id) {
-      const who = "self";
-      const key = "nb_day_" + who + "_" + rt0.id;
-      if (store.get(key, null) == null && store.get("nb_day_" + rt0.id, null) == null) {
-        store.set(key, 0);
-        store.set("nb_day_jump_" + who + "_" + rt0.id, { date: todayKey(), i: 0 });
-      }
-    }
-  } catch (e) {}
+  // Do not pin slot 0 / Lunes on redeem. Opening the app uses today's training day.
   persist();
   if (a.accessCode) {
     const dig = String(a.accessCode || "").replace(/\D/g, "");
@@ -17718,17 +17812,29 @@ function showDay1IfNeeded() {
   store.set("nb_day1_seen", 1);
   store.set("nb_welcome_v43", 0); // allow inline welcome once on Hoy
   const rt = typeof activeRoutine === "function" ? activeRoutine() : null;
-  const _di0 = rt && rt.daysPlan && rt.daysPlan.length
-    ? ((typeof dayIndex === "function" ? dayIndex(rt) : 0) % rt.daysPlan.length)
-    : 0;
-  const day = rt && rt.daysPlan && rt.daysPlan.length ? rt.daysPlan[_di0] : null;
+  const _rest0 = rt && rt.daysPlan && rt.daysPlan.length && typeof isProgramRestDay === "function" && isProgramRestDay(rt);
+  const _n0 = rt && rt.daysPlan ? rt.daysPlan.length : 0;
+  const _di0 = (!_rest0 && _n0)
+    ? (((typeof dayIndex === "function" ? dayIndex(rt) : 0) % _n0) + _n0) % _n0
+    : -1;
+  const day = _di0 >= 0 && rt && rt.daysPlan ? rt.daysPlan[_di0] : null;
   const modal = document.createElement("div");
   modal.className = "modal";
-  if (day) {
+  if (_rest0) {
     modal.innerHTML = `<div class="sheet nb-fade">
       <div class="handle"></div>
       <p class="tagline">Bienvenido</p>
-      <h2>Hoy toca ${escapeHtml(programDayLabel(_di0, day))} · empecemos</h2>
+      <h2>Hoy es ${escapeHtml(calendarWeekdayName())} · descanso</h2>
+      <p class="muted">Este plan no entrena hoy. No es la sesión del lunes.</p>
+      <div class="actions">
+        <button class="btn ghost" id="closeSheet">Entendido</button>
+      </div>
+    </div>`;
+  } else if (day) {
+    modal.innerHTML = `<div class="sheet nb-fade">
+      <div class="handle"></div>
+      <p class="tagline">Bienvenido</p>
+      <h2>Hoy toca ${escapeHtml(programDayLabel(_di0, day, _n0))} · empecemos</h2>
       <p class="muted">Un toque y entra al primer ejercicio. No hace falta recorrer todas las pestañas.</p>
       <div class="actions">
         <button class="btn primary" id="day1Go">Empezar</button>
@@ -17848,13 +17954,18 @@ function openCodeEntry() {
     render();
     (function () {
       const rt0 = activeRoutine();
-      const day0 = rt0 && rt0.daysPlan && rt0.daysPlan.length
-        ? rt0.daysPlan[dayIndex(rt0) % rt0.daysPlan.length]
+      const n0 = rt0 && rt0.daysPlan ? rt0.daysPlan.length : 0;
+      if (rt0 && n0 && isProgramRestDay(rt0)) {
+        toast("Hoy es " + calendarWeekdayName() + " · descanso. No hay sesión.");
+      } else {
+      const day0 = rt0 && n0
+        ? rt0.daysPlan[((dayIndex(rt0) % n0) + n0) % n0]
         : null;
       if (day0) {
-        const di0 = dayIndex(rt0) % rt0.daysPlan.length;
-        toast("Hoy toca " + programDayLabel(di0, day0) + " · empecemos");
+        const di0 = ((dayIndex(rt0) % n0) + n0) % n0;
+        toast("Hoy toca " + programDayLabel(di0, day0, n0) + " · empecemos");
       } else toast("Bienvenido. Miguel te asigna pronto.");
+      }
     })();
     setTimeout(() => showDay1IfNeeded(), 350);
     } finally {
@@ -18722,7 +18833,7 @@ function bindEditor() {
   const addDay = $("#addDay");
   if (addDay) addDay.onclick = () => {
     collectDraftFromDom();
-    const _di = state.editDraft.daysPlan.length; state.editDraft.daysPlan.push({ title: programWeekdayName(_di) + (_di > 6 ? " · extra" : ""), items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
+    const _di = state.editDraft.daysPlan.length; const _n = _di + 1; state.editDraft.daysPlan.push({ title: programWeekdayName(_di, _n) + (_di > 6 ? " · extra" : ""), items: [{ name: "Nuevo ejercicio", sets: 3, reps: "8–10", rest: 90, exId: "" }] });
     render();
   };
   $("#cancelRt").onclick = () => { state.editDraft = null; render(); };
@@ -19094,7 +19205,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v7", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v8", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
