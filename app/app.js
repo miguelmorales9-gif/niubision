@@ -16107,7 +16107,7 @@ function founderHtml() {
         <b>Miguel Morales</b>
         <span>Entrenador y fundador</span>
       </div>
-      <p>Miguel Morales es entrenador personal en Puerto Rico, con más de diez años de experiencia. Veterano del Ejército de los Estados Unidos, obtuvo formación en liderazgo y supervisión.</p>
+      <p>Miguel Morales es entrenador personal certificado por el Departamento de Recreación y Deportes de Puerto Rico, licencia 9798-3322359, con más de diez años de experiencia. Veterano del Ejército de los Estados Unidos, obtuvo formación en liderazgo y supervisión.</p>
       <p>Su método combina ciencia del ejercicio, disciplina militar y una base universitaria en psicología industrial. Diseña programas claros, medibles y sostenibles, orientados a resultados y a la constancia del cliente.</p>
     </article>`;
 }
@@ -16133,7 +16133,7 @@ function aboutView() {
     <p style="margin-bottom:14px">NiuBision no es un nombre para sonar nuevo. Niubi es el fuego que queda cuando ya entrenaste. El trabajo está hecho, se ve, y no hay nada que fingir.</p>
     <p style="margin-bottom:14px">Bision es atreverse a mirarlo. El ojo de la marca.</p>
     <p style="margin-bottom:16px">NiuBision no te promete un cuerpo que tú no vas a trabajar. Te promete que ese trabajo no se esconde.</p>
-    <p style="margin-bottom:14px">Entrenamiento personal y coaching en línea en Puerto Rico. Lo dirige Miguel Morales, veterano del Ejército de los Estados Unidos. Programas a la medida para hombres y mujeres que quieren cerrar el día, no soñarlo.</p>
+    <p style="margin-bottom:14px">Entrenamiento personal y coaching en línea en Puerto Rico. Lo dirige Miguel Morales, veterano del Ejército de los Estados Unidos, certificado por el DRD, licencia 9798-3322359. Programas a la medida para hombres y mujeres que quieren cerrar el día, no soñarlo.</p>
     <p style="margin-bottom:8px">Abre la app. Mira lo que hiciste. Después vive.</p>
     <p style="margin-bottom:16px">See the work. Enjoy the day.</p>
 
