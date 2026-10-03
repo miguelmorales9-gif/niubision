@@ -9709,6 +9709,7 @@ function slimClient(c) {
     sessionsTotal: c.sessionsTotal, sessionsUsed: c.sessionsUsed,
     lastSession: c.lastSession, lastSeen: c.lastSeen, status: c.status,
     cue: String(c.cue || "").slice(0, 180),
+    routinePinned: c.routinePinned ? true : undefined,
     report: c.report ? {
       updatedAt: c.report.updatedAt,
       lastSession: c.report.lastSession,
@@ -10670,14 +10671,20 @@ function applyClientAssignment(d) {
     lockIfRevokedSeat();
     return;
   }
-  if (me.routine) state.profile.routine = me.routine;
+  const nextRoutine = routineForPlan(me.plan, me.routine, me.routinePinned);
+  if (nextRoutine) state.profile.routine = nextRoutine;
+  else if (planMeta(me.plan || "").kind === "session" && state.profile.routine === "full-inicio") state.profile.routine = "";
   if (me.plan) state.profile.plan = me.plan;
   let local = selfClient();
   if (!local) {
     local = me;
     state.clients = mergeRows(state.clients || [], [me]);
   } else {
-    local.routine = me.routine || local.routine;
+    const kept = routineForPlan(me.plan, me.routine, me.routinePinned);
+    if (kept) local.routine = kept;
+    else if (planMeta(me.plan || "").kind === "session" && !me.routinePinned && local.routine === "full-inicio") local.routine = "";
+    else if (me.routine && planMeta(me.plan || "").kind !== "session") local.routine = me.routine;
+    if (me.routinePinned) local.routinePinned = true;
     local.plan = me.plan || local.plan;
     local.endDate = me.endDate || local.endDate;
     local.startDate = me.startDate || local.startDate;
@@ -11389,7 +11396,10 @@ function assignRoutine(id) {
     toast("Pida el programa en Programas. Miguel lo aprueba en Bandeja.");
     return null;
   }
-  if (state.role === "coach" && currentClient()) currentClient().routine = r.id;
+  if (state.role === "coach" && currentClient()) {
+    currentClient().routine = r.id;
+    currentClient().routinePinned = true;
+  }
   else state.profile.routine = r.id;
   state.profile.level = bandOf(r);
   store.set("nb_level", state.profile.level);
@@ -11547,6 +11557,13 @@ function planMeta(plan) {
   if (/ia/i.test(p) && /rutina/i.test(p)) return { weeks: 0, sessions: 0, kind: "addon" };
   if (/sesi[oó]n|presencial|domicilio/i.test(p)) return { weeks: 2, sessions: 1, kind: "session" };
   return { weeks: 4, sessions: 0, kind: "month" };
+}
+function routineForPlan(plan, routine, pinned) {
+  const id = String(routine || "");
+  if (!id) return "";
+  // A single gym session must not inherit the unpaid default program.
+  if (planMeta(plan).kind === "session" && id === "full-inicio" && !pinned) return "";
+  return id;
 }
 function isBasePlan(plan) {
   const p = String(plan || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -12347,11 +12364,8 @@ function openAssignProgramPicker(routineId) {
   };
 }
 function activeRoutineId() {
-  if (state.role === "coach") {
-    const cur = currentClient();
-    return (cur && cur.routine) || (state.profile && state.profile.routine) || "";
-  }
-  return (state.profile && state.profile.routine) || "";
+  const rt = activeRoutine();
+  return (rt && rt.id) || "";
 }
 function programasFiltered() {
   let list = allRoutines().slice();
@@ -12603,35 +12617,18 @@ function bindProgramas() {
   const q = $("#progQ");
   if (q) q.addEventListener("input", () => {
     state.progQ = q.value;
-    const needle = q.value.toLowerCase().trim();
-    if (needle && state.role === "client" && !state.progCatalogOpen) {
-      state.progCatalogOpen = true;
-      const mount = $("#progResults");
-      if (mount) {
-        mount.innerHTML = programasResultsInner();
-        bindProgResultActions(mount);
-        return;
-      }
+    if (state.role === "client" && String(q.value || "").trim()) state.progCatalogOpen = true;
+    const mount = $("#progResults");
+    if (!mount) return render();
+    mount.innerHTML = programasResultsInner();
+    bindProgResultActions(mount);
+    const count = document.querySelector(".programas-screen .prog-count");
+    if (count && state.role === "client") {
+      const hasFilter = !!(state.progBand || state.progDays || state.progKind || String(state.progQ || "").trim());
+      const activeId = activeRoutineId();
+      const n = programasFiltered().filter((r) => !(activeId && r.id === activeId)).length;
+      if (hasFilter || state.progCatalogOpen) count.textContent = n + " plantillas · Hoy solo cambia si Miguel aprueba";
     }
-    const root = document.querySelector(".programas-screen") || document;
-    root.querySelectorAll(".prog-card, .list-row.prog-compact").forEach((el) => {
-      if (el.classList.contains("prog-hero-active")) return;
-      const hay = (el.textContent || "").toLowerCase();
-      el.hidden = !!(needle && hay.indexOf(needle) < 0);
-    });
-    root.querySelectorAll(".prog-shelf-label, .prog-shelf-more").forEach((lab) => {
-      let n = lab.nextElementSibling;
-      let any = false;
-      if (lab.classList.contains("prog-shelf-more")) {
-        lab.hidden = !!needle;
-        return;
-      }
-      while (n && !n.classList.contains("prog-shelf-label")) {
-        if (!n.hidden && (n.classList.contains("prog-card") || n.classList.contains("prog-compact"))) any = true;
-        n = n.nextElementSibling;
-      }
-      lab.hidden = !!needle && !any;
-    });
   });
   $$("[data-prog-band]").forEach((b) => b.onclick = () => {
     const next = b.dataset.progBand || "";
@@ -13581,9 +13578,12 @@ function bindStudioOps() {
 ensureStudioOps();
 
 function activeRoutine() {
-  const id = state.role === "coach"
-    ? ((currentClient() && currentClient().routine) || (state.profile && state.profile.routine) || "")
-    : ((state.profile && state.profile.routine) || "");
+  const cur = state.role === "coach" ? currentClient() : (typeof selfClient === "function" ? selfClient() : null);
+  const raw = state.role === "coach"
+    ? ((cur && cur.routine) || (state.profile && state.profile.routine) || "")
+    : ((state.profile && state.profile.routine) || (cur && cur.routine) || "");
+  const plan = (cur && cur.plan) || (state.profile && state.profile.plan) || "";
+  const id = routineForPlan(plan, raw, cur && cur.routinePinned);
   if (!id) return null;
   return findRoutine(id) || null;
 }
@@ -15701,7 +15701,7 @@ function header() {
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
     <div class="brand brand-hybrid"><img src="${MARK}" alt="" draggable="false" oncontextmenu="return false"><div><strong>NiuBision</strong><span class="brand-tag-quiet">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</span></div></div>
-    <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
+    <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : state.role === "guest" ? "Portada" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
 }
@@ -16865,6 +16865,7 @@ function bindWork() {
   const nx = $("#nextEx"); if (nx) nx.onclick = () => jumpEx(1);
   const fd = $("#finishDay");
   if (fd) fd.onclick = () => {
+    if (state.role === "coach" && !currentClient()) return toast("Elija un cliente. No se guarda una sesión sin ficha.");
     const ses = saveFromDom();
     const doneSets = ses.items.reduce((n, it) => n + it.sets.filter((s) => s.done).length, 0);
     const total = ses.items.reduce((n, it) => n + it.sets.length, 0);
@@ -17200,7 +17201,6 @@ function socialView() {
     <div class="card">
       <p>Trabajo, disciplina y el día a día de NiuBision. Entre al perfil oficial y síganos.</p>
       <p class="muted" style="margin-top:8px">facebook.com/NiuBision</p>
-      <p class="muted">Esa es la página oficial. Si existe “Niubision Fitness” en Arecibo, ciérrela o póngale este mismo sitio. Google las mezcla.</p>
       <a class="btn primary" href="https://www.facebook.com/NiuBision" target="_blank" rel="noopener noreferrer" style="margin-top:14px">Abrir Facebook</a>
     </div>
   </section>`;
@@ -17213,7 +17213,7 @@ function privacyView() {
     <h3>En este teléfono</h3>
     <p>Nombre, plan, código, series, peso, medidas, hábitos, fotos de progreso (hasta 6, comprimidas) y firmas del relevo y del contrato. Eso vive en el almacenamiento del navegador de este aparato.</p>
     <h3>Con el entrenador</h3>
-    <p>Si hay nube del estudio, el resumen de la sesión (día, series, peso, check-in) y hasta 6 fotos de progreso comprimidas llegan al panel del entrenador. El video de técnica se envía por WhatsApp, no se sube al sitio.</p>
+    <p>Si hay nube del estudio, el resumen de la sesión (día, series, peso, check-in) llega al panel del entrenador. Las fotos de progreso se quedan en este teléfono. El video de técnica se envía por WhatsApp, no se sube al sitio.</p>
     <h3>Pagos</h3>
     <p>PayPal y ATH Móvil son de ellos, no de NiuBision. No pedimos ni guardamos números de tarjeta, PIN, CVV ni claves de ATH.</p>
     <h3>WhatsApp</h3>
@@ -17324,7 +17324,7 @@ function pricesView() {
         <li><strong>Premium 197/mes</strong> — Estándar más una videollamada semanal. Cupo de 8.</li>
         <li><strong>12 semanas</strong> — el mismo servicio, un solo pago, con ahorro. No se prorratea.</li>
         <li><strong>Gimnasio 55</strong> — sesión presencial. Ejecuta el plan; no lo sustituye. Packs caducan.</li>
-        <li><strong>Armado 12</strong> — una rutina extra de la biblioteca. No es inteligencia ni un mes de coaching.</li>
+        <li><strong>Armado 12</strong> — una rutina extra de la biblioteca. Es una rutina escrita, no un mes con el coach.</li>
       </ul>
     </div>
     <div class="card compare">
@@ -17950,12 +17950,15 @@ function upsertClientFromAssign(a) {
   if (isRevoked(a.accessCode, a.clientId)) return null;
   let c = (state.clients || []).find((x) => (a.clientId && x.id === a.clientId) || (a.accessCode && String(x.accessCode || "").replace(/\D/g, "") === String(a.accessCode || "").replace(/\D/g, "")));
   if (!c) {
-    c = { id: a.clientId || ("c" + Date.now()), name: a.name, plan: a.plan || "Estándar", routine: a.routine || "", accessCode: a.accessCode };
+    c = { id: a.clientId || ("c" + Date.now()), name: a.name, plan: a.plan || "Estándar", routine: routineForPlan(a.plan, a.routine, a.routinePinned), accessCode: a.accessCode };
     state.clients = state.clients || [];
     state.clients.push(c);
   }
   if (a.plan) c.plan = a.plan;
-  if (a.routine) c.routine = a.routine;
+  const keptRoutine = routineForPlan(a.plan || c.plan, a.routine, a.routinePinned);
+  if (keptRoutine) c.routine = keptRoutine;
+  else if (a.routine && planMeta(a.plan || c.plan).kind === "session" && a.routine === "full-inicio") c.routine = "";
+  if (a.routinePinned) c.routinePinned = true;
   if (a.accessCode) c.accessCode = a.accessCode;
   if (a.accessCode) c.unpaid = false;
   if (a.sex) c.sex = a.sex;
@@ -18048,7 +18051,9 @@ function applyClientAssign(a) {
   state.role = "client";
   if (a.name) state.profile.name = a.name;
   if (a.plan) state.profile.plan = a.plan;
-  if (a.routine) state.profile.routine = a.routine;
+  const nextRoutine = routineForPlan(a.plan, a.routine, a.routinePinned);
+  if (nextRoutine) state.profile.routine = nextRoutine;
+  else if (planMeta(a.plan || "").kind === "session" && state.profile.routine === "full-inicio") state.profile.routine = "";
   if (a.accessCode) state.profile.accessCode = a.accessCode;
   if (a.sex) state.profile.sex = a.sex;
   if (a.age) state.profile.age = a.age;
@@ -19749,7 +19754,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v12", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v13", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
