@@ -12121,9 +12121,11 @@ function saveProgramRequests() {
   state.programRequests = (state.programRequests || []).slice(0, 80);
   try { store.set("nb_program_requests", state.programRequests); } catch (e) {}
 }
-function requestProgram(routineId) {
-  const r = findRoutine(routineId);
-  if (!r) { toast("No se encontró el programa"); return null; }
+function requestProgram(routineId, brief) {
+  brief = brief || {};
+  const r = routineId ? findRoutine(routineId) : null;
+  const hasBrief = !!(brief.objetivo || brief.dias || brief.equipo || brief.molestia);
+  if (!r && !hasBrief) { toast("No se encontró el programa"); return null; }
   const who = selfClient() || {};
   const code = String((state.profile && state.profile.accessCode) || (who && who.accessCode) || "").replace(/\D/g, "").slice(0, 6);
   if (!/^\d{6}$/.test(code)) {
@@ -12133,7 +12135,9 @@ function requestProgram(routineId) {
   }
   const name = cleanName((who && who.name) || state.profile.name || "Cliente") || "Cliente";
   const clientId = (who && who.id) || state.profile.clientId || "";
-  const dup = pendingProgramRequests().find((x) => x.routineId === r.id && (
+  const dup = pendingProgramRequests().find((x) => (
+    (r && x.routineId === r.id) || (!r && (x.objetivo || x.dias || x.equipo || x.molestia))
+  ) && (
     (clientId && x.clientId === clientId) || cleanName(x.name || "") === name
   ));
   if (dup) { toast("Ya está enviado a Miguel"); return dup; }
@@ -12141,8 +12145,12 @@ function requestProgram(routineId) {
     id: "pr" + Date.now(),
     type: "program_req",
     status: "pending",
-    routineId: r.id,
-    routineName: shortName(r) || r.name,
+    routineId: r ? r.id : "",
+    routineName: r ? (shortName(r) || r.name) : ("Pedido · " + (brief.objetivo || "corto")),
+    objetivo: String(brief.objetivo || ""),
+    dias: String(brief.dias || ""),
+    equipo: String(brief.equipo || ""),
+    molestia: String(brief.molestia || ""),
     name,
     clientId,
     accessCode: code,
@@ -12203,6 +12211,17 @@ function approveProgramRequest(reqId) {
   if (!req || req.status !== "pending") { toast("Pedido no encontrado"); return false; }
   const r = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
   if (!r) {
+    const brief = req.objetivo || req.dias || req.equipo || req.molestia;
+    if (brief) {
+      req.status = "approved";
+      req.approvedAt = Date.now();
+      clearProgramReqInbox(req.id);
+      saveProgramRequests();
+      persist();
+      cloudPush().catch(() => {});
+      toast("Pedido aprobado. La rutina no cambió. Asigne la plantilla a mano.");
+      return true;
+    }
     req.status = "ignored";
     req.ignoredAt = Date.now();
     clearProgramReqInbox(req.id);
@@ -12360,6 +12379,24 @@ function programaCardHtml(r) {
     <div class="work-tools">${actions}</div>
   </article>`;
 }
+function programaCompactHtml(r) {
+  const activeId = activeRoutineId();
+  const isActive = activeId && r.id === activeId;
+  let actions = `<button class="btn small ghost" type="button" data-prog-ver="${escAttr(r.id)}">Ver</button>`;
+  if (state.role === "client") {
+    const codeOk = /^\d{6}$/.test(String((state.profile && state.profile.accessCode) || "").replace(/\D/g, ""));
+    const pending = pendingProgramRequests().some((x) => x.routineId && x.routineId === r.id);
+    if (pending) actions += `<span class="st-chip ok prog-badge" data-pedir-status="pedido">pedido</span>`;
+    else if (codeOk) actions += `<button class="btn small primary" type="button" data-prog-pedir="${escAttr(r.id)}">Pedir a Miguel</button>`;
+    else actions += `<span class="muted">Entre con su código para pedir</span>`;
+  } else if (state.role === "coach") {
+    actions += `<button class="btn small primary" type="button" data-prog-asignar="${escAttr(r.id)}">Asignar</button>`;
+  }
+  return `<div class="list-row prog-compact${isActive ? " is-active" : ""}">
+    <div><strong>${escapeHtml(shortName(r) || r.name)}</strong><div class="muted">${r.days || "?"} días · ${escapeHtml(r.level || "")} · ${escapeHtml(kindLabel(kindOf(r)))}</div></div>
+    <span class="prog-compact-actions">${actions}</span>
+  </div>`;
+}
 function programasView() {
   if (state.role === "coach" && state.editDraft) return editorView();
   const list = programasFiltered();
@@ -12382,21 +12419,17 @@ function programasView() {
         <p>Hoy usa este programa. Pedir otro no lo cambia solo — Miguel aprueba en Bandeja.</p>
         <div class="work-tools">
           <button class="btn small ghost" type="button" data-prog-ver="${escAttr(activeRt.id)}">Ver</button>
-          <button class="btn small primary" type="button" id="progAskOther">Pedir otro a Miguel</button>
+          <button class="btn small primary" type="button" id="progAskOther">Pedir a Miguel</button>
         </div>
       </article>`;
     } else {
       hero = `<article class="card prog-card prog-hero-active">
         <div class="prog-head"><h3>Sin programa activo</h3><span class="st-chip prog-badge">Pedir</span></div>
-        <p class="muted">Elija nivel A/B/C o busque una plantilla, luego Pedir a Miguel.</p>
+        <p class="muted">Pedir a Miguel es un pedido corto. El catálogo no se asigna solo.</p>
+        <button class="btn small primary" type="button" id="progAskOther">Pedir a Miguel</button>
       </article>`;
     }
-    if (pending.length) {
-      hero += `<div class="prog-pending">
-        <p class="tagline">Enviado a Miguel</p>
-        ${pending.slice(0, 4).map((p) => `<div class="list-row prog-pending-row"><div><strong>${escapeHtml(p.routineName || p.routineId || "Programa")}</strong><div class="muted">Pendiente de aprobación</div></div><span class="st-chip ok">Enviado</span></div>`).join("")}
-      </div>`;
-    }
+    hero += pedirStatusHtml();
   }
 
   const coachExtra = state.role === "coach"
@@ -12427,12 +12460,14 @@ function programasView() {
     });
     blocks = order.filter((k) => limitedShelves[k] && limitedShelves[k].length).map((k) => {
       const rows = limitedShelves[k];
-      const cap = isClient && !hasFilter ? 3 : rows.length;
+      const compact = state.progCompact !== false;
+      const cap = (!compact && isClient && !hasFilter) ? 3 : rows.length;
       const shown = rows.slice(0, cap);
       const more = rows.length > cap
         ? `<p class="muted prog-shelf-more">+${rows.length - cap} más — busque o filtre por días/tipo</p>`
         : "";
-      return `<p class="tagline prog-shelf-label">${kindLabel(k)}</p>${shown.map(programaCardHtml).join("")}${more}`;
+      const cardFn = (state.progCompact === false) ? programaCardHtml : programaCompactHtml;
+      return `<p class="tagline prog-shelf-label">${kindLabel(k)}</p>${shown.map(cardFn).join("")}${more}`;
     }).join("");
   }
 
@@ -12465,11 +12500,13 @@ function programasView() {
     <h2 class="prog-title">Programas</h2>
     <p class="muted prog-count">${escapeHtml(countLine)}</p>
     ${hero}
+    ${paraTiHtml()}
     <div class="prog-abc" role="group" aria-label="Nivel A B C">
       ${abc.map(([id,letter,lab]) => `<button type="button" data-prog-band="${id}" class="${(state.progBand||"")===id?"on":""}" aria-pressed="${(state.progBand||"")===id?"true":"false"}">${letter}<small>${lab}</small></button>`).join("")}
     </div>
     ${coachExtra}
     <div class="prog-sticky">
+      <button class="btn small ghost" type="button" id="progCompactToggle">${state.progCompact === false ? "Vista compacta" : "Ver fichas"}</button>
       <input class="search" id="progQ" placeholder="Buscar hipertrofia, fuerza, casa…" value="${escapeHtml(state.progQ || "")}" aria-label="Buscar programas">
       <div class="filters" role="group" aria-label="Días">${[["","Todos"],...days.slice(1)].map(([id,l]) => `<button type="button" data-prog-days="${id}" class="${String(state.progDays||"")===id?"on":""}">${l}</button>`).join("")}</div>
       <label class="prog-kind-label" for="progKindSel">Tipo de programa</label>
@@ -12517,16 +12554,13 @@ function bindProgramas() {
     render();
   };
   const askOther = $("#progAskOther");
-  if (askOther) askOther.onclick = () => {
-    state.progCatalogOpen = true;
+  if (askOther) askOther.onclick = () => openPedirBeats("");
+  const paraTiBtn = $("#paraTiPedir");
+  if (paraTiBtn) paraTiBtn.onclick = () => openPedirBeats("");
+  const compactBtn = $("#progCompactToggle");
+  if (compactBtn) compactBtn.onclick = () => {
+    state.progCompact = state.progCompact === false;
     render();
-    setTimeout(() => {
-      try {
-        const el = document.querySelector(".prog-catalog-gate") || document.querySelector(".prog-sticky") || document.querySelector(".prog-abc");
-        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      } catch (e) {}
-      toast("Elija una plantilla y pulse Pedir a Miguel");
-    }, 60);
   };
   $$("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
   $$("[data-prog-pedir]").forEach((b) => b.onclick = () => {
@@ -12841,8 +12875,9 @@ function inboxView() {
       ${b.programReqs.length ? b.programReqs.map((req) => {
         const hit = resolveRoutine(req.routineId) || resolveRoutine(req.routineName);
         const missing = !hit;
-        const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.routineId || "programa");
-        const hint = missing ? "Ya no está en la biblioteca · Aprobar solo cierra el pedido" : "Aprobar lo deja activo en Hoy del cliente";
+        const label = escapeHtml(req.name || "Cliente") + " pide " + escapeHtml(req.routineName || req.objetivo || req.routineId || "programa");
+        const briefBits = [req.objetivo, req.dias ? (req.dias + " días") : "", req.equipo, req.molestia].filter(Boolean).join(" · ");
+        const hint = (briefBits ? briefBits + " · " : "") + (missing ? "Sin plantilla · aprobar no asigna solo" : "Aprobar una plantilla la deja activa. Un pedido corto no asigna solo.");
         return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : `<p class="muted bucket-empty">Sin pedidos. El cliente pide desde Programas; usted aprueba aquí.</p>`}
     </div>
@@ -14514,16 +14549,119 @@ function openHoySheet(opts) {
   const g = modal.querySelector("#hoySheetGo");
   if (g) g.onclick = () => { niuPulseTap(); close(); if (typeof opts.onGo === "function") opts.onGo(); };
 }
+function pedirStatusLabel(status) {
+  const st = String(status || "pending");
+  if (st === "approved") return "aprobado";
+  if (st === "ignored" || st === "rejected") return "rechazado";
+  return "pedido";
+}
+function pedirBriefHtml(draft) {
+  draft = draft || {};
+  const objetivos = ["Fuerza", "Hipertrofia", "Inicio", "Glúteos"];
+  const dias = ["2", "3", "4", "5", "6"];
+  const equipos = ["Gimnasio", "Casa", "Ambos"];
+  const chips = (list, key, cur) => list.map((lab) => `<button type="button" data-pedir-${key}="${escAttr(lab)}" class="${String(cur)===String(lab)?"on":""}">${escapeHtml(lab)}</button>`).join("");
+  const plantilla = draft.routineName
+    ? `<p class="muted">Plantilla de referencia: ${escapeHtml(draft.routineName)}. No se asigna sola.</p>`
+    : `<p class="muted">Pedido corto. No abre el catálogo y no cambia el programa.</p>`;
+  return `<div class="pedir-brief" id="pedirBrief">
+    ${plantilla}
+    <p class="tagline">Objetivo</p>
+    <div class="pedir-chips" role="group" aria-label="Objetivo">${chips(objetivos, "objetivo", draft.objetivo || "")}</div>
+    <p class="tagline">Días</p>
+    <div class="pedir-chips" role="group" aria-label="Días">${chips(dias, "dias", draft.dias || "")}</div>
+    <p class="tagline">Equipo</p>
+    <div class="pedir-chips" role="group" aria-label="Equipo">${chips(equipos, "equipo", draft.equipo || "")}</div>
+    <label class="muted" for="pedirMolestia">Molestia</label>
+    <textarea class="field" id="pedirMolestia" placeholder="Rodilla, hombro, o nada">${escapeHtml(draft.molestia || "")}</textarea>
+  </div>`;
+}
+function pedirStatusHtml() {
+  const rows = (state.programRequests || []).filter((r) => r && (r.status || r.objetivo || r.routineName));
+  if (!rows.length) return `<p class="muted pedir-status-empty">Sin pedido todavía. Miguel lo ve en Bandeja cuando lo envíe.</p>`;
+  return `<div class="pedir-status-list">${rows.slice(0, 4).map((req) => {
+    const lab = pedirStatusLabel(req.status);
+    const cls = lab === "aprobado" ? "ok" : (lab === "rechazado" ? "warn" : "");
+    const detail = [req.objetivo, req.dias ? (req.dias + " días") : "", req.equipo, req.molestia].filter(Boolean).join(" · ");
+    return `<div class="list-row"><div><strong>${escapeHtml(req.routineName || req.objetivo || "Pedido")}</strong><div class="muted">${escapeHtml(detail || "En Bandeja")}</div></div><span class="st-chip ${cls}" data-pedir-status="${lab}">${lab}</span></div>`;
+  }).join("")}</div>`;
+}
+function clientTrainDays() {
+  const active = (typeof activeRoutine === "function") ? activeRoutine() : null;
+  const fromRt = Number(active && active.days) || 0;
+  if (fromRt) return fromRt;
+  const fromReq = (state.programRequests || []).find((r) => r && r.dias);
+  if (fromReq) return Number(fromReq.dias) || 0;
+  return Number(state.progDays) || 0;
+}
+function clientGoalHint() {
+  const req = (state.programRequests || []).find((r) => r && r.objetivo);
+  if (req) return String(req.objetivo).toLowerCase();
+  const active = (typeof activeRoutine === "function") ? activeRoutine() : null;
+  if (active && active.goal) return String(active.goal).toLowerCase();
+  if (active) return kindOf(active);
+  return "";
+}
+function paraTiPick() {
+  const band = currentBand();
+  const days = clientTrainDays();
+  const goal = clientGoalHint();
+  let pool = allRoutines().filter((r) => bandOf(r) === band);
+  if (!pool.length) pool = allRoutines().slice();
+  if (days) {
+    const byDays = pool.filter((r) => Number(r.days) === days);
+    if (byDays.length) pool = byDays;
+  }
+  const wantKind = /glute|cadera/.test(goal) ? "gluteos"
+    : /casa|home/.test(goal) ? "casa"
+    : /fuerza|strength/.test(goal) ? "fuerza"
+    : /split|grupo/.test(goal) ? "split"
+    : /hiper|muscul|cuerpo|inicio/.test(goal) ? "cuerpo"
+    : "";
+  if (wantKind) {
+    const byK = pool.filter((r) => kindOf(r) === wantKind);
+    if (byK.length) pool = byK;
+  }
+  pool = pool.slice().sort((a, b) => (a.days || 0) - (b.days || 0) || rankOf(a) - rankOf(b));
+  return pool[0] || preferredRoutine(band) || null;
+}
+function paraTiHtml() {
+  if (state.role !== "client") return "";
+  const r = paraTiPick();
+  const days = clientTrainDays();
+  const band = currentBand();
+  const bandLab = band === "avanzado" ? "C" : band === "intermedio" ? "B" : "A";
+  if (!r) {
+    return `<article class="card para-ti"><p class="tagline">Para ti</p><h3>Sin plantilla con esos datos</h3><p class="muted">Nivel ${bandLab}${days ? " · " + days + " días" : ""}. A, B y C siguen en la biblioteca. Nada se borra.</p><button class="btn small primary" type="button" id="paraTiPedir">Pedir a Miguel</button></article>`;
+  }
+  const why = (days ? days + " días" : "sus días") + " · nivel " + bandLab;
+  return `<article class="card para-ti">
+    <p class="tagline">Para ti</p>
+    <h3>${escapeHtml(shortName(r) || r.name)}</h3>
+    <p class="muted">${escapeHtml(why)} · ${escapeHtml(r.level || "")} · ${r.days || "?"} días</p>
+    <p class="muted">Sale de los días, el nivel y el objetivo que ya tiene. No se asigna.</p>
+    <div class="work-tools">
+      <button class="btn small ghost" type="button" data-prog-ver="${escAttr(r.id)}">Ver</button>
+      <button class="btn small primary" type="button" data-prog-pedir="${escAttr(r.id)}">Pedir a Miguel</button>
+    </div>
+  </article>`;
+}
+
 function openPedirBeats(routineId) {
-  const r = resolveRoutine(routineId) || findRoutine(routineId);
-  if (!r) { toast("Programa no encontrado"); return; }
+  const r = routineId ? (resolveRoutine(routineId) || findRoutine(routineId)) : null;
   let draft = {};
   try { draft = JSON.parse(localStorage.getItem("niu.coachRequest.draft") || "{}") || {}; } catch (e) { draft = {}; }
-  draft.routineId = r.id;
-  draft.routineName = shortName(r) || r.name;
-  let beat = 1;
-  const motivos = [["tecnica","Técnica"],["dolor","Dolor / molestia"],["plan","Cambio de plan"],["otro","Otro"]];
-  const urgs = [["normal","Normal"],["pronto","Esta semana"],["urgente","Urgente"]];
+  if (r) {
+    draft.routineId = r.id;
+    draft.routineName = shortName(r) || r.name;
+  } else {
+    draft.routineId = "";
+    draft.routineName = "";
+  }
+  if (!draft.dias) {
+    const n = clientTrainDays();
+    if (n) draft.dias = String(n);
+  }
   closeModals();
   const modal = document.createElement("div");
   modal.className = "nb-sheet-backdrop modal";
@@ -14532,69 +14670,45 @@ function openPedirBeats(routineId) {
   const close = () => { try { modal.remove(); } catch (e) {} document.body.classList.remove("modal-open"); };
   modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
   const paint = () => {
-    const dots = [1,2,3].map((n) => `<span class="${beat>=n?"on":""}"></span>`).join("");
-    let body = "";
-    if (beat === 1) {
-      body = `<p class="muted">¿Para qué pide <strong>${escapeHtml(shortName(r) || r.name)}</strong>?</p>
-        <div class="pedir-chips">${motivos.map(([id,l]) => `<button type="button" data-mot="${id}" class="${draft.motivo===id?"on":""}">${l}</button>`).join("")}</div>
-        <button class="btn primary" type="button" id="pedirNext" ${draft.motivo?"":"disabled"}>Continuar</button>`;
-    } else if (beat === 2) {
-      body = `<p class="muted">Detalle corto para Miguel (opcional) y urgencia.</p>
-        <textarea class="field" id="pedirDet" placeholder="Ej. me cuesta la sentadilla en el último tercio">${escapeHtml(draft.detalle || "")}</textarea>
-        <div class="pedir-chips">${urgs.map(([id,l]) => `<button type="button" data-urg="${id}" class="${(draft.urgencia||"normal")===id?"on":""}">${l}</button>`).join("")}</div>
-        <div class="row two"><button class="btn ghost" type="button" id="pedirBack">Atrás</button>
-        <button class="btn primary" type="button" id="pedirNext">Continuar</button></div>`;
-    } else {
-      const motLab = (motivos.find((x) => x[0]===draft.motivo) || ["","—"])[1];
-      const urgLab = (urgs.find((x) => x[0]===(draft.urgencia||"normal")) || ["","Normal"])[1];
-      body = `<p class="muted">Revise y envíe. Miguel lo ve en Bandeja — respuesta típica 1 día hábil.</p>
-        <div class="card"><p class="tagline">Resumen</p>
-          <h3>${escapeHtml(shortName(r) || r.name)}</h3>
-          <p class="muted">${escapeHtml(motLab)} · ${escapeHtml(urgLab)}</p>
-          ${draft.detalle ? `<p>${escapeHtml(draft.detalle)}</p>` : "<p class='muted'>Sin detalle extra.</p>"}
-        </div>
-        <div class="row two"><button class="btn ghost" type="button" id="pedirBack">Atrás</button>
-        <button class="btn primary" type="button" id="pedirSend">Enviar a Miguel</button></div>`;
-    }
-    modal.innerHTML = `<div class="nb-sheet" role="dialog" aria-label="Pedir programa">
+    modal.innerHTML = `<div class="nb-sheet" role="dialog" aria-label="Pedir a Miguel">
       <div class="handle"></div>
       <p class="tagline">Pedir a Miguel</p>
-      <h2 style="font-family:var(--display);font-size:24px;margin:0 0 8px">Paso ${beat} de 3</h2>
-      <div class="pedir-beats">${dots}</div>
-      ${body}
-      <button class="btn ghost" type="button" id="pedirClose" style="margin-top:8px">Cancelar</button>
+      <h2 style="font-family:var(--display);font-size:24px;margin:0 0 8px">Pedido corto</h2>
+      ${pedirBriefHtml(draft)}
+      <button class="btn primary" type="button" id="pedirSend">Enviar a Miguel</button>
+      <button class="btn ghost" type="button" id="pedirClose">Cancelar</button>
     </div>`;
     const cl = modal.querySelector("#pedirClose"); if (cl) cl.onclick = close;
-    Array.from(modal.querySelectorAll("[data-mot]")).forEach((b) => b.onclick = () => {
-      draft.motivo = b.dataset.mot; try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
-      paint();
-    });
-    Array.from(modal.querySelectorAll("[data-urg]")).forEach((b) => b.onclick = () => {
-      draft.urgencia = b.dataset.urg; try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
-      paint();
-    });
-    const det = modal.querySelector("#pedirDet");
-    if (det) det.oninput = () => { draft.detalle = det.value; };
-    const back = modal.querySelector("#pedirBack");
-    if (back) back.onclick = () => { beat = Math.max(1, beat - 1); paint(); };
-    const next = modal.querySelector("#pedirNext");
-    if (next) next.onclick = () => {
-      if (beat === 2 && det) draft.detalle = det.value;
+    const setChip = (key, val) => {
+      draft[key] = val;
       try { localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft)); } catch (e) {}
-      if (beat === 1 && !draft.motivo) { toast("Elija un motivo"); return; }
-      beat = Math.min(3, beat + 1); paint();
+      paint();
     };
+    Array.from(modal.querySelectorAll("[data-pedir-objetivo]")).forEach((b) => b.onclick = () => setChip("objetivo", b.getAttribute("data-pedir-objetivo")));
+    Array.from(modal.querySelectorAll("[data-pedir-dias]")).forEach((b) => b.onclick = () => setChip("dias", b.getAttribute("data-pedir-dias")));
+    Array.from(modal.querySelectorAll("[data-pedir-equipo]")).forEach((b) => b.onclick = () => setChip("equipo", b.getAttribute("data-pedir-equipo")));
+    const mol = modal.querySelector("#pedirMolestia");
+    if (mol) mol.oninput = () => { draft.molestia = mol.value; };
     const send = modal.querySelector("#pedirSend");
     if (send) send.onclick = () => {
+      if (mol) draft.molestia = mol.value || "";
+      if (!draft.objetivo) { toast("Elija un objetivo"); return; }
+      if (!draft.dias) { toast("Elija los días"); return; }
+      if (!draft.equipo) { toast("Elija el equipo"); return; }
       niuPulseTap();
-      const row = requestProgram(r.id);
+      const row = requestProgram(draft.routineId || "", {
+        objetivo: draft.objetivo,
+        dias: draft.dias,
+        equipo: draft.equipo,
+        molestia: draft.molestia || ""
+      });
       try {
         draft.sentAt = Date.now();
         localStorage.setItem("niu.coachRequest.draft", JSON.stringify(draft));
       } catch (e) {}
       close();
       if (row) {
-        toast("Pedido enviado — Miguel lo ve en Bandeja");
+        toast("Pedido enviado. Miguel lo aprueba en Bandeja.");
         render();
       }
     };
@@ -16400,20 +16514,50 @@ function bindWork() {
     const it = loadSession(rt).items[Number(el.dataset.video)];
     const name = displayName(it || {});
     const who = selfClient() || { id: "self", name: state.profile.name || "Cliente" };
-    if (videosMonth(who.id).length >= 2) return toast("Ya usó las 2 correcciones de este mes");
-    state.videos = state.videos || [];
-    state.videos.push({
-      id: "v" + Date.now(),
-      clientId: who.id,
-      name: who.name,
-      exercise: name,
-      date: todayKey(),
-      month: monthKey(),
-      status: "pendiente",
-      note: ""
-    });
-    persist();
-    window.open(waLink(waReady("video", { name: who.name, ex: name })), "_blank");
+    const already = (state.videos || []).some((v) => v && v.clientId === who.id && v.date === todayKey() && v.exercise === name);
+    if (!already && videosMonth(who.id).length >= 2) return toast("Ya usó las 2 correcciones de este mes");
+    closeModals();
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.innerHTML = `<div class="sheet">
+      <div class="handle"></div>
+      <p class="tagline">Técnica</p>
+      <h2>Video de ${escapeHtml(name)}</h2>
+      <p class="muted">WhatsApp no se abre solo. Ábralo si quiere mandar el video. Solo queda como enviado cuando usted lo confirma.</p>
+      <div class="actions">
+        <button class="btn ghost" type="button" id="vidOpenWa">Abrir WhatsApp</button>
+        <button class="btn primary" type="button" id="vidSent">Ya lo envié</button>
+        <button class="btn ghost" type="button" id="vidClose">Ahora no</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    const mark = (status) => {
+      state.videos = state.videos || [];
+      const prev = state.videos.find((v) => v && v.date === todayKey() && v.exercise === name && v.clientId === who.id);
+      if (prev) prev.status = status;
+      else state.videos.push({
+        id: "v" + Date.now(),
+        clientId: who.id,
+        name: who.name,
+        exercise: name,
+        date: todayKey(),
+        month: monthKey(),
+        status,
+        note: ""
+      });
+      persist();
+    };
+    modal.querySelector("#vidClose").onclick = () => modal.remove();
+    modal.querySelector("#vidOpenWa").onclick = () => {
+      mark("pendiente");
+      window.open(waLink(waReady("video", { name: who.name, ex: name })), "_blank");
+      toast("WhatsApp abierto. Confirme cuando el video haya salido.");
+    };
+    modal.querySelector("#vidSent").onclick = () => {
+      mark("enviado");
+      modal.remove();
+      toast("Video enviado");
+    };
   });
   $$("[data-jumpday]").forEach((b) => b.onclick = () => {
     saveFromDom();
@@ -16495,7 +16639,13 @@ function bindWork() {
     const nFin = rt.daysPlan.length;
     const diFin = dayIndex(rt);
     const dayTitle = diFin < 0 ? calendarWeekdayName() : rt.daysPlan[((diFin % nFin) + nFin) % nFin].title;
-    const rec = { date: todayKey(), routine: rt.id, day: dayTitle, doneSets, total, load: lb };
+    const loads = [];
+    ses.items.forEach((it) => {
+      (it.sets || []).forEach((set) => {
+        if (set && set.done && (set.w || set.r)) loads.push({ name: displayName(it) || "Ejercicio", w: set.w || "", r: set.r || "" });
+      });
+    });
+    const rec = { date: todayKey(), routine: rt.id, day: dayTitle, doneSets, total, load: lb, loads: loads.slice(0, 12) };
     const i = (state.history || []).findIndex((h) => h.date === rec.date && h.routine === rec.routine);
     if (i >= 0) state.history[i] = rec;
     else state.history.push(rec);
@@ -16513,7 +16663,7 @@ function bindWork() {
     holdScreen(false);
     beep(520, 250);
     if (state.role === "client") cloudPushClient().catch(() => {});
-    flashClose(doneSets, total, lb);
+    flashClose(doneSets, total, lb, ses);
   };
 }
 
@@ -16599,15 +16749,47 @@ function startTimer(sec) {
     if (t.getAttribute("data-restadd")) { bump(); return; }
   };
 }
-function flashClose(done, total, lb) {
+function videosSentOn(date) {
+  const d = date || todayKey();
+  return (state.videos || []).filter((v) => v && v.date === d && v.status === "enviado");
+}
+function sessionProofHtml(ses) {
+  ses = ses || { items: [] };
+  const sent = videosSentOn(todayKey());
+  const videoLine = sent.length
+    ? `<p class="ok" data-video-proof="enviado">Video enviado${sent[0].exercise ? " · " + escapeHtml(sent[0].exercise) : ""}</p>`
+    : `<p class="muted" data-video-proof="no">Sin video de técnica en esta sesión.</p>`;
+  const rows = [];
+  (ses.items || []).forEach((it) => {
+    (it.sets || []).forEach((set, i) => {
+      if (!set || !set.done) return;
+      if (!(set.w || set.r)) return;
+      rows.push({ name: displayName(it) || "Ejercicio", n: i + 1, w: set.w, r: set.r });
+    });
+  });
+  if (!rows.length) {
+    const hist = (state.history || []).slice().reverse().find((h) => h && h.loads && h.loads.length);
+    ((hist && hist.loads) || []).forEach((set, i) => {
+      rows.push({ name: set.name || "Ejercicio", n: i + 1, w: set.w, r: set.r });
+    });
+  }
+  const loads = rows.length
+    ? `<div class="load-history"><p class="tagline">Cargas de la sesión</p>${rows.slice(0, 8).map((row) => `<div class="list-row"><span>${escapeHtml(String(row.name))} · serie ${row.n}</span><strong>${escapeHtml(String(row.w || "—"))} lb × ${escapeHtml(String(row.r || "—"))}</strong></div>`).join("")}</div>`
+    : `<p class="muted">Sin cargas anotadas en esta sesión.</p>`;
+  const sync = syncBannerHtml() || (isOnline()
+    ? `<div class="sync-banner">Al día · ${escapeHtml(lastSyncLabel())}</div>`
+    : `<div class="sync-banner offline">Sin conexión · el trabajo sigue aquí · ${escapeHtml(lastSyncLabel())}</div>`);
+  return `<div class="session-proof">${videoLine}${loads}${sync}</div>`;
+}
+function flashClose(done, total, lb, ses) {
   speak("Día completo. El trabajo se vio.");
   const el = document.createElement("div");
   el.className = "close-flash";
   el.innerHTML = `<p>Sesión en el libro</p><b>${done} series</b>${lb ? `<p style="margin-top:12px;color:var(--mute)">${lb} lb movidas</p>` : ""}`;
   document.body.appendChild(el);
-  setTimeout(() => { try { el.remove(); } catch (e) {} openDone(done, total, lb); }, 1800);
+  setTimeout(() => { try { el.remove(); } catch (e) {} openDone(done, total, lb, ses); }, 1800);
 }
-function openDone(done, total, lb) {
+function openDone(done, total, lb, ses) {
   const st = streak();
   const durSec = Math.max(0, Math.floor(((state.sessElapsed || 0) + (state.sessStart ? Date.now() - state.sessStart : 0)) / 1000));
   const durMin = Math.max(1, Math.round(durSec / 60));
@@ -16624,6 +16806,7 @@ function openDone(done, total, lb) {
       <div class="ring-card"><b>${lb || (total ? Math.round((done/total)*100) : 0)}${lb ? " lb" : "%"}</b><span>${lb ? "movidas" : "hoy"}</span></div>
     </div>
     <p class="muted">Racha ${st}. Mañana otro día. Hoy ya está hecho.</p>
+    ${sessionProofHtml(ses)}
     ${floorLine()}
     <p class="tagline" style="margin-top:12px">¿Cómo se sintió?</p>
     <div class="filters" id="feelRow">
@@ -16830,12 +17013,65 @@ function termsView() {
     <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
   </section>`;
 }
+function planProgressModel() {
+  const profile = state.profile || {};
+  const plan = profile.plan || state.pendingPlan || "";
+  const legal = !!(waiverSigned() && healthComplete() && (!healthFlagged() || (state.health && state.health.clearance)) && contractSigned(plan || "NiuBision Estándar"));
+  const name = cleanName(profile.name || "");
+  const id = profile.clientId || (state._pendingLead && state._pendingLead.id) || "";
+  const pays = (state.payments || []).filter((p) => {
+    if (!p) return false;
+    if (id && p.clientId === id) return true;
+    if (name && cleanName(p.name || "") === name) return true;
+    return false;
+  });
+  const payStarted = pays.some((p) => p.status && p.status !== "renovar");
+  const seat = (typeof selfClient === "function") ? selfClient() : null;
+  const codeReady = clientHasValidCode(seat) || (/^\d{6}$/.test(String(profile.accessCode || "")) && !isRevoked(profile.accessCode, profile.clientId));
+  const inHoy = !!(profile.unlocked && codeReady && legal);
+  const steps = [
+    { id: "pago", label: "Pago", done: !!(payStarted || codeReady || inHoy) },
+    { id: "relevo", label: "Relevo", done: !!(legal || inHoy) },
+    { id: "codigo", label: "Código", done: !!(inHoy || (codeReady && legal)) },
+    { id: "hoy", label: "Hoy", done: !!inHoy }
+  ];
+  const current = steps.find((step) => !step.done) || steps[steps.length - 1];
+  return { steps, current };
+}
+function planProgressHtml() {
+  const model = planProgressModel();
+  const bits = model.steps.map((step) => {
+    const cls = step.done ? "done" : (step.id === model.current.id ? "on" : "");
+    return `<span class="plan-step ${cls}"${step.id === model.current.id ? ' aria-current="step"' : ""}>${escapeHtml(step.label)}</span>`;
+  }).join('<span class="plan-arrow" aria-hidden="true">→</span>');
+  const hint = {
+    pago: "Falta el pago. El relevo, el PAR-Q y el contrato van antes de aceptar el código.",
+    relevo: "Falta el relevo, el cuestionario y el contrato. El código no se acepta sin eso.",
+    codigo: "Falta el código de 6 dígitos. Llega cuando Miguel confirma el pago. Péguelo en Entrar.",
+    hoy: "Listo. El trabajo está en Hoy."
+  }[model.current.id] || "";
+  const cta = model.current.id === "hoy"
+    ? `<button class="btn primary" type="button" data-view="work">Ir a Hoy</button>`
+    : model.current.id === "codigo"
+      ? `<button class="btn primary" type="button" id="progressCode">Pegar el código</button>`
+      : model.current.id === "relevo"
+        ? `<button class="btn primary" type="button" id="progressLegal">Seguir con el relevo</button>`
+        : "";
+  return `<div class="plan-progress" id="planProgress">
+    <p class="tagline">Su camino</p>
+    <div class="plan-line" aria-label="Pago, relevo, código, Hoy">${bits}</div>
+    <p class="plan-now">Paso actual: ${escapeHtml(model.current.label)}</p>
+    <p class="muted">${escapeHtml(hint)}</p>
+    ${cta}
+  </div>`;
+}
 function pricesView() {
   const chip = state.role === "client" ? `<p>${packChip(selfClient())}</p>` : "";
   return `<section class="screen">
     ${guestTourHtml()}
     <p class="tagline">Servicios</p>
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
+    ${planProgressHtml()}
     ${chip}
     <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD. Precio final, sin IVU. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
     <div class="card">
@@ -16872,7 +17108,7 @@ function pricesView() {
         ${p.includes ? `<p class="muted"><strong>Incluye.</strong> ${p.includes}</p>` : ""}
         ${p.not ? `<p class="warn" style="font-size:13px;margin-top:6px"><strong>No incluye.</strong> ${p.not}</p>` : ""}
         <ul class="include">${p.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
-        ${state.role === "guest" ? `<button class="btn primary" data-need="${escAttr(p.name)}">Empezar este plan</button>` : `<button class="btn primary" data-want="${p.name} ${p.price} USD">Cuestionario y contrato</button>`}
+        ${state.role === "guest" ? `<button class="btn ghost" data-need="${escAttr(p.name)}">Elegir</button>` : `<button class="btn ghost" data-want="${p.name} ${p.price} USD">Elegir</button>`}
       </article>`).join("")}
     <div class="card">
       <h3>Preguntas que suelen quedar</h3>
@@ -17894,6 +18130,50 @@ function landWithCode(a) {
   }
   setTimeout(() => showDay1IfNeeded(), 350);
 }
+function accessState() {
+  const profile = state.profile || {};
+  const name = cleanName(profile.name || "");
+  const phone = phoneNorm(profile.phone || "");
+  const lead = state._pendingLead
+    || (state.clients || []).find((c) => c && ((name && cleanName(c.name) === name) || (phone.length >= 10 && phoneNorm(c.phone) === phone)))
+    || null;
+  const pays = (state.payments || []).filter((p) => {
+    if (!p) return false;
+    if (lead && lead.id && p.clientId === lead.id) return true;
+    if (name && cleanName(p.name || "") === name) return true;
+    return false;
+  });
+  const codeOnFile = !!((lead && clientHasValidCode(lead)) || (/^\d{6}$/.test(String(profile.accessCode || "")) && !isRevoked(profile.accessCode, profile.clientId)));
+  if (codeOnFile) {
+    return {
+      id: "codigo",
+      title: "Código enviado",
+      body: "Péguelo abajo. El relevo, el PAR-Q y el contrato van antes de aceptarlo. Si lo perdió, pídale a Miguel que lo reenvíe por WhatsApp. No hay cuenta que recuperar."
+    };
+  }
+  const payOpen = pays.some((p) => p.status && p.status !== "recibido" && p.status !== "renovar");
+  const waitingPay = !!(lead && (lead.unpaid || !clientHasValidCode(lead)));
+  if (payOpen || waitingPay) {
+    return {
+      id: "pago",
+      title: "Pago pendiente",
+      body: "Sus datos están. El código de 6 dígitos sale cuando Miguel confirme PayPal o ATH Móvil. No se acepta antes del relevo, el PAR-Q y el contrato."
+    };
+  }
+  return {
+    id: "recuperar",
+    title: "Cómo recuperar el código",
+    body: "No hay cuenta ni clave de correo. El código llega por WhatsApp cuando el pago está confirmado. Si ya se lo enviaron, pídaselo otra vez a Miguel y péguelo aquí. Si aún no empieza, elija un plan: primero las firmas, después el pago."
+  };
+}
+function accessStateHtml() {
+  const row = accessState();
+  return `<div class="access-state" data-access="${escAttr(row.id)}">
+    <p class="tagline">Dónde está</p>
+    <h3>${escapeHtml(row.title)}</h3>
+    <p class="muted">${escapeHtml(row.body)}</p>
+  </div>`;
+}
 function openCodeEntry() {
   closeModals();
   const modal = document.createElement("div");
@@ -17902,7 +18182,8 @@ function openCodeEntry() {
     <div class="handle"></div>
     <p class="tagline">Cliente</p>
     <h2>Tengo un código</h2>
-    <p class="muted">Son 6 dígitos. Se lo envían por WhatsApp cuando el servicio está pagado.</p>
+    ${accessStateHtml()}
+    <p class="muted">Son 6 dígitos. Se lo envían por WhatsApp cuando el servicio está pagado. Las firmas van antes de aceptarlo.</p>
     <input class="field" id="codeIn" inputmode="numeric" maxlength="24" placeholder="000000" autocomplete="one-time-code" value="${escAttr(String(state._pendingCode || "").replace(/\D/g, "").slice(0, 6))}">
     <p class="warn" id="codeErr" hidden style="margin:8px 0 0"></p>
     <button class="btn primary" id="useCode">Entrar con este código</button>
@@ -18365,6 +18646,10 @@ function bindChrome() {
   $$("[data-ex]").forEach((c) => c.onclick = () => openExercise(c.dataset.ex));
   $$("[data-want]").forEach((b) => b.onclick = () => startOnboard(b.dataset.want));
   $$("[data-need]").forEach((b) => b.onclick = () => openNeedCode(b.dataset.need));
+  const progressCode = $("#progressCode");
+  if (progressCode) progressCode.onclick = () => openCodeEntry();
+  const progressLegal = $("#progressLegal");
+  if (progressLegal) progressLegal.onclick = () => continueJoin((state.profile && state.profile.plan) || state.pendingPlan || "NiuBision Estándar");
   $$("[data-pick]").forEach((b) => b.onclick = () => {
     state.settings.clientId = b.dataset.pick;
     persist();
@@ -19212,7 +19497,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v9", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v10", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

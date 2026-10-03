@@ -1960,3 +1960,59 @@ input[type=file].hidden {
   max-width: 26ch;
   text-align: center;
 }
+
+/* hybrid-v10 — access, session proof, pedir, compact programs, plan line */
+.access-state {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg-3, rgba(243,237,227,.04));
+  border: 1px solid var(--line);
+}
+.access-state h3 {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 22px;
+  margin: 2px 0 6px;
+}
+.session-proof { margin: 12px 0; }
+.session-proof .ok { color: var(--mint); }
+.load-history { margin: 8px 0 10px; }
+.plan-progress {
+  margin: 0 0 16px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(243,237,227,.04);
+}
+.plan-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.plan-step {
+  font-size: 13px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--mute);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.plan-step.on {
+  color: var(--ink);
+  background: var(--sun);
+  border-color: var(--sun);
+  font-weight: 700;
+}
+.plan-step.done { color: var(--cream); border-color: rgba(243,237,227,.35); }
+.plan-arrow { color: var(--mute); }
+.plan-now { margin: 6px 0 4px; font-weight: 650; }
+.para-ti { border-color: var(--gold-dim); margin-bottom: 12px; }
+.para-ti h3 { font-family: var(--display); font-weight: 500; font-size: 22px; margin: 2px 0 6px; }
+.prog-compact { align-items: center; }
+.prog-compact.is-active { border-color: var(--gold-dim); }
+.prog-compact-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.pedir-status-list { margin: 0 0 12px; }
