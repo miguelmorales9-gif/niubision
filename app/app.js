@@ -15106,7 +15106,7 @@ function contractSigned(planLabel) {
   return (state.contracts || []).some((k) => {
     if (!k) return false;
     const who = (id && k.clientId && k.clientId === id) || (name && cleanName(k.name) === name);
-    if (!who) return false;
+    if (!who || !k.date || !k.signature) return false;
     if (!plan) return true;
     const kp = String(k.plan || "");
     return !kp || kp.indexOf(plan) >= 0 || plan.indexOf(kp) >= 0;
@@ -17016,7 +17016,11 @@ function termsView() {
 function planProgressModel() {
   const profile = state.profile || {};
   const plan = profile.plan || state.pendingPlan || "";
-  const legal = !!(waiverSigned() && healthComplete() && (!healthFlagged() || (state.health && state.health.clearance)) && contractSigned(plan || "NiuBision Estándar"));
+  // The PAR-Q and medical clearance stay in the legal gate with the waiver.
+  // Contract is tracked separately so the line can show an unsigned contract.
+  const relevo = !!(waiverSigned() && healthComplete() && (!healthFlagged() || (state.health && state.health.clearance)));
+  const contrato = contractSigned(plan || "NiuBision Estándar");
+  const legal = !!(relevo && contrato);
   const name = cleanName(profile.name || "");
   const id = profile.clientId || (state._pendingLead && state._pendingLead.id) || "";
   const pays = (state.payments || []).filter((p) => {
@@ -17031,8 +17035,9 @@ function planProgressModel() {
   const inHoy = !!(profile.unlocked && codeReady && legal);
   const steps = [
     { id: "pago", label: "Pago", done: !!(payStarted || codeReady || inHoy) },
-    { id: "relevo", label: "Relevo", done: !!(legal || inHoy) },
-    { id: "codigo", label: "Código", done: !!(inHoy || (codeReady && legal)) },
+    { id: "relevo", label: "Relevo", done: relevo },
+    { id: "contrato", label: "Contrato", done: contrato },
+    { id: "codigo", label: "Código", done: !!(codeReady && legal) },
     { id: "hoy", label: "Hoy", done: !!inHoy }
   ];
   const current = steps.find((step) => !step.done) || steps[steps.length - 1];
@@ -17046,7 +17051,8 @@ function planProgressHtml() {
   }).join('<span class="plan-arrow" aria-hidden="true">→</span>');
   const hint = {
     pago: "Falta el pago. El relevo, el PAR-Q y el contrato van antes de aceptar el código.",
-    relevo: "Falta el relevo, el cuestionario y el contrato. El código no se acepta sin eso.",
+    relevo: "Falta el relevo o el PAR-Q. El contrato y el código esperan a que complete esa puerta legal.",
+    contrato: "Falta firmar el contrato. El código no se acepta sin el relevo, el PAR-Q y el contrato.",
     codigo: "Falta el código de 6 dígitos. Llega cuando Miguel confirma el pago. Péguelo en Entrar.",
     hoy: "Listo. El trabajo está en Hoy."
   }[model.current.id] || "";
@@ -17054,12 +17060,12 @@ function planProgressHtml() {
     ? `<button class="btn primary" type="button" data-view="work">Ir a Hoy</button>`
     : model.current.id === "codigo"
       ? `<button class="btn primary" type="button" id="progressCode">Pegar el código</button>`
-      : model.current.id === "relevo"
-        ? `<button class="btn primary" type="button" id="progressLegal">Seguir con el relevo</button>`
+      : (model.current.id === "relevo" || model.current.id === "contrato")
+        ? `<button class="btn primary" type="button" id="progressLegal">${model.current.id === "contrato" ? "Firmar el contrato" : "Completar relevo y PAR-Q"}</button>`
         : "";
   return `<div class="plan-progress" id="planProgress">
     <p class="tagline">Su camino</p>
-    <div class="plan-line" aria-label="Pago, relevo, código, Hoy">${bits}</div>
+    <div class="plan-line" aria-label="Pago, relevo, contrato, código, Hoy">${bits}</div>
     <p class="plan-now">Paso actual: ${escapeHtml(model.current.label)}</p>
     <p class="muted">${escapeHtml(hint)}</p>
     ${cta}
