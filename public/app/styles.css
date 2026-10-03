@@ -2016,3 +2016,52 @@ input[type=file].hidden {
 .prog-compact.is-active { border-color: var(--gold-dim); }
 .prog-compact-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .pedir-status-list { margin: 0 0 12px; }
+
+/* Shutter preview — iris opens off the hold logo. Cover is already behind. */
+.nb-shutter {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: auto;
+  background: transparent;
+}
+.nb-blade {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+  width: 170vmax;
+  height: 170vmax;
+  background:
+    linear-gradient(100deg, rgba(255,200,120,.95) 0 3px, rgba(255,138,31,.5) 3px 11px, #121018 26px);
+  transform-origin: 0 0;
+  clip-path: polygon(0 0, 108% -14%, 78% 102%);
+  transform: rotate(calc(var(--i) * 45deg));
+  transition: transform .84s cubic-bezier(.62,.02,.18,1);
+  will-change: transform;
+}
+.nb-shutter.open .nb-blade {
+  transform: rotate(calc(var(--i) * 45deg + 72deg)) translate(80vmax, -30vmax);
+}
+.nb-shutter-logo {
+  position: fixed;
+  z-index: 2;
+  margin: 0;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  animation: none !important;
+  filter: drop-shadow(0 0 22px rgba(255,138,31,.45));
+}
+.nb-shutter-ring {
+  position: fixed;
+  z-index: 3;
+  border-radius: 50%;
+  border: 4px solid #FF8A1F;
+  box-shadow: 0 0 16px rgba(255,138,31,.75);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-shutter { display: none !important; }
+}

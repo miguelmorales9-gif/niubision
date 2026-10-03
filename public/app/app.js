@@ -14732,7 +14732,6 @@ function renderGate() {
     </section>`;
     bindSplash();
     guardLogoMedia($("#holdLogo"));
-    warmupIntro();
     return;
   }
   const previewHint = isUiPreviewHost()
@@ -14842,6 +14841,82 @@ function playIntro() {
     setTimeout(finish, 7000);
   });
 }
+
+function playShutter() {
+  const splash = $("#splash");
+  const img = splash && splash.querySelector(".splash-logo");
+  const from = img ? img.getBoundingClientRect() : null;
+  const ring = splash && splash.querySelector(".ring-hold");
+  const ringBox = ring ? ring.getBoundingClientRect() : null;
+  const ox = from ? from.left + from.width / 2 : window.innerWidth / 2;
+  const oy = from ? from.top + from.height / 2 : window.innerHeight * 0.42;
+  const host = document.createElement("div");
+  host.id = "nbShutter";
+  host.className = "nb-shutter";
+  host.setAttribute("aria-hidden", "true");
+  host.style.setProperty("--ox", ox + "px");
+  host.style.setProperty("--oy", oy + "px");
+  let blades = "";
+  for (let i = 0; i < 8; i++) blades += `<span class="nb-blade" style="--i:${i}"></span>`;
+  host.innerHTML = blades;
+  if (img && from && from.width > 0) {
+    const clone = img.cloneNode(true);
+    clone.className = "nb-shutter-logo";
+    clone.removeAttribute("id");
+    clone.alt = "";
+    clone.style.left = from.left + "px";
+    clone.style.top = from.top + "px";
+    clone.style.width = from.width + "px";
+    clone.style.height = from.height + "px";
+    host.appendChild(clone);
+  }
+  if (ringBox && ringBox.width > 0) {
+    const halo = document.createElement("div");
+    halo.className = "nb-shutter-ring";
+    halo.style.left = (ringBox.left + ringBox.width / 2) + "px";
+    halo.style.top = (ringBox.top + ringBox.height / 2) + "px";
+    halo.style.width = ringBox.width + "px";
+    halo.style.height = ringBox.height + "px";
+    host.appendChild(halo);
+  }
+  document.body.appendChild(host);
+  state.splash = false;
+  store.set("nb_seen_cover", true);
+  store.set("nb_seen_intro", true);
+  render();
+  const coverImg = document.querySelector(".cover-hybrid .splash-logo");
+  const to = coverImg ? coverImg.getBoundingClientRect() : null;
+  if (coverImg) coverImg.style.visibility = "hidden";
+  const clone = host.querySelector(".nb-shutter-logo");
+  const halo = host.querySelector(".nb-shutter-ring");
+  const ms = 840;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      host.classList.add("open");
+      if (clone && from && to && to.width > 0) {
+        clone.animate([
+          { left: from.left + "px", top: from.top + "px", width: from.width + "px", height: from.height + "px", opacity: 1 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1, offset: 0.42 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1, offset: 0.86 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 0 }
+        ], { duration: ms, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" });
+      } else if (clone) {
+        clone.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, fill: "forwards" });
+      }
+      if (halo) {
+        halo.animate([
+          { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
+          { transform: "translate(-50%, -50%) scale(2.5)", opacity: 0 }
+        ], { duration: ms, easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" });
+      }
+    });
+  });
+  setTimeout(() => {
+    if (coverImg) coverImg.style.visibility = "";
+    try { host.remove(); } catch (e) {}
+  }, ms + 40);
+}
+
 function bindSplash() {
   const wrap = $("#holdLogo");
   const ring = $("#holdRing") || $(".ring-progress") || $(".ring circle");
@@ -14862,16 +14937,17 @@ function bindSplash() {
   const go = () => {
     if (gone) return;
     gone = true;
-    const splash = $("#splash");
-    if (splash) splash.classList.add("out");
-    playIntro().then(() => {
+    window.removeEventListener("pointerup", up);
+    wrap.removeEventListener("pointerdown", down);
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
       state.splash = false;
       store.set("nb_seen_cover", true);
       store.set("nb_seen_intro", true);
-      window.removeEventListener("pointerup", up);
-      wrap.removeEventListener("pointerdown", down);
       render();
-    });
+      return;
+    }
+    playShutter();
   };
   const step = (on) => {
     ticking = on;
@@ -19422,7 +19498,6 @@ async function boot() {
     if (state.pinHash || (state.pin && String(state.pin).length >= 4)) store.set("nb_pin_server", 1);
     store.set("nb_pin_server_seen", 1);
   }
-  if (state.splash) warmupIntro();
   pinLocked();
   if (store.get("nb_pin_init_9798") && !store.get("nb_pin_secret_v38")) {
     /* Drop device PIN seeded from the old shipped default; coach re-enters the cloud PIN once. */
@@ -19503,7 +19578,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v10", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v1", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
