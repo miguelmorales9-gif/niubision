@@ -13669,16 +13669,19 @@ function hoyRingHtml(pct, doneSets, totalSets) {
 function dayWhoKey() {
   return state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
 }
+function manualDayPick(rt) {
+  if (!rt || !rt.id) return null;
+  const jump = store.get("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
+  // Manual pick today only. A jump without pick (old redeem wrote i:0) must not
+  // pull Friday back to Lunes. A cleared pick is null and falls through to the calendar.
+  if (jump && jump.pick && jump.date === todayKey() && jump.i != null) return jump;
+  return null;
+}
 function dayIndex(rt) {
   if (!rt || !rt.id) return 0;
   const n = (rt.daysPlan && rt.daysPlan.length) || 1;
-  const who = dayWhoKey();
-  const jump = store.get("nb_day_jump_" + who + "_" + rt.id, null);
-  // Manual pick today only. A jump without pick (old redeem wrote i:0) must not
-  // pull Friday back to Lunes.
-  if (jump && jump.pick && jump.date === todayKey() && jump.i != null) {
-    return ((Number(jump.i) % n) + n) % n;
-  }
+  const jump = manualDayPick(rt);
+  if (jump) return ((Number(jump.i) % n) + n) % n;
   const slot = slotForCalendarDay(n, mondayWeekIndex());
   if (slot == null) return -1;
   return slot;
@@ -13690,10 +13693,30 @@ function setDayIndex(rt, n) {
   store.set("nb_day_" + who + "_" + rt.id, i);
   store.set("nb_day_jump_" + who + "_" + rt.id, { date: todayKey(), i: i, pick: 1 });
 }
+function clearDayIndex(rt) {
+  if (!rt || !rt.id) return;
+  store.set("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
+}
+function dayJumpHtml(rt) {
+  const n = (rt && rt.daysPlan && rt.daysPlan.length) || 0;
+  if (!n) return "";
+  const di = dayIndex(rt);
+  const picked = !!manualDayPick(rt);
+  const todaySlot = slotForCalendarDay(n, mondayWeekIndex());
+  const chips = rt.daysPlan.map((d, i) => {
+    const on = picked ? i === di : (todaySlot != null && i === todaySlot);
+    return `<button type="button" data-jumpday="${i}" class="${on ? "on" : ""}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(programWeekdayName(i, n))}</button>`;
+  }).join("");
+  // Rest days are not in the training strip. Hoy clears the manual pick.
+  const hoyOn = !picked && todaySlot == null;
+  const hoy = todaySlot == null
+    ? `<button type="button" data-jumpday="hoy" class="${hoyOn ? "on" : ""}" aria-pressed="${hoyOn ? "true" : "false"}">Hoy</button>`
+    : "";
+  return `<div class="day-jump">${hoy}${chips}</div>`;
+}
 function isProgramRestDay(rt) {
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) return false;
-  const jump = store.get("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
-  if (jump && jump.pick && jump.date === todayKey() && jump.i != null) return false;
+  if (manualDayPick(rt)) return false;
   return slotForCalendarDay(rt.daysPlan.length, mondayWeekIndex()) == null;
 }
 function nextTrainingWeekdayName(rt) {
@@ -16094,10 +16117,12 @@ function dayPreviewHtml(day) {
 }
 function weekPeekHtml(rt, di) {
   if (!rt || !rt.daysPlan) return "";
+  const nPeek = rt.daysPlan.length;
+  const todaySlot = slotForCalendarDay(nPeek, mondayWeekIndex());
   return `<details class="more-fold week-peek">
-    <summary>Ver los ${rt.daysPlan.length} días de esta rutina</summary>
+    <summary>Ver los ${nPeek} días de esta rutina</summary>
     <p class="muted" style="margin:8px 0">${escapeHtml(rt.name)} · ${escapeHtml(rt.goal || "")} · Día 1 = Lunes, el resto sigue el calendario</p>
-    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${di != null && i === di ? "Hoy · " : ""}${escapeHtml(programDayLabel(i, d, rt.daysPlan.length))}</h3>
+    ${rt.daysPlan.map((d, i) => `<div class="card"><h3>${todaySlot != null && i === todaySlot ? "Hoy · " : ""}${escapeHtml(programDayLabel(i, d, nPeek))}</h3>
       ${(d.items || []).map((it) => `<div class="list-row"><span>${escapeHtml(displayName(it))}</span><span class="muted">${it.sets} × ${escapeHtml(String(it.reps || ""))}</span></div>`).join("")}
     </div>`).join("")}
     <button type="button" class="btn ghost" id="seeWeekRt">Abrir ficha de la rutina</button>
@@ -16267,8 +16292,6 @@ function workView() {
   }
   if (isProgramRestDay(rt)) {
     const dayBig = calendarWeekdayName();
-    const n = rt.daysPlan.length;
-    const jumps = rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}">${escapeHtml(programWeekdayName(i, n))}</button>`).join("");
     const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
     const isClient = state.role === "client";
     const nextTrain = nextTrainingWeekdayName(rt);
@@ -16281,7 +16304,7 @@ function workView() {
     const fold = `<details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${isClient ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-        <div class="day-jump">${jumps}</div>
+        ${dayJumpHtml(rt)}
       </details>`;
     return `<section class="${hoySectionCls}">
       ${syncBannerHtml()}
@@ -16381,7 +16404,7 @@ function workView() {
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${workClientAskHtml()}
-        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i, rt.daysPlan.length))}</button>`).join("")}</div>
+        ${dayJumpHtml(rt)}
       </details>` : `
       ${restNote}
       ${prioBlock}
@@ -16400,7 +16423,7 @@ function workView() {
       <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
         <summary>Cambiar día o rutina</summary>
         ${workPickerHtml(band, list, rt.id)}
-        <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i, rt.daysPlan.length))}</button>`).join("")}</div>
+        ${dayJumpHtml(rt)}
       </details>`;
     return `<section class="${hoySectionCls}">
       ${syncBannerHtml()}
@@ -16456,7 +16479,7 @@ function workView() {
     <details class="more-fold" ${store.get("nb_pick_open") ? "open" : ""}>
       <summary>Cambiar día o rutina</summary>
       ${state.role === "client" ? workClientAskHtml() : workPickerHtml(band, list, rt.id)}
-      <div class="day-jump">${rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}" class="${i===di?"on":""}">${escapeHtml(programWeekdayName(i, rt.daysPlan.length))}</button>`).join("")}</div>
+      ${dayJumpHtml(rt)}
     </details>
     ${ses.items.map((it, i) => {
       const ex = findEx(it.exId);
@@ -16795,7 +16818,12 @@ function bindWork() {
   });
   $$("[data-jumpday]").forEach((b) => b.onclick = () => {
     saveFromDom();
-    setDayIndex(rt, Number(b.dataset.jumpday));
+    const raw = b.dataset.jumpday;
+    const current = dayIndex(rt);
+    const samePick = raw !== "hoy" && Number(raw) === current && b.classList.contains("on");
+    // Tap the selected day again, or Hoy, to drop the manual pick and show the real today.
+    if (raw === "hoy" || samePick) clearDayIndex(rt);
+    else setDayIndex(rt, Number(raw));
     store.set("nb_open_ex", 0);
     store.set("nb_live", 0);
     state.sessStart = null;
@@ -19754,7 +19782,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v13", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v14", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
