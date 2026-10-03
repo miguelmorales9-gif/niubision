@@ -15066,29 +15066,57 @@ function playRing() {
   const to = coverImg ? coverImg.getBoundingClientRect() : null;
   const ms = 980;
   const ease = "cubic-bezier(0.65, 0.05, 0.18, 1)";
+  let holeAnim = null;
+  let orbAnim = null;
+  let settled = false;
+  /* Tear down only after the ring has faded. Removing nb-held used to restart
+     .screen { animation: rise }, which snaps the cover from opacity 0. */
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    const landed = coverImg ? coverImg.getBoundingClientRect() : to;
+    if (orb && landed && landed.width > 0) {
+      orb.style.left = landed.left + "px";
+      orb.style.top = landed.top + "px";
+      orb.style.width = landed.width + "px";
+      orb.style.height = landed.height + "px";
+      orb.style.opacity = "1";
+      orb.style.filter = "drop-shadow(0 0 22px rgba(255,138,31,.18))";
+    }
+    hole.style.opacity = "0";
+    hole.style.transform = "translate(-50%, -50%) scale(" + grow + ")";
+    hole.style.willChange = "auto";
+    try { if (holeAnim) holeAnim.cancel(); } catch (e) {}
+    try { if (orbAnim) orbAnim.cancel(); } catch (e2) {}
+    if (coverImg) coverImg.style.visibility = "";
+    if (cover) cover.style.animation = "none";
+    requestAnimationFrame(function () {
+      if (orb) { try { orb.remove(); } catch (e3) {} }
+      try { host.remove(); } catch (e4) {}
+      if (cover) cover.classList.remove("nb-held");
+    });
+  };
   requestAnimationFrame(function () {
     requestAnimationFrame(function () {
       host.classList.add("open");
-      hole.animate([
+      holeAnim = hole.animate([
         { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
         { transform: "translate(-50%, -50%) scale(" + grow + ")", opacity: 1, offset: 0.9 },
         { transform: "translate(-50%, -50%) scale(" + grow + ")", opacity: 0 }
       ], { duration: ms, easing: ease, fill: "forwards" });
       if (orb && from && to && to.width > 0) {
-        orb.animate([
+        orbAnim = orb.animate([
           { left: from.left + "px", top: from.top + "px", width: from.width + "px", height: from.height + "px", opacity: 1 },
           { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1, offset: 0.42 },
           { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1 }
         ], { duration: ms, easing: ease, fill: "forwards" });
       }
+      const pending = [holeAnim.finished];
+      if (orbAnim) pending.push(orbAnim.finished);
+      Promise.all(pending).then(settle).catch(settle);
+      setTimeout(settle, ms + 80);
     });
   });
-  setTimeout(function () {
-    if (coverImg) coverImg.style.visibility = "";
-    if (orb) { try { orb.remove(); } catch (e) {} }
-    try { host.remove(); } catch (e2) {}
-    if (cover) cover.classList.remove("nb-held");
-  }, ms + 30);
 }
 
 function bindSplash() {
@@ -19782,7 +19810,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v14", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v15", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
