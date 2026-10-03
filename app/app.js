@@ -9391,7 +9391,7 @@ const state = {
   filter: "All",
   query: "",
   clients: store.get("nb_clients", []),
-  profile: store.get("nb_profile", { name: "", plan: "Estándar", routine: "full-inicio", unlocked: false }),
+  profile: store.get("nb_profile", { name: "", plan: "Estándar", routine: "", unlocked: false }),
   weighins: store.get("nb_weighins", []),
   measures: store.get("nb_measures", []),
   photos: store.get("nb_photos", []),
@@ -9511,26 +9511,26 @@ const PLANS = [
       "Precio final."
     ] },
   { id: "estandar12", eyebrow: "Compromiso · ahorro", name: "NiuBision Estándar · 12 semanas", price: "349", unit: "pago único", featured: false,
-    simple: "Tres meses de Estándar pagados de una vez. 349 USD en total: cerca de 97 USD al mes (ahorro de ~10%).",
+    simple: "Tres meses de Estándar pagados de una vez. 349 USD en total: cerca de 116 USD al mes (ahorro de ~8%).",
     forWho: "Quien ya decidió 12 semanas y quiere pagar menos que mes a mes (127 × 3 = 381).",
     includes: "El mismo servicio que Estándar durante 12 semanas corridas.",
     not: "No se prorratea si abandona a mitad. No incluye llamadas Premium.",
     detail: [
       "Mismo contenido que Estándar durante 12 semanas.",
       "Un solo pago de 349 USD en vez de 381 USD (3 meses a 127).",
-      "Ahorro de cerca del 10 por ciento.",
+      "Ahorro de cerca del 8 por ciento.",
       "El período empieza el día del pago.",
       "Precio final."
     ] },
   { id: "premium12", eyebrow: "Mejor valor de llamada", name: "NiuBision Premium · 12 semanas", price: "529", unit: "pago único", featured: false,
-    simple: "Tres meses de Premium pagados de una vez. 529 USD en total: cerca de 147 USD al mes (ahorro de ~16%).",
+    simple: "Tres meses de Premium pagados de una vez. 529 USD en total: cerca de 176 USD al mes (ahorro de ~10%).",
     forWho: "Quien va a usar la videollamada semanal durante 12 semanas.",
     includes: "El mismo servicio que Premium, incluidas las llamadas, durante 12 semanas.",
     not: "No se prorratea. Sigue el cupo de 8.",
     detail: [
       "Mismo contenido que Premium durante 12 semanas.",
       "Un solo pago de 529 USD en vez de 591 USD (3 meses a 197).",
-      "Ahorro de cerca del 16 por ciento.",
+      "Ahorro de cerca del 10 por ciento.",
       "12 videollamadas semanales en ese bloque; se agenda cada una.",
       "Precio final."
     ] },
@@ -9708,6 +9708,7 @@ function slimClient(c) {
     startDate: c.startDate, endDate: c.endDate,
     sessionsTotal: c.sessionsTotal, sessionsUsed: c.sessionsUsed,
     lastSession: c.lastSession, lastSeen: c.lastSeen, status: c.status,
+    cue: String(c.cue || "").slice(0, 180),
     report: c.report ? {
       updatedAt: c.report.updatedAt,
       lastSession: c.report.lastSession,
@@ -10681,7 +10682,7 @@ function applyClientAssignment(d) {
     local.endDate = me.endDate || local.endDate;
     local.startDate = me.startDate || local.startDate;
     local.unpaid = !!me.unpaid;
-    if (me.cue) local.cue = me.cue;
+    if (typeof me.cue === "string") local.cue = me.cue;
     local.sessionsTotal = me.sessionsTotal || local.sessionsTotal;
     local.sessionsUsed = me.sessionsUsed || local.sessionsUsed;
     if (me.health) local.health = me.health;
@@ -10992,9 +10993,13 @@ function maybeClientPull() {
       render();
       return;
     }
-    const before = (state.profile.routine || "") + "|" + (state.profile.plan || "");
+    const cueNow = () => {
+      const who = selfClient();
+      return (who && who.cue) || "";
+    };
+    const before = (state.profile.routine || "") + "|" + (state.profile.plan || "") + "|" + cueNow();
     applyClientAssignment({ clients: [hit] });
-    const after = (state.profile.routine || "") + "|" + (state.profile.plan || "");
+    const after = (state.profile.routine || "") + "|" + (state.profile.plan || "") + "|" + cueNow();
     if (after !== before) render();
   }).catch(() => {});
 }
@@ -11238,7 +11243,7 @@ async function cloudRedeem(code) {
   const hit = await lookupAccess(code);
   if (!hit) return { ok: false };
   upsertClientFromAssign({
-    name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
+    name: hit.name, plan: hit.plan, routine: hit.routine || "",
     accessCode: String(hit.accessCode || code).replace(/\D/g, "").slice(0, 6),
     clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone
   });
@@ -11272,10 +11277,12 @@ async function lookupAccess(code) {
       try {
         const res = await cloudGet(bases[i] + "/redeem?code=" + encodeURIComponent(digits), { headers: { Accept: "application/json" } });
         const data = await res.json().catch(() => ({}));
-        if (res.status === 404 || /anulado/i.test(String(data.error || ""))) {
+        if (/anulado/i.test(String(data.error || ""))) {
           buryCode(digits, "");
           return null;
         }
+        // One host 404 is not proof the code is dead. Try the next base.
+        if (res.status === 404) continue;
         if (res.ok && data.client) {
           answered = true;
           if (data.client.unpaid) return null;
@@ -11461,6 +11468,8 @@ function floorStats() {
   };
 }
 function floorLine() {
+  if (state.role !== "coach") return "";
+  if (inboxBucketCount() > 0) return "";
   const f = floorStats();
   if (!f.active) return "";
   return `<p class="floor-line">Hoy el piso · ${f.today} de ${f.active} cerraron el día</p>`;
@@ -11538,6 +11547,16 @@ function planMeta(plan) {
   if (/ia/i.test(p) && /rutina/i.test(p)) return { weeks: 0, sessions: 0, kind: "addon" };
   if (/sesi[oó]n|presencial|domicilio/i.test(p)) return { weeks: 2, sessions: 1, kind: "session" };
   return { weeks: 4, sessions: 0, kind: "month" };
+}
+function isBasePlan(plan) {
+  const p = String(plan || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/premium|estandar|evaluaci|presencial|sesion|pack/.test(p)) return false;
+  return /\bbase\b/.test(p);
+}
+function selfPlanIsBase() {
+  const who = typeof selfClient === "function" ? selfClient() : null;
+  const plan = (who && who.plan) || (state.profile && state.profile.plan) || "";
+  return isBasePlan(plan);
 }
 function daysLeft(c) {
   if (!c || !c.endDate) return null;
@@ -12514,18 +12533,105 @@ function programasView() {
         ${kinds.map(([id,l]) => `<option value="${escAttr(id)}"${(state.progKind||"")===id?" selected":""}>${escapeHtml(l)}</option>`).join("")}
       </select>
     </div>
-    ${catalogBody}
+    <div id="progResults">${catalogBody}</div>
   </section>`;
+}
+function programasResultsInner() {
+  const list = programasFiltered();
+  const hasFilter = !!(state.progBand || state.progDays || state.progKind || (state.progQ || "").trim());
+  const isClient = state.role === "client";
+  const activeId = activeRoutineId();
+  const total = allRoutines().length;
+  const order = ["cuerpo", "fuerza", "sup-inf", "split", "gluteos", "casa"];
+  const catalogList = isClient && activeId ? list.filter((r) => r.id !== activeId) : list;
+  const showCatalog = !isClient || hasFilter || state.progCatalogOpen;
+  let blocks = "";
+  if (showCatalog) {
+    const limitedShelves = {};
+    catalogList.forEach((r) => {
+      const k = kindOf(r);
+      (limitedShelves[k] = limitedShelves[k] || []).push(r);
+    });
+    blocks = order.filter((k) => limitedShelves[k] && limitedShelves[k].length).map((k) => {
+      const rows = limitedShelves[k];
+      const compact = state.progCompact !== false;
+      const cap = (!compact && isClient && !hasFilter) ? 3 : rows.length;
+      const shown = rows.slice(0, cap);
+      const more = rows.length > cap
+        ? `<p class="muted prog-shelf-more">+${rows.length - cap} más — busque o filtre por días/tipo</p>`
+        : "";
+      const cardFn = (state.progCompact === false) ? programaCardHtml : programaCompactHtml;
+      return `<p class="tagline prog-shelf-label">${kindLabel(k)}</p>${shown.map(cardFn).join("")}${more}`;
+    }).join("");
+  }
+  const catalogGate = isClient && !showCatalog
+    ? `<div class="prog-catalog-gate">
+        <p class="muted">${total} plantillas en la biblioteca. Elija A, B o C, busque, o abra el catálogo.</p>
+        <button class="btn ghost" type="button" id="progOpenCatalog">Ver plantillas</button>
+      </div>`
+    : "";
+  return showCatalog
+    ? (blocks || nbEmpty({
+        icon: "☰",
+        title: "Nada con estos filtros",
+        hint: "La biblioteca sigue ahí. Quite filtros para ver A, B y C de nuevo.",
+        cta: hasFilter
+          ? `<button class="btn primary" type="button" id="progClearFilters">Quitar filtros</button>`
+          : `<button class="btn ghost" type="button" data-prog-band="">Ver todos</button>`
+      }))
+    : catalogGate;
+}
+function bindProgResultActions(root) {
+  const scope = root || document;
+  const openCat = scope.querySelector && scope.querySelector("#progOpenCatalog");
+  if (openCat) openCat.onclick = () => { state.progCatalogOpen = true; render(); };
+  const clearF = scope.querySelector && scope.querySelector("#progClearFilters");
+  if (clearF) clearF.onclick = () => {
+    state.progBand = ""; state.progDays = ""; state.progKind = ""; state.progQ = "";
+    render();
+  };
+  scope.querySelectorAll("[data-prog-ver]").forEach((b) => b.onclick = () => openRoutine(b.dataset.progVer));
+  scope.querySelectorAll("[data-prog-pedir]").forEach((b) => b.onclick = () => openPedirBeats(b.dataset.progPedir));
+  scope.querySelectorAll("[data-prog-band]").forEach((b) => b.onclick = () => {
+    state.progBand = "";
+    state.progCatalogOpen = true;
+    render();
+  });
 }
 function bindProgramas() {
   if (state.role === "coach" && state.editDraft) return bindEditor();
   const q = $("#progQ");
   if (q) q.addEventListener("input", () => {
     state.progQ = q.value;
-    const stage = $("#viewStage");
-    if (!stage) return render();
-    // live filter without full nav rebuild
-    render();
+    const needle = q.value.toLowerCase().trim();
+    if (needle && state.role === "client" && !state.progCatalogOpen) {
+      state.progCatalogOpen = true;
+      const mount = $("#progResults");
+      if (mount) {
+        mount.innerHTML = programasResultsInner();
+        bindProgResultActions(mount);
+        return;
+      }
+    }
+    const root = document.querySelector(".programas-screen") || document;
+    root.querySelectorAll(".prog-card, .list-row.prog-compact").forEach((el) => {
+      if (el.classList.contains("prog-hero-active")) return;
+      const hay = (el.textContent || "").toLowerCase();
+      el.hidden = !!(needle && hay.indexOf(needle) < 0);
+    });
+    root.querySelectorAll(".prog-shelf-label, .prog-shelf-more").forEach((lab) => {
+      let n = lab.nextElementSibling;
+      let any = false;
+      if (lab.classList.contains("prog-shelf-more")) {
+        lab.hidden = !!needle;
+        return;
+      }
+      while (n && !n.classList.contains("prog-shelf-label")) {
+        if (!n.hidden && (n.classList.contains("prog-card") || n.classList.contains("prog-compact"))) any = true;
+        n = n.nextElementSibling;
+      }
+      lab.hidden = !!needle && !any;
+    });
   });
   $$("[data-prog-band]").forEach((b) => b.onclick = () => {
     const next = b.dataset.progBand || "";
@@ -12851,6 +12957,36 @@ function printWeekPdf(c) {
   if (!w) { toast("Permita ventanas emergentes para el PDF"); return; }
   setTimeout(() => { try { w.print(); } catch (e) {} }, 400);
 }
+function inboxDoneHtml() {
+  const rows = [];
+  (state.programRequests || []).forEach((req) => {
+    if (!req || !req.status || req.status === "pending") return;
+    const lab = req.status === "approved" ? "Aprobado" : (req.status === "ignored" ? "Ignorado" : "Cerrado");
+    rows.push({
+      at: Number(req.approvedAt || req.ignoredAt || req.at || 0) || 0,
+      title: (req.name || "Cliente") + " · " + (req.routineName || req.objetivo || "pedido"),
+      detail: lab
+    });
+  });
+  (state.payments || []).forEach((p) => {
+    if (!p || p.status !== "recibido") return;
+    rows.push({
+      at: Date.parse(p.date || "") || 0,
+      title: (p.name || "Cliente") + " · pago recibido",
+      detail: ((p.amount != null && p.amount !== "") ? p.amount + " USD · " : "") + (p.method || "")
+    });
+  });
+  rows.sort((a, b) => b.at - a.at);
+  if (!rows.length) {
+    return nbEmpty({
+      icon: "✓",
+      title: "Nada marcado hecho",
+      hint: "Cuando apruebe un pedido o confirme un pago, queda aquí.",
+      cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>`
+    });
+  }
+  return `<div class="card inbox-bucket"><h3>Hecho <span class="muted">${rows.length}</span></h3>${rows.slice(0, 24).map((r) => `<div class="list-row inbox-row"><div><strong>${escapeHtml(r.title)}</strong><div class="muted">${escapeHtml(r.detail)}</div></div></div>`).join("")}</div>`;
+}
 function inboxView() {
   const b = inboxBuckets();
   const rowClient = (c, actionHtml) => {
@@ -12881,12 +13017,12 @@ function inboxView() {
         return `<div class="list-row inbox-row nb-fade"><div><strong>${label}</strong><div class="muted">${hint}</div></div><span class="inbox-actions"><button class="btn small primary" type="button" data-req-approve="${escAttr(req.id)}">Aprobar</button><button class="btn small ghost" type="button" data-req-otra="${escAttr(req.id)}">Otra</button><button class="btn small ghost" type="button" data-req-ignore="${escAttr(req.id)}">Ignorar</button></span></div>`;
       }).join("") : `<p class="muted bucket-empty">Sin pedidos. El cliente pide desde Programas; usted aprueba aquí.</p>`}
     </div>
-    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
+    <div class="card inbox-bucket ${chip==="nuevo"?"":"hidden"}">
       <h3>Firmas listas · falta código <span class="muted">${b.paidNoCode.length}</span></h3>
       <p class="muted inbox-cue">Cuando el dinero esté en PayPal o ATH, pulse <strong>Pago recibido · dar código</strong>. No se emite solo.</p>
       ${b.paidNoCode.length ? b.paidNoCode.map((c) => rowClient(c, `<button class="btn small primary" type="button" data-paid="${escAttr(c.id)}">${payCodeCta()}</button>`)).join("") : "<p class='muted bucket-empty'>Cola vacía. Nadie con firmas listas esperando código.</p>"}
     </div>
-    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
+    <div class="card inbox-bucket ${chip==="nuevo"?"":"hidden"}">
       <h3>Pagos y leads sin código <span class="muted">${b.waiting.length}</span></h3>
       <p class="muted inbox-cue">Aviso ≠ código. Si coincide con una ficha y ya firmó, confirme el pago. Si no hay ficha, ábrala en Gente.</p>
       ${b.waiting.length ? b.waiting.map((n) => {
@@ -12915,13 +13051,13 @@ function inboxView() {
         return rowNotice(n, act, matchHtml);
       }).join("") : "<p class='muted bucket-empty'>Sin avisos. Los pagos iniciados y leads nuevos salen aquí hasta tener código.</p>"}
     </div>
-    <div class="card inbox-bucket ${chip==="atrasado"?"hidden":""}">
+    <div class="card inbox-bucket ${chip==="nuevo"?"":"hidden"}">
       <h3>PAR-Q / confianza pendiente <span class="muted">${b.legalPend.length}</span></h3>
       ${b.legalPend.length
         ? (b.legalPend.map((c) => rowClient(c, `<button class="btn small ghost" type="button" data-openclient="${escAttr(c.id)}">Abrir ficha</button><button class="btn small ghost" type="button" data-wa-legal="${escAttr(c.id)}">Recordar firmas</button>`)).join("") + `<p class="muted">Falta lo que firma el cliente en la app (relevo, cuestionario de salud, contrato). Sin eso no hay código.</p>`)
         : "<p class='muted bucket-empty'>Al día. Nadie debe firmar relevo, salud o contrato hoy.</p>"}
     </div>
-    <div class="card inbox-bucket late-rail ${chip==="atrasado" || chip==="nuevo" ? "" : "hidden"}">
+    <div class="card inbox-bucket late-rail ${chip==="atrasado" ? "" : "hidden"}">
       <h3>Sin sesión <span class="muted">${b.silent.length}</span></h3>
       ${b.silent.length ? b.silent.map((c) => {
         const age = sessionAgeDays(c);
@@ -12929,7 +13065,7 @@ function inboxView() {
         return `<div class="list-row inbox-row"><div><strong>${escapeHtml(c.name)}</strong><div class="muted">${escapeHtml(c.plan || "")} · ${escapeHtml(label)}</div></div><span class="inbox-actions"><button class="btn small ghost" type="button" data-assignwa="${escAttr(c.id)}">Asignar + WhatsApp</button><button class="btn small ghost" type="button" data-wa="${escAttr(c.id)}">WhatsApp</button></span></div>`;
       }).join("") : "<p class='muted bucket-empty'>Nadie lleva 7 días sin sesión. El piso está activo.</p>"}
     </div>
-    ${chip==="hecho" ? nbEmpty({ icon: "✓", title: "Nada marcado hecho hoy", hint: "Al aprobar pedidos o dar códigos, la bandeja se aligera sola. Siga en Gente si necesita fichas.", cta: `<button class="btn ghost" type="button" data-view="people">Ir a Gente</button>` }) : ""}
+    ${chip==="hecho" ? inboxDoneHtml() : ""}
     <div class="actions">
       <button class="btn ghost" data-view="people">Gente y códigos</button>
       <button class="btn ghost" data-view="home">Hoy el piso</button>
@@ -13022,11 +13158,7 @@ function buildAiRoutine(opts) {
 function saveAiRoutine(rt, client) {
   state.customRoutines = state.customRoutines || [];
   state.customRoutines.push(rt);
-  if (client) {
-    client.routine = rt.id;
-  } else if (state.role === "client") {
-    state.profile.routine = rt.id;
-  }
+  if (client && state.role === "coach") client.routine = rt.id;
   persist();
 }
 function emailReceipt(row) {
@@ -13239,12 +13371,13 @@ function openAiBuilder() {
     if (!coach) {
       state.aiCredits = Math.max(0, (state.aiCredits || 0) - 1);
       saveAiRoutine(rt, null);
+      toast("Borrador listo. Miguel lo revisa. Hoy no cambia solo.");
     } else {
       saveAiRoutine(rt, currentClient());
+      toast("Rutina lista: " + rt.name);
     }
-    toast("Rutina lista: " + rt.name);
     modal.remove();
-    state.view = coach ? "rutinas" : "work";
+    state.view = coach ? "rutinas" : "programas";
     render();
   };
 }
@@ -13311,11 +13444,11 @@ function clientOpsCards() {
       <h3>Próxima cita</h3>
       ${next ? `<p><strong>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</strong></p><p class="muted">${escapeHtml(next.type)} · ${escapeHtml(next.place || "")}. Reprogramar con 12 horas por WhatsApp.</p>` : "<p class='muted'>Aún no hay cita. El entrenador la agenda.</p>"}
     </div>
-    <div class="card">
+    ${isBasePlan(c.plan) ? "" : `<div class="card">
       <h3>Video de técnica</h3>
       <p class="muted">${used} de 2 este mes.</p>
       <button class="btn ghost" id="openVideoSelf">Enviar video</button>
-    </div>
+    </div>`}
     <div class="card">
       <h3>Armado de rutina</h3>
       <p class="muted">12 USD. Usa la biblioteca, no un modelo de IA. Créditos: ${state.aiCredits || 0}. El entrenador puede revisarla.</p>
@@ -13433,7 +13566,7 @@ function bindStudioOps() {
       }
       let cl = state.clients.find((x) => x.id === p.clientId) || (state.clients || []).find((x) => x.name === p.name);
       if (!cl && p.name) {
-        cl = { id: p.clientId || ("c" + Date.now()), name: p.name, plan: p.plan || "Estándar", routine: "full-inicio", unpaid: true };
+        cl = { id: p.clientId || ("c" + Date.now()), name: p.name, plan: p.plan || "Estándar", routine: "", unpaid: true };
         state.clients.push(cl);
       }
       const done = await confirmClientPaid(cl, p.method);
@@ -13449,9 +13582,10 @@ ensureStudioOps();
 
 function activeRoutine() {
   const id = state.role === "coach"
-    ? (currentClient() && currentClient().routine) || state.profile.routine || "full-inicio"
-    : state.profile.routine || "full-inicio";
-  return findRoutine(id) || findRoutine("full-inicio");
+    ? ((currentClient() && currentClient().routine) || (state.profile && state.profile.routine) || "")
+    : ((state.profile && state.profile.routine) || "");
+  if (!id) return null;
+  return findRoutine(id) || null;
 }
 /** Week starts Monday: 0=Lunes … 6=Domingo (never JS Sunday-first). */
 const WEEKDAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
@@ -13561,6 +13695,22 @@ function isProgramRestDay(rt) {
   const jump = store.get("nb_day_jump_" + dayWhoKey() + "_" + rt.id, null);
   if (jump && jump.pick && jump.date === todayKey() && jump.i != null) return false;
   return slotForCalendarDay(rt.daysPlan.length, mondayWeekIndex()) == null;
+}
+function nextTrainingWeekdayName(rt) {
+  if (!rt || !rt.daysPlan || !rt.daysPlan.length) return "";
+  const map = trainingWeekdays(rt.daysPlan.length);
+  if (!map.length) return "";
+  const today = mondayWeekIndex(new Date());
+  let next = map.find((d) => d > today);
+  if (next == null) next = map[0];
+  return WEEKDAYS_ES[next] || "";
+}
+function clientCueHtml() {
+  if (state.role !== "client") return "";
+  const who = typeof selfClient === "function" ? selfClient() : null;
+  const cue = who && who.cue ? String(who.cue).trim() : "";
+  if (!cue) return "";
+  return `<div class="card"><p class="tagline">De Miguel</p><p>${escapeHtml(cue.slice(0, 180))}</p></div>`;
 }
 function sessionKey(rt) {
   const who = state.role === "coach" ? ((currentClient() && currentClient().id) || "studio") : "self";
@@ -14149,7 +14299,7 @@ function recordPay(planLabel, method, status) {
         id: "c" + Date.now(),
         name: who,
         plan: info.name || planLabel,
-        routine: state.profile.routine || "full-inicio",
+        routine: state.profile.routine || "",
         sex: state.profile.sex,
         age: state.profile.age,
         phone: state.profile.phone,
@@ -15502,7 +15652,7 @@ function openContract(planLabel) {
     state.profile.plan = short;
     let c = selfClient() || (Array.isArray(state.clients) ? state.clients.find((x) => cleanName(x.name) === nm) : null);
     if (!c) {
-      c = { id: "c" + Date.now(), name: nm, plan: short, routine: state.profile.routine || "full-inicio" };
+      c = { id: "c" + Date.now(), name: nm, plan: short, routine: state.profile.routine || "" };
       state.clients = Array.isArray(state.clients) ? state.clients : [];
       state.clients.push(c);
     }
@@ -15833,7 +15983,8 @@ function homeView() {
   });
   const pack = selfClient();
   const next = pack ? upcomingAppts(pack.id)[0] : null;
-  const vids = pack ? videosMonth(pack.id).length : 0;
+  const basePlan = selfPlanIsBase();
+  const vids = basePlan ? 0 : (pack ? videosMonth(pack.id).length : 0);
   const silent = pack && sessionAgeDays(pack) >= 7;
   const headline = "Su semana";
   const sunday = new Date().getDay() === 0;
@@ -15846,11 +15997,11 @@ function homeView() {
     <div class="quiet">
       <span>Racha <b>${st}</b></span>
       <span>Hábitos <b>${hn}/3</b> <button type="button" id="habitHome">abrir</button></span>
-      <span>Videos <b>${vids}/2</b></span>
+      ${basePlan ? "" : `<span>Videos <b>${vids}/2</b></span>`}
       ${next ? `<span>Cita <b>${escapeHtml(next.date)} · ${escapeHtml(next.time)}</b> <button type="button" id="reschedWa">reprogramar</button></span>` : "<span>Sin cita aún</span>"}
     </div>
-    ${restHome ? `<div class="card"><h3>Hoy · ${escapeHtml(calendarWeekdayName())}</h3><p class="muted">${escapeHtml(rt.name)} · hoy descanso del plan. No hay sesión.</p><div class="actions"><button class="btn ghost" data-view="work">Ver la semana</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : (day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(diHome, day, daysPlan.length))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : "")}
-    ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
+    ${restHome ? `<div class="card"><h3>Hoy · ${escapeHtml(calendarWeekdayName())}</h3><p class="muted">${escapeHtml(rt.name)} · hoy descanso del plan. No hay sesión.${nextTrainingWeekdayName(rt) ? " El próximo entrenamiento es el " + escapeHtml(nextTrainingWeekdayName(rt).toLowerCase()) + "." : ""}</p><div class="actions"><button class="btn ghost" data-view="work">Ver la semana</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : (day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(diHome, day, daysPlan.length))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : "")}
+    ${!basePlan && !checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     ${restHome || (state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
     <div id="moreStudio" class="more-fold" hidden>
@@ -16100,6 +16251,7 @@ function workView() {
             </div>
           </div>
           <p class="hoy-interp">Sin rutina activa. Puede pedir un programa cuando quiera.</p>
+          ${clientCueHtml()}
         ` : `
         <div>
           <p class="hoy-greet">${escapeHtml(hoyDayGreeting())}</p>
@@ -16119,7 +16271,10 @@ function workView() {
     const jumps = rt.daysPlan.map((d, i) => `<button type="button" data-jumpday="${i}">${escapeHtml(programWeekdayName(i, n))}</button>`).join("");
     const who = state.role === "coach" && currentClient() ? escapeHtml(currentClient().name) + " · " : "";
     const isClient = state.role === "client";
-    const restCopy = "Hoy no hay sesión. Descanso del plan.";
+    const nextTrain = nextTrainingWeekdayName(rt);
+    const restCopy = nextTrain
+      ? ("Hoy es " + dayBig + ". Descanso del plan. El próximo entrenamiento es el " + nextTrain.toLowerCase() + ".")
+      : "Hoy no hay sesión. Descanso del plan.";
     const hoySectionCls = isClient ? "screen session-start client-hoy client-hoy-hybrid" : "screen session-start";
     const week = weekDots();
     const strip = `<div class="week">${week.map((d) => `<span class="dot ${d.on?"on":""} ${d.today?"today":""}">${d.label}</span>`).join("")}</div>`;
@@ -16153,6 +16308,7 @@ function workView() {
           </div>
           <p class="hoy-interp">${escapeHtml(restCopy)}</p>
           ${strip}
+          ${clientCueHtml()}
         ` : `
         <div>
           <p class="hoy-greet">${who}${escapeHtml(hoyDayGreeting())}</p>
@@ -16333,7 +16489,7 @@ function workView() {
           <button class="btn small ghost" data-addset="${i}">+ serie</button>
           <button class="btn small ghost" data-skip="${i}">Saltar ejercicio</button>
           <button class="btn small ghost" data-rest="${it.rest}">Descanso ${it.rest}s</button>
-          <button class="btn small ghost" data-video="${i}">Enviar video</button>
+          ${(state.role === "client" && selfPlanIsBase()) ? "" : `<button class="btn small ghost" data-video="${i}">Enviar video</button>`}
         </div>
         </div>
       </article>`;
@@ -16588,6 +16744,7 @@ function bindWork() {
   $$("[data-rest]").forEach((el) => el.onclick = (e) => { e.preventDefault(); startTimer(Number(el.dataset.rest)); });
   $$("[data-video]").forEach((el) => el.onclick = (e) => {
     e.preventDefault();
+    if (state.role === "client" && selfPlanIsBase()) return;
     const it = loadSession(rt).items[Number(el.dataset.video)];
     const name = displayName(it || {});
     const who = selfClient() || { id: "self", name: state.profile.name || "Cliente" };
@@ -16833,9 +16990,9 @@ function videosSentOn(date) {
 function sessionProofHtml(ses) {
   ses = ses || { items: [] };
   const sent = videosSentOn(todayKey());
-  const videoLine = sent.length
+  const videoLine = (state.role === "client" && selfPlanIsBase()) ? "" : (sent.length
     ? `<p class="ok" data-video-proof="enviado">Video enviado${sent[0].exercise ? " · " + escapeHtml(sent[0].exercise) : ""}</p>`
-    : `<p class="muted" data-video-proof="no">Sin video de técnica en esta sesión.</p>`;
+    : `<p class="muted" data-video-proof="no">Sin video de técnica en esta sesión.</p>`);
   const rows = [];
   (ses.items || []).forEach((it) => {
     (it.sets || []).forEach((set, i) => {
@@ -16924,6 +17081,7 @@ function openDone(done, total, lb, ses) {
 
 function maybeWeeklyCheckinPrompt() {
   if (state.role !== "client") return;
+  if (selfPlanIsBase()) return;
   const weekKey = (typeof isoWeekKey === "function" ? isoWeekKey() : todayKey().slice(0, 7));
   if (store.get("nb_week_check_ask_" + weekKey)) return;
   const recent = (state.checkins || []).some((c) => {
@@ -17219,19 +17377,29 @@ function pricesView() {
   </section>`;
 }
 
+function applyPeopleFilter() {
+  const q = String(state.peopleQ || "").toLowerCase().trim();
+  const digits = String(state.peopleQ || "").replace(/\D/g, "");
+  let shown = 0;
+  $$(".people-card").forEach((card) => {
+    const name = (card.getAttribute("data-name") || "").toLowerCase();
+    const phone = card.getAttribute("data-phone") || "";
+    const ok = !q || name.indexOf(q) >= 0 || (digits && phone.indexOf(digits) >= 0);
+    card.hidden = !ok;
+    if (ok) shown++;
+  });
+  const empty = $("#peopleNoMatch");
+  if (empty) empty.hidden = !q || shown > 0;
+}
 function peopleView() {
   state.clients = foldStudioClients((state.clients || []).map(attachLegalToClient));
   const inbox = recentInbox();
   const pays = dedupePayments(state.payments || []).slice().reverse();
-  const qPeople = String(state.peopleQ || "").toLowerCase().trim();
   const peopleList = (state.clients || []).slice().sort((a, b) => {
     const au = !a.accessCode ? 0 : (clientStatus(a) === "por vencer" || clientStatus(a) === "vencido" ? 1 : 2);
     const bu = !b.accessCode ? 0 : (clientStatus(b) === "por vencer" || clientStatus(b) === "vencido" ? 1 : 2);
     if (au !== bu) return au - bu;
     return cleanName(a.name).localeCompare(cleanName(b.name), "es");
-  }).filter((c) => {
-    if (!qPeople) return true;
-    return cleanName(c.name).indexOf(qPeople) >= 0 || String(c.phone || "").indexOf(qPeople.replace(/\D/g, "")) >= 0;
   });
   const railDemo = (() => {
     const all = state.clients || [];
@@ -17259,6 +17427,7 @@ function peopleView() {
     </div>
     <button class="btn ghost" type="button" data-view="inbox" style="margin-bottom:10px">Abrir bandeja de hoy</button>
     <input class="search" id="peopleQ" placeholder="Buscar por nombre o teléfono" value="${escapeHtml(state.peopleQ || "")}">
+    <p id="peopleNoMatch" class="muted" hidden>Nadie con esa búsqueda. Pruebe otro nombre o teléfono.</p>
     ${inbox.length ? `<div class="card"><h3>Nuevo en la nube</h3>${inbox.map((n) => `<div class="list-row"><div><strong>${escapeHtml(n.type === "pay" ? "Pago iniciado" : "Cliente nuevo")}</strong><div class="muted">${escapeHtml(n.name || "")} · ${escapeHtml(n.plan || "")}${n.amount ? " · " + escapeHtml(n.amount) + " USD" : ""}</div></div><button class="btn small ghost" type="button" data-hide-in="${escAttr(n.id || "")}">Quitar aviso</button></div>`).join("")}<p class="muted">Quitar aviso no borra al cliente. Si ya tiene código, el aviso no vuelve.</p></div>` : ""}
     <div class="card">
       <h3>Aviso del cliente</h3>
@@ -17284,13 +17453,13 @@ function peopleView() {
       }
       return `<div class="list-row"><div><strong>${escapeHtml(p.amount || "—")} USD · ${escapeHtml(p.method || (p.status === "renovar" ? "Renovar" : "—"))}</strong><div class="muted">${escapeHtml(p.name || "Cliente")} · ${escapeHtml(p.date)}${p.status === "renovar" ? " · por vencer" : ""}${coded && clPay && clPay.accessCode ? " · " + escapeHtml(String(clPay.accessCode)) : ""}</div></div><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${payAct}<button class="btn small ghost" type="button" data-delpay="${escAttr(p.id)}">Eliminar</button></span></div>`;
     }).join("")}</div>` : ""}
-    ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale cuando hay pago confirmado.", cta: "" }) : (!peopleList.length ? nbEmpty({ icon: "⌕", title: "Nadie con esa búsqueda", hint: "Pruebe otro nombre o teléfono, o limpie el buscador.", cta: `<button class="btn ghost" type="button" id="clearPeopleQ">Limpiar búsqueda</button>` }) : peopleList.map((c) => {
+    ${!Array.isArray(state.clients) || !state.clients.length ? nbEmpty({ icon: "◎", title: "Todavía no hay gente", hint: "Añada el primer cliente abajo, o pegue un aviso de WhatsApp. El código sale después del pago, el relevo y el contrato.", cta: "" }) : (!peopleList.length ? nbEmpty({ icon: "⌕", title: "Nadie con esa búsqueda", hint: "Pruebe otro nombre o teléfono, o limpie el buscador.", cta: `<button class="btn ghost" type="button" id="clearPeopleQ">Limpiar búsqueda</button>` }) : peopleList.map((c) => {
       const rt = findRoutine(c.routine);
       normalizeClient(c);
       const st = clientStatus(c);
       const late = sessionAgeDays(c) >= 7;
       const railCls = (!c.accessCode) ? "rail-nuevo" : (st === "pausado" || st === "vencido") ? "rail-pausado" : (late ? "rail-atrasado" : "rail-activo");
-      return `<div class="card people-card ${railCls}">
+      return `<div class="card people-card ${railCls}" data-name="${escAttr(cleanName(c.name))}" data-phone="${escAttr(String(c.phone || "").replace(/\D/g, ""))}">
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
         <div class="muted">${escapeHtml(c.plan)} · ${escapeHtml(rt ? rt.name : "")}</div>
@@ -17427,7 +17596,7 @@ function openExercise(id) {
     <p class="muted">${escapeHtml(e.levelEs || e.level || "")} · ${escapeHtml(e.equipmentEs || e.equipment || "")} · ${escapeHtml((e.musclesEs || e.muscles || []).join(", "))}</p>
     <ol class="steps">${spanishSteps(e).map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
     <a class="btn primary" style="text-decoration:none;margin-bottom:8px" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent((e.nameEs || e.name) + " ejercicio técnica")}">Ver video de la técnica</a>
-    <a class="btn ghost" style="text-decoration:none;margin-bottom:8px" target="_blank" rel="noopener" href="${waLink("Video de técnica: " + (e.nameEs || e.name) + " — " + (state.profile.name || ""))}">Enviar video al entrenador</a>
+    ${(state.role === "client" && selfPlanIsBase()) ? "" : `<a class="btn ghost" style="text-decoration:none;margin-bottom:8px" target="_blank" rel="noopener" href="${waLink("Video de técnica: " + (e.nameEs || e.name) + " — " + (state.profile.name || ""))}">Enviar video al entrenador</a>`}
     <button class="btn ghost" id="closeSheet">Cerrar</button>
   </div>`;
   document.body.appendChild(modal);
@@ -17443,6 +17612,7 @@ function openExercise(id) {
 }
 
 function openCheckin() {
+  if (state.role === "client" && selfPlanIsBase()) return;
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet"><div class="handle"></div>
@@ -17742,7 +17912,7 @@ function clientCode(c) {
 function encodeTicket(c) {
   if (!c) return "";
   const obj = {
-    n: c.name, p: c.plan, r: c.routine || "full-inicio",
+    n: c.name, p: c.plan, r: c.routine || "",
     a: ensureAccessCode(c), k: studioKey(),
     s: c.sex || "", g: c.age || "", t: c.phone || "", i: c.id || "",
     b: (state.settings && state.settings.cloudId) || store.get("nb_blob_id") || NB_CLOUD.id
@@ -17760,7 +17930,7 @@ function decodeTicket(raw) {
     return {
       name: cleanName(obj.n),
       plan: String(obj.p || "").slice(0, 40),
-      routine: String(obj.r || "full-inicio").slice(0, 64),
+      routine: obj.r == null ? "" : String(obj.r).slice(0, 64),
       accessCode: String(obj.a).replace(/\D/g, "").slice(0, 6),
       clientId: obj.i, sex: obj.s, age: obj.g, phone: obj.t,
       blob: obj.b || ""
@@ -17780,7 +17950,7 @@ function upsertClientFromAssign(a) {
   if (isRevoked(a.accessCode, a.clientId)) return null;
   let c = (state.clients || []).find((x) => (a.clientId && x.id === a.clientId) || (a.accessCode && String(x.accessCode || "").replace(/\D/g, "") === String(a.accessCode || "").replace(/\D/g, "")));
   if (!c) {
-    c = { id: a.clientId || ("c" + Date.now()), name: a.name, plan: a.plan || "Estándar", routine: a.routine || "full-inicio", accessCode: a.accessCode };
+    c = { id: a.clientId || ("c" + Date.now()), name: a.name, plan: a.plan || "Estándar", routine: a.routine || "", accessCode: a.accessCode };
     state.clients = state.clients || [];
     state.clients.push(c);
   }
@@ -17824,7 +17994,7 @@ function ingestLead(raw) {
   state.clients = Array.isArray(state.clients) ? state.clients : [];
   let c = state.clients.find((x) => (phone && String(x.phone || "") === phone) || cleanName(x.name) === name);
   if (!c) {
-    c = { id: (obj && obj.i) || ("c" + Date.now()), name, plan, routine: "full-inicio", unpaid: true };
+    c = { id: (obj && obj.i) || ("c" + Date.now()), name, plan, routine: "", unpaid: true };
     state.clients.push(c);
   }
   if (plan) c.plan = plan;
@@ -17847,7 +18017,7 @@ function parseClientCode(raw) {
   if (m6 && t.indexOf("|") < 0 && !/^NB[12]/i.test(t)) {
     const code = m6[1];
     const c = findByAccessCode(code);
-    if (c) return { name: c.name, plan: c.plan, routine: c.routine || "full-inicio", accessCode: code, clientId: c.id, sex: c.sex, age: c.age, phone: c.phone };
+    if (c) return { name: c.name, plan: c.plan, routine: c.routine || "", accessCode: code, clientId: c.id, sex: c.sex, age: c.age, phone: c.phone };
     return { accessCode: code, pending: true };
   }
   const p = t.split("|");
@@ -17879,7 +18049,6 @@ function applyClientAssign(a) {
   if (a.name) state.profile.name = a.name;
   if (a.plan) state.profile.plan = a.plan;
   if (a.routine) state.profile.routine = a.routine;
-  else if (!state.profile.routine) state.profile.routine = "full-inicio";
   if (a.accessCode) state.profile.accessCode = a.accessCode;
   if (a.sex) state.profile.sex = a.sex;
   if (a.age) state.profile.age = a.age;
@@ -18070,7 +18239,7 @@ function openNeedCode(planLabel) {
     let c = (state.clients || []).find((x) => cleanName(x.name) === name || String(x.phone || "") === phone);
     if (state.role === "coach") {
       if (!c) {
-        c = { id: "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, email, unpaid: true };
+        c = { id: "c" + Date.now(), name, plan, routine: "", sex, age, phone, email, unpaid: true };
         state.clients = Array.isArray(state.clients) ? state.clients : [];
         state.clients.push(c);
       } else {
@@ -18078,7 +18247,7 @@ function openNeedCode(planLabel) {
       }
       persistClients();
     } else {
-      c = { id: (c && c.id) || "c" + Date.now(), name, plan, routine: "full-inicio", sex, age, phone, email, unpaid: true };
+      c = { id: (c && c.id) || "c" + Date.now(), name, plan, routine: "", sex, age, phone, email, unpaid: true };
       state.clients = Array.isArray(state.clients) ? state.clients : [];
       const i = state.clients.findIndex((x) => x.id === c.id || cleanName(x.name) === name || (phone && String(x.phone || "") === phone));
       if (i >= 0) {
@@ -18306,7 +18475,7 @@ function openCodeEntry() {
       }
       if (hit) {
         a = {
-          name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
+          name: hit.name, plan: hit.plan, routine: hit.routine || "",
           accessCode: a.accessCode, clientId: hit.id, sex: hit.sex, age: hit.age, phone: hit.phone,
           waiver: hit.waiver, health: hit.health, contract: hit.contract
         };
@@ -18871,7 +19040,7 @@ function bindChrome() {
   if (pq) {
     pq.oninput = () => {
       state.peopleQ = pq.value;
-      render();
+      applyPeopleFilter();
     };
   }
   const cpq = $("#clearPeopleQ");
@@ -19009,7 +19178,7 @@ function bindChrome() {
       if (!name) return toast("Escriba un nombre");
       const plan = $("#newPlan").value;
       if (/premium/i.test(plan) && !/12 semanas/i.test(plan) && premiumCount() >= 8) return toast("Cupo Premium lleno (8)");
-      const row = { id: "c" + Date.now(), name, plan, routine: "full-inicio", unpaid: true };
+      const row = { id: "c" + Date.now(), name, plan, routine: "", unpaid: true };
       const sex = ($("#newSex") && $("#newSex").value) || "";
       const age = parseInt($("#newAge") && $("#newAge").value, 10);
       const phone = ($("#newPhone") && $("#newPhone").value || "").replace(/\D/g, "");
@@ -19311,6 +19480,7 @@ function afterPaint() {
   }
   if (state.view === "rutinas") bindRoutinesCoach();
   if (state.view === "programas") bindProgramas();
+  if (state.view === "people") applyPeopleFilter();
   if (state.view === "inbox") {
     $$("[data-chip]").forEach((b) => b.onclick = () => { state.inboxChip = b.dataset.chip || "nuevo"; render(); });
     $$("[data-req-approve]").forEach((b) => b.onclick = () => { approveProgramRequest(b.dataset.reqApprove); render(); });
@@ -19579,7 +19749,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v11", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v12", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
