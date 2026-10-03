@@ -1,9 +1,9 @@
-const CACHE = "nb-offline-hybrid-v10";
+const CACHE = "nb-offline-hybrid-v11";
 const SHELL = [
   "/",
   "/index.html",
-  "/app/styles.css?v=hybrid-v10",
-  "/app/app.js?v=hybrid-v10",
+  "/app/styles.css?v=hybrid-v11",
+  "/app/app.js?v=hybrid-v11",
   "/favicon.svg",
   "/logo.png",
   "/icon-48.png",
@@ -15,8 +15,6 @@ const SHELL = [
   "/icon-192-maskable.png",
   "/icon-512.png",
   "/icon-512-maskable.png",
-  "/intro-poster.jpg",
-  "/intro.mp4",
   "/manifest.webmanifest"
 ];
 const DB_NAME = "nb-sync";

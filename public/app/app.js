@@ -14732,7 +14732,6 @@ function renderGate() {
     </section>`;
     bindSplash();
     guardLogoMedia($("#holdLogo"));
-    warmupIntro();
     return;
   }
   const previewHint = isUiPreviewHost()
@@ -14842,6 +14841,83 @@ function playIntro() {
     setTimeout(finish, 7000);
   });
 }
+
+function playRing() {
+  const splash = $("#splash");
+  const ringEl = splash && splash.querySelector(".ring-hold");
+  const logo = splash && splash.querySelector(".splash-logo");
+  const ringBox = ringEl ? ringEl.getBoundingClientRect() : null;
+  const from = logo ? logo.getBoundingClientRect() : null;
+  const box = (ringBox && ringBox.width > 40) ? ringBox : from;
+  const ox = box ? box.left + box.width / 2 : window.innerWidth / 2;
+  const oy = box ? box.top + box.height / 2 : window.innerHeight * 0.42;
+  const startD = box && box.width > 40 ? box.width : 220;
+  const corners = [[0, 0], [window.innerWidth, 0], [0, window.innerHeight], [window.innerWidth, window.innerHeight]];
+  let far = 0;
+  corners.forEach(function (pt) {
+    far = Math.max(far, Math.hypot(pt[0] - ox, pt[1] - oy));
+  });
+  const grow = (far + 36) / Math.max(8, startD / 2 - 6);
+  const host = document.createElement("div");
+  host.id = "nbRingReveal";
+  host.className = "nb-ring-reveal";
+  host.setAttribute("aria-hidden", "true");
+  host.style.setProperty("--ox", ox + "px");
+  host.style.setProperty("--oy", oy + "px");
+  host.style.setProperty("--d", startD + "px");
+  host.style.setProperty("--grow", String(grow));
+  let orb = null;
+  if (logo && from && from.width > 0) {
+    orb = logo.cloneNode(true);
+    orb.className = "nb-ring-orb";
+    orb.removeAttribute("id");
+    orb.alt = "";
+    orb.style.left = from.left + "px";
+    orb.style.top = from.top + "px";
+    orb.style.width = from.width + "px";
+    orb.style.height = from.height + "px";
+    host.appendChild(orb);
+  }
+  const hole = document.createElement("div");
+  hole.className = "nb-ring-hole";
+  host.appendChild(hole);
+  document.body.appendChild(host);
+  state.splash = false;
+  store.set("nb_seen_cover", true);
+  store.set("nb_seen_intro", true);
+  render();
+  const cover = document.querySelector(".cover-hybrid");
+  const coverImg = cover && cover.querySelector(".splash-logo");
+  if (cover) cover.classList.add("nb-held");
+  if (coverImg) coverImg.style.visibility = "hidden";
+  const to = coverImg ? coverImg.getBoundingClientRect() : null;
+  const ms = 980;
+  const ease = "cubic-bezier(0.65, 0.05, 0.18, 1)";
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      host.classList.add("open");
+      hole.animate([
+        { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
+        { transform: "translate(-50%, -50%) scale(" + grow + ")", opacity: 1, offset: 0.9 },
+        { transform: "translate(-50%, -50%) scale(" + grow + ")", opacity: 0 }
+      ], { duration: ms, easing: ease, fill: "forwards" });
+      if (orb && from && to && to.width > 0) {
+        orb.animate([
+          { left: from.left + "px", top: from.top + "px", width: from.width + "px", height: from.height + "px", opacity: 1 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1, offset: 0.42 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1 }
+        ], { duration: ms, easing: ease, fill: "forwards" });
+      }
+    });
+  });
+  setTimeout(function () {
+    if (coverImg) coverImg.style.visibility = "";
+    if (orb) { try { orb.remove(); } catch (e) {} }
+    try { host.remove(); } catch (e2) {}
+    if (cover) cover.classList.remove("nb-held");
+  }, ms + 30);
+}
+
 function bindSplash() {
   const wrap = $("#holdLogo");
   const ring = $("#holdRing") || $(".ring-progress") || $(".ring circle");
@@ -14862,16 +14938,17 @@ function bindSplash() {
   const go = () => {
     if (gone) return;
     gone = true;
-    const splash = $("#splash");
-    if (splash) splash.classList.add("out");
-    playIntro().then(() => {
+    window.removeEventListener("pointerup", up);
+    wrap.removeEventListener("pointerdown", down);
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
       state.splash = false;
       store.set("nb_seen_cover", true);
       store.set("nb_seen_intro", true);
-      window.removeEventListener("pointerup", up);
-      wrap.removeEventListener("pointerdown", down);
       render();
-    });
+      return;
+    }
+    playRing();
   };
   const step = (on) => {
     ticking = on;
@@ -19422,7 +19499,6 @@ async function boot() {
     if (state.pinHash || (state.pin && String(state.pin).length >= 4)) store.set("nb_pin_server", 1);
     store.set("nb_pin_server_seen", 1);
   }
-  if (state.splash) warmupIntro();
   pinLocked();
   if (store.get("nb_pin_init_9798") && !store.get("nb_pin_secret_v38")) {
     /* Drop device PIN seeded from the old shipped default; coach re-enters the cloud PIN once. */
@@ -19503,7 +19579,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v10", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v11", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
