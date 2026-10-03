@@ -2017,8 +2017,9 @@ input[type=file].hidden {
 .prog-compact-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .pedir-status-list { margin: 0 0 12px; }
 
-/* Preview — the hold ring grows to full bleed and the cover is already inside. */
-.cover-hybrid.nb-held { animation: none !important; }
+/* Preview — hold ring eases out to full bleed. Cover is already inside. */
+.cover-hybrid.nb-held,
+.cover-hybrid.nb-held * { animation: none !important; }
 .nb-ring-reveal {
   position: fixed;
   inset: 0;
@@ -2026,24 +2027,32 @@ input[type=file].hidden {
   pointer-events: auto;
   overflow: hidden;
 }
+.nb-ring-orb {
+  position: fixed;
+  z-index: 3;
+  margin: 0;
+  max-width: none;
+  object-fit: contain;
+  pointer-events: none;
+  animation: none !important;
+  filter: drop-shadow(0 0 22px rgba(255,138,31,.22));
+}
 .nb-ring-hole {
   position: absolute;
+  z-index: 2;
   left: var(--ox);
   top: var(--oy);
   width: var(--d);
   height: var(--d);
   border-radius: 50%;
-  border: 5px solid #FF8A1F;
+  border: 4px solid #FF8A1F;
   box-shadow:
-    0 0 22px 3px rgba(255,138,31,.9),
+    0 0 18px 2px rgba(255,138,31,.75),
     0 0 0 200vmax #121018;
   transform: translate(-50%, -50%) scale(1);
-  transition: transform .9s cubic-bezier(.16,1,.3,1);
-  will-change: transform;
+  opacity: 1;
+  will-change: transform, opacity;
   background: transparent;
-}
-.nb-ring-reveal.open .nb-ring-hole {
-  transform: translate(-50%, -50%) scale(var(--grow));
 }
 @media (prefers-reduced-motion: reduce) {
   .nb-ring-reveal { display: none !important; }

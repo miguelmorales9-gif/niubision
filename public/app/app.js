@@ -14846,7 +14846,9 @@ function playRing() {
   const splash = $("#splash");
   const ringEl = splash && splash.querySelector(".ring-hold");
   const logo = splash && splash.querySelector(".splash-logo");
-  const box = (ringEl && ringEl.getBoundingClientRect().width) ? ringEl.getBoundingClientRect() : (logo ? logo.getBoundingClientRect() : null);
+  const ringBox = ringEl ? ringEl.getBoundingClientRect() : null;
+  const from = logo ? logo.getBoundingClientRect() : null;
+  const box = (ringBox && ringBox.width > 40) ? ringBox : from;
   const ox = box ? box.left + box.width / 2 : window.innerWidth / 2;
   const oy = box ? box.top + box.height / 2 : window.innerHeight * 0.42;
   const startD = box && box.width > 40 ? box.width : 220;
@@ -14855,13 +14857,7 @@ function playRing() {
   corners.forEach(function (pt) {
     far = Math.max(far, Math.hypot(pt[0] - ox, pt[1] - oy));
   });
-  const grow = (far * 2.25) / startD;
-  state.splash = false;
-  store.set("nb_seen_cover", true);
-  store.set("nb_seen_intro", true);
-  render();
-  const cover = document.querySelector(".cover-hybrid");
-  if (cover) cover.classList.add("nb-held");
+  const grow = (far + 36) / Math.max(8, startD / 2 - 6);
   const host = document.createElement("div");
   host.id = "nbRingReveal";
   host.className = "nb-ring-reveal";
@@ -14870,18 +14866,56 @@ function playRing() {
   host.style.setProperty("--oy", oy + "px");
   host.style.setProperty("--d", startD + "px");
   host.style.setProperty("--grow", String(grow));
+  let orb = null;
+  if (logo && from && from.width > 0) {
+    orb = logo.cloneNode(true);
+    orb.className = "nb-ring-orb";
+    orb.removeAttribute("id");
+    orb.alt = "";
+    orb.style.left = from.left + "px";
+    orb.style.top = from.top + "px";
+    orb.style.width = from.width + "px";
+    orb.style.height = from.height + "px";
+    host.appendChild(orb);
+  }
   const hole = document.createElement("div");
   hole.className = "nb-ring-hole";
   host.appendChild(hole);
   document.body.appendChild(host);
-  const ms = 900;
+  state.splash = false;
+  store.set("nb_seen_cover", true);
+  store.set("nb_seen_intro", true);
+  render();
+  const cover = document.querySelector(".cover-hybrid");
+  const coverImg = cover && cover.querySelector(".splash-logo");
+  if (cover) cover.classList.add("nb-held");
+  if (coverImg) coverImg.style.visibility = "hidden";
+  const to = coverImg ? coverImg.getBoundingClientRect() : null;
+  const ms = 980;
+  const ease = "cubic-bezier(0.65, 0.05, 0.18, 1)";
   requestAnimationFrame(function () {
-    requestAnimationFrame(function () { host.classList.add("open"); });
+    requestAnimationFrame(function () {
+      host.classList.add("open");
+      hole.animate([
+        { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
+        { transform: "translate(-50%, -50%) scale(" + grow + ")", opacity: 1, offset: 0.9 },
+        { transform: "translate(-50%, -50%) scale(" + grow + ")", opacity: 0 }
+      ], { duration: ms, easing: ease, fill: "forwards" });
+      if (orb && from && to && to.width > 0) {
+        orb.animate([
+          { left: from.left + "px", top: from.top + "px", width: from.width + "px", height: from.height + "px", opacity: 1 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1, offset: 0.42 },
+          { left: to.left + "px", top: to.top + "px", width: to.width + "px", height: to.height + "px", opacity: 1 }
+        ], { duration: ms, easing: ease, fill: "forwards" });
+      }
+    });
   });
   setTimeout(function () {
-    try { host.remove(); } catch (e) {}
+    if (coverImg) coverImg.style.visibility = "";
+    if (orb) { try { orb.remove(); } catch (e) {} }
+    try { host.remove(); } catch (e2) {}
     if (cover) cover.classList.remove("nb-held");
-  }, ms + 40);
+  }, ms + 30);
 }
 
 function bindSplash() {
@@ -19545,7 +19579,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v4", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v5", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
