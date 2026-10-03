@@ -2057,3 +2057,28 @@ input[type=file].hidden {
 @media (prefers-reduced-motion: reduce) {
   .nb-ring-reveal { display: none !important; }
 }
+
+/* Desktop: opaque header over the content column only. Phone nav stays at the bottom. */
+@media (min-width: 900px) {
+  body.in-app .app-header {
+    background: #121018;
+    z-index: 40;
+    margin-left: 232px;
+    width: auto;
+  }
+  body.in-app #viewStage {
+    margin-left: 232px;
+  }
+  body.in-app #viewStage .screen {
+    margin-left: 0;
+  }
+  body.in-app .nav,
+  body.in-app .nav.guest,
+  body.in-app .nav.slim,
+  body.in-app .nav.four {
+    top: 16px;
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+    z-index: 25;
+  }
+}
