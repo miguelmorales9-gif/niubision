@@ -11244,15 +11244,32 @@ async function cloudRedeem(code) {
   });
   return { ok: true, data: { client: hit } };
 }
+function nbNetError() {
+  const err = new Error("network");
+  err.nbNet = true;
+  return err;
+}
+function isNbNet(e) {
+  if (!e) return false;
+  if (e.nbNet || e.name === "AbortError") return true;
+  return /abort|failed to fetch|network|timeout|load failed/i.test(String(e.message || e));
+}
+function localPaidClient(digits) {
+  const local = findByAccessCode(digits);
+  if (local && !local.unpaid && !isRevoked(local.accessCode, local.id)) return local;
+  return null;
+}
 async function lookupAccess(code) {
   const digits = String(code || "").replace(/\D/g, "");
   if (digits.length !== 6) return null;
   if (isUiPreviewHost() && digits === PREVIEW_DEMO_CODE) return previewDemoClient();
   if (isRevoked(digits)) return null;
   if (isOnline()) {
-    try {
-      const bases = apiBases();
-      for (let i = 0; i < bases.length; i++) {
+    const bases = apiBases();
+    let netFail = false;
+    let answered = false;
+    for (let i = 0; i < bases.length; i++) {
+      try {
         const res = await cloudGet(bases[i] + "/redeem?code=" + encodeURIComponent(digits), { headers: { Accept: "application/json" } });
         const data = await res.json().catch(() => ({}));
         if (res.status === 404 || /anulado/i.test(String(data.error || ""))) {
@@ -11260,6 +11277,7 @@ async function lookupAccess(code) {
           return null;
         }
         if (res.ok && data.client) {
+          answered = true;
           if (data.client.unpaid) return null;
           if (isRevoked(data.client.accessCode, data.client.id)) return null;
           if (data.library) {
@@ -11268,12 +11286,19 @@ async function lookupAccess(code) {
           }
           return data.client;
         }
+        if (res.status === 401 || res.status === 403 || res.status === 402) answered = true;
+        else if (!res.ok) netFail = true;
+      } catch (e) {
+        netFail = true;
       }
-    } catch (e) {}
+    }
+    if (netFail && !answered) {
+      const local = localPaidClient(digits);
+      if (local) return local;
+      throw nbNetError();
+    }
   }
-  const local = findByAccessCode(digits);
-  if (local && !local.unpaid && !isRevoked(local.accessCode, local.id)) return local;
-  return null;
+  return localPaidClient(digits);
 }
 function allRoutines() {
   const stock = (window.NBroutinesStock || window.NBroutines || []).map((r) => {
@@ -12433,7 +12458,7 @@ function programasView() {
     ? (hasFilter || state.progCatalogOpen
       ? `${catalogList.length} plantillas · Hoy solo cambia si Miguel aprueba`
       : `Activo primero · ${total} plantillas detrás de nivel y búsqueda`)
-    : `${list.length} de ${total} · Hoy solo cambia si Miguel aprueba.`;
+    : `${list.length} de ${total} · Asigne directo desde la ficha.`;
 
   return `<section class="screen programas-screen${isClient ? " programas-client" : ""}">
     <p class="tagline">${state.role === "coach" ? "Estudio · biblioteca" : "Su biblioteca"}</p>
@@ -13380,9 +13405,8 @@ function bindStudioOps() {
       if (!done) { render(); return; }
       toast(done.code ? "Pago recibido. Código " + done.code : "Pago recibido");
       render();
-      if (done.client && done.code) {
-        showShare(done.client);
-      } else openReceipt(p);
+      if (done.client && done.code && autoCodeOn()) showShare(done.client);
+      else if (p) openReceipt(p);
     };
   });
 }
@@ -13735,6 +13759,8 @@ async function authLogin(kind, secret) {
   const body = kind === "coach"
     ? JSON.stringify({ role: "coach", pin: String(secret || "") })
     : JSON.stringify({ role: "client", code: String(secret || "").replace(/\D/g, "") });
+  let netFail = false;
+  let denied = false;
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/auth/login", {
@@ -13748,8 +13774,13 @@ async function authLogin(kind, secret) {
         if (j.studioToken) state.settings.cloudToken = j.studioToken;
         return j;
       }
-    } catch (e) {}
+      if (res.status === 401 || res.status === 403 || res.status === 429) denied = true;
+      else netFail = true;
+    } catch (e) {
+      netFail = true;
+    }
   }
+  if (netFail && !denied) throw nbNetError();
   return null;
 }
 async function authLogout() {
@@ -13900,14 +13931,7 @@ async function totpOk(code) {
 }
 function totpEnrolled() { return !!store.get("nb_totp_on", false); }
 function totpSecret() {
-  let s = store.get("nb_totp_secret", "");
-  if (!s) {
-    const a = new Uint8Array(20);
-    crypto.getRandomValues(a);
-    s = base32Encode(a);
-    store.set("nb_totp_secret", s);
-  }
-  return s;
+  return store.get("nb_totp_secret", "") || "";
 }
 function totpOtpauth() {
   return "otpauth://totp/" + encodeURIComponent("NiuBision:Estudio") +
@@ -13916,56 +13940,34 @@ function totpOtpauth() {
 function totpQrSrc() {
   return "https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&margin=8&data=" + encodeURIComponent(totpOtpauth());
 }
+function lockLocalCoachSecrets() {
+  resetStudioPin();
+  store.set("nb_pin_server", 0);
+  store.set("nb_totp_on", false);
+  store.set("nb_totp_secret", "");
+  authClear();
+  if (state.settings) state.settings.cloudToken = "";
+  if (state.role === "coach") state.role = null;
+  persist();
+}
 function openPinRecover() {
-  const enrolled = totpEnrolled();
-  const secret = totpSecret();
   const modal = document.createElement("div");
   modal.className = "modal";
-  modal.innerHTML = enrolled ? `<div class="sheet">
+  modal.innerHTML = `<div class="sheet">
     <div class="handle"></div>
-    <p class="tagline">Google Authenticator</p>
-    <h2>Cambiar clave</h2>
-    <p class="muted">Abra Google Authenticator y escriba el código de 6 dígitos de NiuBision. Luego defina la clave nueva.</p>
-    <input class="field" id="recCode" inputmode="numeric" maxlength="6" placeholder="Código de Authenticator" autocomplete="one-time-code">
-    <input class="field" id="recA" inputmode="numeric" maxlength="8" placeholder="Nueva clave (4 a 8 dígitos)" autocomplete="new-password">
-    <input class="field" id="recB" inputmode="numeric" maxlength="8" placeholder="Repetir clave nueva" autocomplete="new-password">
-    <button class="btn primary" id="recGo">Verificar y guardar</button>
-    <button class="btn ghost" id="closeSheet">Cancelar</button>
-  </div>` : `<div class="sheet">
-    <div class="handle"></div>
-    <p class="tagline">Google Authenticator</p>
-    <h2>Activar el estudio</h2>
-    <p class="muted">En el teléfono abra <strong>Google Authenticator</strong> → añadir → escanear el QR. Si no escanea, escriba la clave a mano.</p>
-    <div class="totp-box">
-      <img src="${totpQrSrc()}" alt="QR de Google Authenticator">
-      <p class="totp-secret">${secret}</p>
-    </div>
-    <input class="field" id="enrollCode" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos de la app" autocomplete="one-time-code">
-    <button class="btn primary" id="enrollGo">Activar Authenticator</button>
+    <p class="tagline">Estudio</p>
+    <h2>No se crea una clave aquí</h2>
+    <p class="muted">Este teléfono no puede autenticar una clave nueva sin el servidor. Olvidé la clave no abre el estudio, no guarda un PIN local y no usa un token viejo como si fuera la clave.</p>
+    <p class="muted">Entre en línea con la clave del estudio. Sin esa respuesta del servidor, aquí no se entra.</p>
+    <button class="btn primary" id="recFail">Entendido</button>
     <button class="btn ghost" id="closeSheet">Cancelar</button>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
-  const enroll = modal.querySelector("#enrollGo");
-  if (enroll) enroll.onclick = async () => {
-    if (!(await totpOk($("#enrollCode").value))) return toast("Código incorrecto. Revise la hora del teléfono.");
-    store.set("nb_totp_on", true);
+  modal.querySelector("#recFail").onclick = () => {
+    lockLocalCoachSecrets();
     modal.remove();
-    toast("Google Authenticator activado");
-    openPinRecover();
-  };
-  const go = modal.querySelector("#recGo");
-  if (go) go.onclick = async () => {
-    if (!(await totpOk($("#recCode").value))) return toast("Código de Authenticator incorrecto");
-    const a = ($("#recA").value || "").trim();
-    const b = ($("#recB").value || "").trim();
-    if (!/^\d{4,8}$/.test(a)) return toast("Use 4 a 8 dígitos");
-    if (a !== b) return toast("Las claves no coinciden");
-    await setPin(a);
-    store.set("nb_pin_fails", 0);
-    store.set("nb_pin_lock", 0);
-    modal.remove();
-    toast("Clave actualizada");
+    toast("Sin clave nueva en este teléfono. Hace falta el servidor.");
   };
 }
 function maskDest(s, kind) {
@@ -14429,6 +14431,10 @@ function openPaySheet(planLabel) {
   });
 }
 
+function stashPendingCode(raw) {
+  const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
+  if (digits.length === 6) state._pendingCode = digits;
+}
 function applyHash() {
   const q = new URLSearchParams(location.search || "");
   const viewQ = q.get("view");
@@ -14436,6 +14442,7 @@ function applyHash() {
     if (!state.role) state.role = "guest";
     state.view = viewQ;
   }
+  stashPendingCode(q.get("c") || q.get("code"));
   const raw = String(location.hash || "").replace(/^#/, "");
   if (!raw) return;
   const params = new URLSearchParams(raw.indexOf("=") >= 0 ? raw : "");
@@ -14447,17 +14454,17 @@ function applyHash() {
   const ticket = params.get("t") || params.get("ticket");
   if (ticket) {
     const decoded = decodeTicket(ticket);
-    if (decoded && decoded.accessCode) state._pendingCode = String(decoded.accessCode).replace(/\D/g, "").slice(0, 6);
+    if (decoded && decoded.accessCode) stashPendingCode(decoded.accessCode);
     return;
   }
   const code = params.get("c") || params.get("code");
   if (code) {
-    state._pendingCode = String(code).replace(/\D/g, "").slice(0, 6);
+    stashPendingCode(code);
     return;
   }
   if (/^NB[12]\|/i.test(raw)) {
     const assigned = parseClientCode(raw);
-    if (assigned && assigned.accessCode) state._pendingCode = String(assigned.accessCode).replace(/\D/g, "").slice(0, 6);
+    if (assigned && assigned.accessCode) stashPendingCode(assigned.accessCode);
   }
 }
 
@@ -14829,12 +14836,15 @@ function openCoachGate() {
       if (isOnline()) {
         const sess = await authLogin("coach", a);
         ok = !!(sess && sess.token);
-        if (ok) await setPin(a);
-      } else if (state.pinHash || state.pin || state._legacyPin) {
+        if (ok) {
+          await setPin(a);
+          store.set("nb_pin_server", 1);
+        }
+      } else if (store.get("nb_pin_server") && (state.pinHash || state.pin || state._legacyPin)) {
         ok = await checkPin(a);
       } else {
         setBusy(btn, false);
-        toast("Sin conexión. Entre en línea una vez para validar la clave.");
+        toast("Sin conexión. Este teléfono no crea una clave nueva. Entre en línea para que el servidor confirme la clave.");
         return;
       }
       if (!ok) {
@@ -14845,7 +14855,9 @@ function openCoachGate() {
       clearToast();
     } catch (e) {
       setBusy(btn, false);
-      toast("No se pudo validar. Intente de nuevo.");
+      toast(isNbNet(e)
+        ? "El servidor no contestó. La clave sigue escrita. Intente de nuevo."
+        : "No se pudo validar. Intente de nuevo.");
       return;
     }
     clearToast();
@@ -15011,12 +15023,9 @@ function continueJoin(planLabel) {
   if (healthFlagged() && !(state.health && state.health.clearance)) return openClearance(plan);
   if (!contractSigned(plan)) return openContract(plan);
   if (state._pendingAssign) {
+    const pending = state._pendingAssign;
     state._pendingAssign = null;
-    toast("Firmas listas. Toque Entrar y pegue el código de 6 dígitos.");
-    state.role = null;
-    persist();
-    render();
-    openCodeEntry();
+    landWithCode(pending);
     return;
   }
   const who = selfClient() || state._pendingLead || (state.clients || []).find((x) => cleanName(x.name) === cleanName((state.profile && state.profile.name) || ""));
@@ -15350,7 +15359,7 @@ function header() {
   })() : "";
   const install = showInstall ? `<div class="install-bar" id="installBar"><span>${hint}</span><span style="display:flex;gap:8px">${state._installEvt ? `<button class="btn small primary" id="installBtn" type="button">Instalar</button>` : ""}<button class="btn small ghost" id="hideInstall" type="button">Ahora no</button></span></div>` : "";
   return `${offline}${install}<header class="app-header">
-    <div class="brand brand-hybrid"><img src="${MARK}" alt=""><div><strong>NiuBision</strong><span class="brand-tag-quiet">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</span></div></div>
+    <div class="brand brand-hybrid"><img src="${MARK}" alt="" draggable="false" oncontextmenu="return false"><div><strong>NiuBision</strong><span class="brand-tag-quiet">El trabajo se ve. No se finge.<br>See the work. Enjoy the day.</span></div></div>
     <button class="chip" id="switchRole">${state.role === "coach" ? "Salir del estudio" : "Salir"}</button>
     ${state.role === "guest" ? `<button class="chip" id="guestCode">Tengo código</button>` : ""}
   </header>`;
@@ -15446,7 +15455,7 @@ function openStudioSettings() {
     state.settings.autoCode = on;
     store.set("nb_auto_code", on ? 1 : 0);
     persist();
-    toast(on ? "Al confirmar se ofrece WhatsApp con el código" : "Sin oferta automática de WhatsApp");
+    toast(on ? "Al confirmar se muestra la ficha del código. WhatsApp no se abre solo." : "Al confirmar no se abre la ficha. WhatsApp no se abre solo.");
   };
   const al = $("#enableAlerts", modal);
   if (al) al.onclick = async () => {
@@ -15602,7 +15611,7 @@ function homeView() {
       <h2 style="font-family:var(--display);font-size:28px;margin-bottom:8px">Hoy el piso.</h2>
       ${floorLine()}
       <div class="card need-card" data-needk="bandeja"><p class="tagline">Bandeja de hoy${bandejaN ? " · " + bandejaN : " · 0"}</p><h3>${bandejaN ? "Hay gente que necesita toque" : "Bandeja limpia"}</h3><p class="muted">${bandejaN ? "Pedidos · firmas sin código · avisos · PAR-Q · sin sesión" : "Nada pendiente. Toque para abrir Bandeja o ir a Gente."}</p></div>
-      ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : `<div class="card"><p class="ok">0 urgencias. El piso está tranquilo.</p></div>`}
+      ${need.length ? need.map((x) => `<div class="card need-card" data-needk="${x.k}" data-cid="${escAttr(x.id || "")}"><p class="tagline">${escapeHtml(x.t)}${x.extra ? " · " + x.extra : ""}</p><h3>${escapeHtml(x.n)}</h3><p class="muted">${escapeHtml(x.d)}</p></div>`).join("") : (bandejaN ? `<div class="card"><p class="muted">${bandejaN} en la bandeja. No es urgencia de pago ni de sesión, pero hay pedidos por ver.</p></div>` : `<div class="card"><p class="ok">0 urgencias. El piso está tranquilo.</p></div>`)}
       ${state.clients.length ? `<div class="card"><h3>Roster</h3>${state.clients.map((c) => {
         normalizeClient(c);
         const stc = clientStatus(c);
@@ -15651,7 +15660,7 @@ function homeView() {
     </div>
     ${restHome ? `<div class="card"><h3>Hoy · ${escapeHtml(calendarWeekdayName())}</h3><p class="muted">${escapeHtml(rt.name)} · hoy descanso del plan. No hay sesión.</p><div class="actions"><button class="btn ghost" data-view="work">Ver la semana</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : (day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(diHome, day, daysPlan.length))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : "")}
     ${!checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
-    ${(state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
+    ${restHome || (state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
     <div id="moreStudio" class="more-fold" hidden>
       ${(state.history || []).slice(-4).reverse().length ? `<div class="card"><h3>Últimas sesiones</h3>${(state.history || []).slice(-4).reverse().map((h) => `<div class="list-row"><div><strong>${escapeHtml(h.day || "Sesión")}</strong><div class="muted">${escapeHtml(h.date)} · ${h.doneSets}/${h.total} series</div></div></div>`).join("")}</div>` : ""}
@@ -15857,13 +15866,7 @@ function bindPick(root) {
 function workView() {
   let rt = activeRoutine();
   const band = currentBand();
-  if (rt && bandOf(rt) !== band && state.role !== "client") {
-    const next = preferredRoutine(band);
-    if (next) {
-      assignRoutine(next.id);
-      rt = activeRoutine();
-    }
-  }
+  // Opening Hoy is not an assignment. A level filter must not rewrite the client's routine.
   const pool = routinesByBand(band);
   const list = pool.length ? pool : routinesOfBand(band);
   if (!rt || !rt.daysPlan || !rt.daysPlan.length) {
@@ -15964,7 +15967,7 @@ function workView() {
           <p class="hoy-greet">${who}${escapeHtml(hoyDayGreeting())}</p>
           <h2>${escapeHtml(dayBig)}</h2>
           <p class="hoy-meta">${escapeHtml(band)} · descanso</p>
-          <p class="hoy-interp">${escapeHtml(restCopy)} No es lunes.</p>
+          <p class="hoy-interp">${escapeHtml(restCopy)}</p>
           ${strip}
         </div>
         ${hoyRingHtml(0, 0, 0)}
@@ -16292,10 +16295,8 @@ function bindWork() {
       render();
       return;
     }
-    const next = preferredRoutine(band);
-    if (next) assignRoutine(next.id);
-    else persist();
-    toast("Nivel: " + b.textContent + (next ? " · " + next.name : ""));
+    persist();
+    toast("Nivel: " + b.textContent + ". Elija la rutina para asignarla.");
     render();
   });
   const fold = document.querySelector(".focus-session details.more-fold, .session-start details.more-fold");
@@ -16925,15 +16926,12 @@ function peopleView() {
       else if (late) atrasado++;
       else activo++;
     });
-    // local demo rails if empty roster — visual only, does not write clients
-    if (!all.length) { activo = 3; atrasado = 1; nuevo = 2; pausado = 1; }
-    return { activo, atrasado, nuevo, pausado, demo: !all.length };
+    return { activo, atrasado, nuevo, pausado, demo: false };
   })();
   return `<section class="screen">
     <p class="tagline">Estudio</p>
     <h2 style="font-family:var(--display);font-size:28px;margin-bottom:6px">Gente</h2>
     <p class="muted">Fichas y códigos. El código sale con relevo, contrato y pago confirmado.</p>
-    ${railDemo.demo ? `<p class="demo-rails-note">Vista previa local de rieles — no escribe clientes ni nube.</p>` : ""}
     <div class="people-rails" aria-label="Estados">
       <div class="rail activo"><b>${railDemo.activo}</b><span>Activo</span></div>
       <div class="rail atrasado"><b>${railDemo.atrasado}</b><span>Atrasado</span></div>
@@ -17874,6 +17872,28 @@ function showDay1IfNeeded() {
   };
 }
 
+function landWithCode(a) {
+  if (!a) return;
+  state._pendingAssign = null;
+  applyClientAssign(a);
+  state.splash = false;
+  store.set("nb_seen_cover", true);
+  state.view = "work";
+  persist();
+  render();
+  const rt0 = activeRoutine();
+  const n0 = rt0 && rt0.daysPlan ? rt0.daysPlan.length : 0;
+  if (rt0 && n0 && isProgramRestDay(rt0)) {
+    toast("Hoy es " + calendarWeekdayName() + " · descanso. No hay sesión.");
+  } else {
+    const day0 = rt0 && n0 ? rt0.daysPlan[((dayIndex(rt0) % n0) + n0) % n0] : null;
+    if (day0) {
+      const di0 = ((dayIndex(rt0) % n0) + n0) % n0;
+      toast("Hoy toca " + programDayLabel(di0, day0, n0) + " · empecemos");
+    } else toast("Bienvenido. Miguel te asigna pronto.");
+  }
+  setTimeout(() => showDay1IfNeeded(), 350);
+}
 function openCodeEntry() {
   closeModals();
   const modal = document.createElement("div");
@@ -17883,7 +17903,7 @@ function openCodeEntry() {
     <p class="tagline">Cliente</p>
     <h2>Tengo un código</h2>
     <p class="muted">Son 6 dígitos. Se lo envían por WhatsApp cuando el servicio está pagado.</p>
-    <input class="field" id="codeIn" inputmode="numeric" maxlength="24" placeholder="000000" autocomplete="one-time-code">
+    <input class="field" id="codeIn" inputmode="numeric" maxlength="24" placeholder="000000" autocomplete="one-time-code" value="${escAttr(String(state._pendingCode || "").replace(/\D/g, "").slice(0, 6))}">
     <p class="warn" id="codeErr" hidden style="margin:8px 0 0"></p>
     <button class="btn primary" id="useCode">Entrar con este código</button>
     <button class="btn ghost" id="closeSheet">Cerrar</button>
@@ -17911,9 +17931,15 @@ function openCodeEntry() {
       try {
         hit = await Promise.race([
           lookupAccess(a.accessCode),
-          new Promise((resolve) => setTimeout(() => resolve(null), 8000))
+          new Promise((_, reject) => setTimeout(() => reject(nbNetError()), 8000))
         ]);
-      } catch (e) { hit = null; }
+      } catch (e) {
+        if (isNbNet(e)) {
+          setErr("El servidor no contestó. El código sigue escrito. Intente de nuevo.");
+          return;
+        }
+        hit = null;
+      }
       if (hit) {
         a = {
           name: hit.name, plan: hit.plan, routine: hit.routine || "full-inicio",
@@ -17938,36 +17964,16 @@ function openCodeEntry() {
       return;
     }
     modal.remove();
-    if (!waiverSigned() || !contractSigned(a.plan) || !healthComplete()) {
+    if (!waiverSigned() || !healthComplete() || (healthFlagged() && !(state.health && state.health.clearance)) || !contractSigned(a.plan)) {
       if (a.name) state.profile.name = a.name;
+      if (a.plan) state.pendingPlan = a.plan;
       if (a.plan) state.profile.plan = a.plan;
       state._pendingAssign = a;
-      toast("Firme el relevo, el cuestionario y el contrato. Después pegue el código otra vez.");
-      continueJoin(a.plan);
+      toast("Antes de aceptar el código: relevo, cuestionario y contrato. No hace falta pegarlo otra vez.");
+      continueJoin(a.plan || state.pendingPlan || "NiuBision Estándar");
       return;
     }
-    applyClientAssign(a);
-    state.splash = false;
-    store.set("nb_seen_cover", true);
-    state.view = "work";
-    persist();
-    render();
-    (function () {
-      const rt0 = activeRoutine();
-      const n0 = rt0 && rt0.daysPlan ? rt0.daysPlan.length : 0;
-      if (rt0 && n0 && isProgramRestDay(rt0)) {
-        toast("Hoy es " + calendarWeekdayName() + " · descanso. No hay sesión.");
-      } else {
-      const day0 = rt0 && n0
-        ? rt0.daysPlan[((dayIndex(rt0) % n0) + n0) % n0]
-        : null;
-      if (day0) {
-        const di0 = ((dayIndex(rt0) % n0) + n0) % n0;
-        toast("Hoy toca " + programDayLabel(di0, day0, n0) + " · empecemos");
-      } else toast("Bienvenido. Miguel te asigna pronto.");
-      }
-    })();
-    setTimeout(() => showDay1IfNeeded(), 350);
+    landWithCode(a);
     } finally {
       if (btn && document.body.contains(btn)) {
         btn.disabled = false;
@@ -18387,9 +18393,8 @@ function bindChrome() {
       const c = state.clients.find((x) => x.id === b.dataset.cid);
       if (c && clientAwaitingCode(c)) {
         const done = await confirmClientPaid(c, payMethodOfClient(c));
-        if (done && done.client && done.code) {
-          showShare(done.client);
-        } else { state.view = "inbox"; render(); }
+        if (done && done.client && done.code && autoCodeOn()) showShare(done.client);
+        else { state.view = "inbox"; render(); }
         return;
       }
       state.view = "inbox";
@@ -18537,7 +18542,7 @@ function bindChrome() {
     setBusy(b, true, "Un momento…");
     let done = null;
     try {
-      done = await confirmClientPaid(c);
+      done = await confirmClientPaid(c, payMethodOfClient(c));
     } catch (e) {
       setBusy(b, false);
       toast("No se pudo confirmar. Intente de nuevo.");
@@ -18546,9 +18551,7 @@ function bindChrome() {
     if (!done) { render(); return; }
     toast(done.code ? ("Código listo: " + done.code) : "Pago recibido");
     render();
-    if (done.client && done.code) {
-      showShare(done.client);
-    }
+    if (done.client && done.code && autoCodeOn()) showShare(done.client);
     if (done.payment) setTimeout(() => openReceipt(done.payment), 500);
   });
   $$("[data-wa]").forEach((b) => b.onclick = () => {
@@ -18922,6 +18925,7 @@ function viewOrder() {
 }
 let viewGen = 0;
 function afterPaint() {
+  guardLogoMedia(document.querySelector(".app-header .brand"));
   $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
   $$("[data-preview-ex]").forEach((b) => {
     b.onclick = () => { if (b.dataset.previewEx) openExercise(b.dataset.previewEx); };
@@ -19123,7 +19127,10 @@ async function boot() {
     }
   }
   if (state.role === "guest") state.role = null;
-  state._pendingCode = null;
+  if (!store.get("nb_pin_server_seen")) {
+    if (state.pinHash || (state.pin && String(state.pin).length >= 4)) store.set("nb_pin_server", 1);
+    store.set("nb_pin_server_seen", 1);
+  }
   if (state.splash) warmupIntro();
   pinLocked();
   if (store.get("nb_pin_init_9798") && !store.get("nb_pin_secret_v38")) {
@@ -19205,7 +19212,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v8", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v9", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
