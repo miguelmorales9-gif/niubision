@@ -14884,15 +14884,27 @@ function playShutter() {
   store.set("nb_seen_cover", true);
   store.set("nb_seen_intro", true);
   render();
-  const coverImg = document.querySelector(".cover-hybrid .splash-logo");
+  const cover = document.querySelector(".cover-hybrid");
+  const coverImg = cover && cover.querySelector(".splash-logo");
   const to = coverImg ? coverImg.getBoundingClientRect() : null;
   if (coverImg) coverImg.style.visibility = "hidden";
+  if (cover) cover.classList.add("nb-rising");
+  const flash = document.createElement("div");
+  flash.className = "nb-shutter-flash";
+  const fx = from ? from.left + from.width / 2 : ox;
+  const fy = from ? from.top + from.height / 2 : oy;
+  const tx = to && to.width > 0 ? to.left + to.width / 2 : fx;
+  const ty = to && to.width > 0 ? to.top + to.height / 2 : fy;
+  flash.style.left = fx + "px";
+  flash.style.top = fy + "px";
+  host.appendChild(flash);
   const clone = host.querySelector(".nb-shutter-logo");
   const halo = host.querySelector(".nb-shutter-ring");
-  const ms = 840;
+  const ms = 900;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       host.classList.add("open");
+      if (cover) cover.classList.add("nb-risen");
       if (clone && from && to && to.width > 0) {
         clone.animate([
           { left: from.left + "px", top: from.top + "px", width: from.width + "px", height: from.height + "px", opacity: 1 },
@@ -14909,12 +14921,18 @@ function playShutter() {
           { transform: "translate(-50%, -50%) scale(2.5)", opacity: 0 }
         ], { duration: ms, easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" });
       }
+      flash.animate([
+        { left: fx + "px", top: fy + "px", transform: "translate(-50%, -50%) scale(.35)", opacity: 0.95 },
+        { left: tx + "px", top: ty + "px", transform: "translate(-50%, -50%) scale(2.2)", opacity: 0.45, offset: 0.42 },
+        { left: tx + "px", top: ty + "px", transform: "translate(-50%, -50%) scale(3.6)", opacity: 0 }
+      ], { duration: 680, easing: "cubic-bezier(.16,1,.3,1)", fill: "forwards" });
     });
   });
+  setTimeout(() => { if (coverImg) coverImg.style.visibility = ""; }, 820);
   setTimeout(() => {
-    if (coverImg) coverImg.style.visibility = "";
+    if (cover) cover.classList.remove("nb-rising", "nb-risen");
     try { host.remove(); } catch (e) {}
-  }, ms + 40);
+  }, 1080);
 }
 
 function bindSplash() {
@@ -19578,7 +19596,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v1", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v2", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {

@@ -1,9 +1,9 @@
-const CACHE = "nb-offline-shutter-v1";
+const CACHE = "nb-offline-shutter-v2";
 const SHELL = [
   "/",
   "/index.html",
-  "/app/styles.css?v=shutter-v1",
-  "/app/app.js?v=shutter-v1",
+  "/app/styles.css?v=shutter-v2",
+  "/app/app.js?v=shutter-v2",
   "/favicon.svg",
   "/logo.png",
   "/icon-48.png",
