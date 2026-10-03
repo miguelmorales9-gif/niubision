@@ -14842,21 +14842,45 @@ function playIntro() {
   });
 }
 
-function playSheet() {
+function playRing() {
+  const splash = $("#splash");
+  const ringEl = splash && splash.querySelector(".ring-hold");
+  const logo = splash && splash.querySelector(".splash-logo");
+  const box = (ringEl && ringEl.getBoundingClientRect().width) ? ringEl.getBoundingClientRect() : (logo ? logo.getBoundingClientRect() : null);
+  const ox = box ? box.left + box.width / 2 : window.innerWidth / 2;
+  const oy = box ? box.top + box.height / 2 : window.innerHeight * 0.42;
+  const startD = box && box.width > 40 ? box.width : 220;
+  const corners = [[0, 0], [window.innerWidth, 0], [0, window.innerHeight], [window.innerWidth, window.innerHeight]];
+  let far = 0;
+  corners.forEach(function (pt) {
+    far = Math.max(far, Math.hypot(pt[0] - ox, pt[1] - oy));
+  });
+  const grow = (far * 2.25) / startD;
   state.splash = false;
   store.set("nb_seen_cover", true);
   store.set("nb_seen_intro", true);
   render();
   const cover = document.querySelector(".cover-hybrid");
-  if (!cover) return;
-  cover.classList.add("nb-sheet");
-  cover.getBoundingClientRect();
+  if (cover) cover.classList.add("nb-held");
+  const host = document.createElement("div");
+  host.id = "nbRingReveal";
+  host.className = "nb-ring-reveal";
+  host.setAttribute("aria-hidden", "true");
+  host.style.setProperty("--ox", ox + "px");
+  host.style.setProperty("--oy", oy + "px");
+  host.style.setProperty("--d", startD + "px");
+  host.style.setProperty("--grow", String(grow));
+  const hole = document.createElement("div");
+  hole.className = "nb-ring-hole";
+  host.appendChild(hole);
+  document.body.appendChild(host);
   const ms = 900;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => cover.classList.add("nb-sheet-in"));
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { host.classList.add("open"); });
   });
-  setTimeout(() => {
-    cover.classList.remove("nb-sheet", "nb-sheet-in");
+  setTimeout(function () {
+    try { host.remove(); } catch (e) {}
+    if (cover) cover.classList.remove("nb-held");
   }, ms + 40);
 }
 
@@ -14890,7 +14914,7 @@ function bindSplash() {
       render();
       return;
     }
-    playSheet();
+    playRing();
   };
   const step = (on) => {
     ticking = on;
@@ -19521,7 +19545,7 @@ async function boot() {
         return;
       }
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v3", { updateViaCache: "none" });
+        const reg = await navigator.serviceWorker.register("/sw.js?v=shutter-v4", { updateViaCache: "none" });
         if (reg.sync) reg.sync.register("nb-sync").catch(() => {});
         if (reg.periodicSync) reg.periodicSync.register("nb-sync", { minInterval: 15 * 60 * 1000 }).catch(() => {});
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && (state.role === "coach" || state.role === "client")) {
