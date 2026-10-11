@@ -39,7 +39,10 @@ self.addEventListener("fetch", (e) => {
 });
 '''
 sw=sw.replace('self.addEventListener("fetch"', redir.strip()+'\nself.addEventListener("fetch"',1)
-sw=sw.replace('const raw = (e.notification.data && e.notification.data.url) || "/";','let raw = (e.notification.data && e.notification.data.url) || "/app/";\n  if (/^\\/(\\?|#|$)/.test(raw)) raw = "/app" + raw;')
+sw=sw.replace('const raw = (e.notification.data && e.notification.data.url) || "/";','let raw = (e.notification.data && e.notification.data.url) || "/app/";\n  if (/^\\/(\\?|#|$)/.test(raw)) raw = "/app" + raw;\n  else if (/^[?#]/.test(raw)) raw = "/app/" + raw;')
+nc=sw.split('self.addEventListener("notificationclick"',1)
+nc[1]=nc[1].replace('let target = "/";','let target = "/app/";',1).replace('target = "/?view=inbox"','target = "/app/?view=inbox"',1).replace('target = "/?view=work"','target = "/app/?view=work"',1).replace('catch (err) { target = "/"; }','catch (err) { target = "/app/"; }',1)
+sw='self.addEventListener("notificationclick"'.join(nc)
 open(f"{out}/sw.js","w").write(sw)
 open(f"{out}/niubision.html","w").write('<!DOCTYPE html><meta charset="utf-8"><script>location.replace("/app/"+location.search+location.hash)</script><meta http-equiv="refresh" content="0; url=/app/">')
 PY
