@@ -1,3 +1,23 @@
+/* NiuBision error reporter: PII-free, deduped, max 5 per page load, 50% sampled after the first. */
+(function () {
+  if (window.__nbErr) return; window.__nbErr = 1;
+  var EP = "https://api.niubision.com/api/log", sent = {}, n = 0;
+  var v = ""; try { var sc = document.currentScript && document.currentScript.src; v = (sc && (sc.split("v=")[1] || "")) || ""; } catch (e) {}
+  function report(kind, msg, stack, line, col) {
+    try {
+      msg = String(msg || "").slice(0, 300); if (!msg || /^Script error\.?$/.test(msg)) return;
+      if (/ResizeObserver loop|extension:\/\/|chrome-extension/i.test(msg + stack)) return;
+      var k = kind + "|" + msg; if (sent[k] || n >= 5) return; if (n > 0 && Math.random() < 0.5) return;
+      sent[k] = 1; n++;
+      var body = JSON.stringify({ src: "app", kind: kind, msg: msg, stack: String(stack || "").slice(0, 1500), path: location.pathname, line: line || 0, col: col || 0, v: v });
+      if (navigator.sendBeacon) navigator.sendBeacon(EP, new Blob([body], { type: "text/plain" }));
+      else fetch(EP, { method: "POST", body: body, mode: "cors", credentials: "omit", keepalive: true, headers: { "Content-Type": "text/plain" } }).catch(function () {});
+    } catch (e) {}
+  }
+  window.addEventListener("error", function (e) { if (e && e.message) report("error", e.message, e.error && e.error.stack, e.lineno, e.colno); });
+  window.addEventListener("unhandledrejection", function (e) { var r = e && e.reason; report("rejection", r && r.message ? r.message : String(r), r && r.stack); });
+  window.nbReportError = report;
+})();
 
 window.NBexercises = [
   {
@@ -10525,12 +10545,14 @@ async function cloudGet(url, opts) {
   const ctrl = extra.signal ? null : new AbortController();
   const t = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
   try {
-    return await fetch(url, Object.assign({
+    const res = await fetch(url, Object.assign({
       mode: "cors",
       credentials: "omit",
       cache: "no-store",
       referrerPolicy: "origin"
     }, extra, ctrl ? { signal: ctrl.signal } : {}));
+    if (res && res.status === 429) { try { noteRateLimit(res); } catch (e) {} }
+    return res;
   } finally {
     if (t) clearTimeout(t);
   }

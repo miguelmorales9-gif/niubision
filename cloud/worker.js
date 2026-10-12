@@ -237,16 +237,128 @@ function mergeStudio(prev, next) {
   return out;
 }
 
-function json(body, status) {
+function json(body, status, extra) {
   return new Response(JSON.stringify(body), {
     status: status || 200,
-    headers: {
+    headers: Object.assign({
       "content-type": "application/json; charset=utf-8",
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
-      "access-control-allow-headers": "Content-Type, Authorization, X-Nb-Pin"
-    }
+      "access-control-allow-headers": "Content-Type, Authorization, X-Nb-Pin",
+      "access-control-expose-headers": "Retry-After"
+    }, extra || {})
   });
+}
+
+// ---- Per-IP rate limiting (Workers Rate Limiting bindings, see wrangler.toml) ----
+// bucket -> [binding name, period seconds]
+const RL = {
+  auth: ["RL_AUTH", 60],   // PIN / coach login, studio, export, revoke, error log read: 10/min
+  code: ["RL_CODE", 60],   // code redeem / receipt / paid / me: 20/min
+  pay: ["RL_PAY", 60],     // pay, lead, program-request, report, push subscribe: 20/min
+  ipn: ["RL_IPN", 60],     // PayPal IPN (PayPal servers): 60/min
+  write: ["RL_WRITE", 60], // state PUT, logout: 60/min
+  log: ["RL_LOG", 60],     // client error reports: 10/min
+  test: ["RL_TEST", 10],   // GET /api/rl-test (non-mutating probe): 5 per 10 s
+  read: ["RL_READ", 60]    // everything else: 300/min
+};
+function rlBucket(path, method) {
+  if (path === "/" || path === "/health" || path === "/api/health") return null;
+  if (path === "/api/rl-test") return "test";
+  if (path === "/api/auth/login" || path === "/api/login" || path === "/api/studio" || path === "/api/export" || path === "/api/revoke") return "auth";
+  if (path.indexOf("/api/log") === 0) return method === "POST" ? "log" : "auth";
+  if (path === "/api/redeem" || path === "/api/receipt" || path === "/api/paid" || path === "/api/auth/me" || path === "/api/me") return "code";
+  if (path === "/api/paypal") return "ipn";
+  if (path === "/api/pay" || path === "/api/lead" || path === "/api/program-request" || path === "/api/report" || path.indexOf("/api/push/") === 0 && method === "POST") return "pay";
+  if (method !== "GET" && method !== "HEAD") return "write";
+  return "read";
+}
+async function rateLimited(req, env, path, method) {
+  const b = rlBucket(path, method);
+  if (!b) return null;
+  const [name, period] = RL[b];
+  const lim = env && env[name];
+  if (!lim || typeof lim.limit !== "function") return null; // binding absent: fail open
+  try {
+    const { success } = await lim.limit({ key: b + ":" + clientIp(req) });
+    if (success) return null;
+  } catch (e) {
+    return null; // never block on limiter errors
+  }
+  console.log(JSON.stringify({ level: "warn", ev: "rate_limited", bucket: b, path, method }));
+  return json({ error: "Demasiados intentos. Espere un minuto y vuelva a intentar.", code: "rate_limited", retryAfter: period }, 429, { "retry-after": String(period) });
+}
+
+// ---- Client error reports (POST /api/log), PII-scrubbed, deduped, KV TTL 30 days ----
+const LOG_TTL = 30 * 24 * 3600;
+const LOG_ORIGINS = /^https:\/\/((www\.)?niubision\.(app|com)|([a-z0-9-]+\.)?niubision-(app|web)\.pages\.dev|localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i;
+function scrub(v, max) {
+  return String(v == null ? "" : v)
+    .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "[email]")
+    .replace(/\b[0-9a-f]{16,}\b/gi, "[hex]")
+    .replace(/\d{6,}/g, "[n]")
+    .replace(/(pin|token|code|c|inv|pago)=[^&\s"']*/gi, "$1=[x]")
+    .slice(0, max);
+}
+async function sha(s) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(d).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function handleLog(req, env, url, method) {
+  if (method === "POST") {
+    const origin = req.headers.get("origin") || "";
+    const raw = await req.text();
+    if (raw.length > 4096) return json({ error: "Demasiado grande" }, 413);
+    if (!LOG_ORIGINS.test(origin)) return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } });
+    let b = {};
+    try { b = JSON.parse(raw); } catch (e) { return json({ error: "JSON inválido" }, 400); }
+    const path = String(b.path || "").split(/[?#]/)[0];
+    const rec = {
+      t: Date.now(),
+      src: /^(app|web)$/.test(b.src) ? b.src : "app",
+      kind: scrub(b.kind || "error", 20),
+      msg: scrub(b.msg, 300),
+      stack: scrub(b.stack, 1500),
+      path: scrub(path, 200),
+      line: Number(b.line) || 0,
+      col: Number(b.col) || 0,
+      v: scrub(b.v, 40),
+      ua: scrub(req.headers.get("user-agent") || b.ua, 200),
+      country: (req.cf && req.cf.country) || ""
+    };
+    if (!rec.msg) return json({ error: "Falta msg" }, 400);
+    const h = await sha(rec.src + "|" + rec.msg + "|" + rec.stack.split("\n")[0] + "|" + rec.v);
+    rec.h = h;
+    console.log(JSON.stringify(Object.assign({ level: "error", ev: "client_error" }, rec)));
+    const seen = await env.STUDIO.get("logd:" + h);
+    if (!seen) {
+      await env.STUDIO.put("logd:" + h, "1", { expirationTtl: 3600 });
+      const inv = String(9999999999999 - rec.t).padStart(13, "0");
+      await env.STUDIO.put("log:" + inv + ":" + h, JSON.stringify(rec), { expirationTtl: LOG_TTL });
+    }
+    return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } });
+  }
+  if (method === "GET") {
+    if (!pinOk(env, pinOf(req, url, null))) return json({ error: "PIN de estudio requerido" }, 403);
+    const hours = Math.min(24 * 30, Math.max(1, Number(url.searchParams.get("hours")) || 24 * 30));
+    const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit")) || 50));
+    const since = Date.now() - hours * 3600 * 1000;
+    const list = await env.STUDIO.list({ prefix: "log:", limit });
+    const items = [];
+    for (const k of list.keys) {
+      const v = await env.STUDIO.get(k.name);
+      if (!v) continue;
+      const r = JSON.parse(v);
+      if (r.t >= since) items.push(r);
+    }
+    if (url.pathname.replace(/\/$/, "") === "/api/log/summary") {
+      const g = {};
+      items.forEach((r) => { const k = r.src + " · " + r.msg; g[k] = g[k] || { n: 0, last: 0, v: r.v, path: r.path }; g[k].n++; g[k].last = Math.max(g[k].last, r.t); });
+      return json({ ok: true, hours, distinct: Object.keys(g).length, groups: Object.entries(g).map(([k, x]) => Object.assign({ key: k }, x)).sort((a, b) => b.last - a.last) });
+    }
+    return json({ ok: true, hours, count: items.length, items });
+  }
+  return json({ error: "Método no permitido" }, 405);
 }
 
 function newToken() {
@@ -535,7 +647,11 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 31, push: !!(env && env.VAPID_PUBLIC_KEY) });
+  const limited = await rateLimited(req, env, path, method);
+  if (limited) return limited;
+  if (path === "/api/rl-test") return json({ ok: true, probe: true });
+  if (path === "/api/log" || path === "/api/log/summary") return handleLog(req, env, url, method);
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 32, push: !!(env && env.VAPID_PUBLIC_KEY) });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -1012,6 +1128,9 @@ export default {
     try {
       return await handle(request, env);
     } catch (err) {
+      let path = "";
+      try { path = new URL(request.url).pathname; } catch (e) {}
+      console.error(JSON.stringify({ level: "error", ev: "worker_exception", path, method: request.method, msg: String(err && err.message || err).slice(0, 300), stack: String(err && err.stack || "").slice(0, 1500) }));
       return json({ error: String(err && err.message ? err.message : err) }, 500);
     }
   }
