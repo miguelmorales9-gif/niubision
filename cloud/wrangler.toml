@@ -2,6 +2,14 @@ name = "niubision-api"
 main = "worker.js"
 compatibility_date = "2026-01-01"
 
+[vars]
+DB_MODE = "dual"   # kv | dual (write KV+D1, read D1 w/ KV fallback by rev) | d1
+
+[[d1_databases]]
+binding = "DB"
+database_name = "niubision-db"
+database_id = "95f1d9a9-8e7e-43dc-a410-d1a300744d13"
+
 [[kv_namespaces]]
 binding = "STUDIO"
 id = "ced5c36d5b1b4d35a8d522a78d9e448e"
