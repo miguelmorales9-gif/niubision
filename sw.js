@@ -166,7 +166,8 @@ self.addEventListener("notificationclick", (e) => {
   const raw = (e.notification.data && e.notification.data.url) || "/";
   let target = "/";
   try {
-    if (/^https?:/i.test(raw)) target = raw;
+    if (/^https?:\/\/(www\.)?niubision\.com(\/|$)/i.test(raw)) target = self.location.origin + (raw.replace(/^https?:\/\/[^/]+/i, "") || "/");
+    else if (/^https?:/i.test(raw)) target = raw;
     else if (raw.charAt(0) === "/" || raw.charAt(0) === "?") target = raw;
     else if (raw === "bandeja" || raw === "inbox") target = "/?view=inbox";
     else if (raw === "hoy" || raw === "work") target = "/?view=work";
