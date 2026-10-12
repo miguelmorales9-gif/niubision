@@ -82,5 +82,14 @@ for f in ("index.html", "sw.js"):
                         lambda m: f'<link rel="preload" as="style" href="{m.group(1)}" onload="this.onload=null;this.rel=\'stylesheet\'">'
                                   f'<noscript><link rel="stylesheet" href="{m.group(1)}"></noscript>', t, count=1)
         assert nf == 1, "fonts link not found"
+        # Inline the 1-line env config (same content as /config.js, kept for the SW) to drop a blocking request
+        cfg = open(f"{out}/config.js", encoding="utf-8").read().strip()
+        assert "</" not in cfg
+        t = t.replace('<script src="/config.js"></script>', f"<script>{cfg}</script>", 1)
     open(f"{out}/{f}", "w", encoding="utf-8").write(t)
+css_p = f"{out}/app/styles.css"
+try:  # whitespace-only CSS minify (no rule merging)
+    subprocess.run(["npx", "-y", "esbuild@0.28.2", css_p, "--minify-whitespace", "--log-level=warning", "--outfile=" + css_p, "--allow-overwrite"], check=True)
+except Exception as e:
+    print("esbuild css minify skipped:", e, file=sys.stderr)
 print(f"optimize-app: {n} images extracted, app.js v={h}, {os.path.getsize(js_p)} bytes, data {data_url} {os.path.getsize(out + data_url)} bytes, views {views_url} {os.path.getsize(out + views_url)} bytes")
