@@ -291,6 +291,7 @@ async function rateLimited(req, env, path, method) {
 
 // ---- Client error reports (POST /api/log), PII-scrubbed, deduped, KV TTL 30 days ----
 const LOG_TTL = 30 * 24 * 3600;
+const LOG_DAY_MAX = 50; // unique errors stored per UTC day (=> max 100 KV writes/day)
 const LOG_ORIGINS = /^https:\/\/((www\.)?niubision\.(app|com)|([a-z0-9-]+\.)?niubision-(app|web)\.pages\.dev|localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i;
 function scrub(v, max) {
   return String(v == null ? "" : v)
@@ -330,11 +331,26 @@ async function handleLog(req, env, url, method) {
     const h = await sha(rec.src + "|" + rec.msg + "|" + rec.stack.split("\n")[0] + "|" + rec.v);
     rec.h = h;
     console.log(JSON.stringify(Object.assign({ level: "error", ev: "client_error" }, rec)));
-    const seen = await env.STUDIO.get("logd:" + h);
-    if (!seen) {
-      await env.STUDIO.put("logd:" + h, "1", { expirationTtl: 3600 });
-      const inv = String(9999999999999 - rec.t).padStart(13, "0");
-      await env.STUDIO.put("log:" + inv + ":" + h, JSON.stringify(rec), { expirationTtl: LOG_TTL });
+    // Hard daily cap on KV writes so error reports never starve client data (free tier: 1000 writes/day).
+    // Per unique error: 2 writes (record + day index). Cap LOG_DAY_MAX uniques/day => <= 2*LOG_DAY_MAX writes.
+    // Over cap (or duplicate today): Workers Logs only (console line above).
+    const day = new Date(rec.t).toISOString().slice(0, 10);
+    const mem = (globalThis.__nbLogDay && globalThis.__nbLogDay.day === day) ? globalThis.__nbLogDay : (globalThis.__nbLogDay = { day, full: false, seen: new Set() });
+    if (!mem.full && !mem.seen.has(h)) {
+      const idxKey = "logday:" + day;
+      let idx = { n: 0, h: [] };
+      try { idx = JSON.parse((await env.STUDIO.get(idxKey)) || "null") || idx; } catch (e) {}
+      idx.h.forEach((x) => mem.seen.add(x));
+      if (idx.n >= LOG_DAY_MAX) {
+        mem.full = true;
+        console.log(JSON.stringify({ level: "warn", ev: "log_kv_cap_reached", day, n: idx.n }));
+      } else if (!mem.seen.has(h)) {
+        mem.seen.add(h);
+        idx.n += 1; idx.h.push(h);
+        const inv = String(9999999999999 - rec.t).padStart(13, "0");
+        await env.STUDIO.put("log:" + inv + ":" + h, JSON.stringify(rec), { expirationTtl: LOG_TTL });
+        await env.STUDIO.put(idxKey, JSON.stringify(idx), { expirationTtl: 2 * 24 * 3600 });
+      }
     }
     return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } });
   }
@@ -651,7 +667,7 @@ async function handle(req, env) {
   if (limited) return limited;
   if (path === "/api/rl-test") return json({ ok: true, probe: true });
   if (path === "/api/log" || path === "/api/log/summary") return handleLog(req, env, url, method);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 32, push: !!(env && env.VAPID_PUBLIC_KEY) });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 33, push: !!(env && env.VAPID_PUBLIC_KEY) });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
