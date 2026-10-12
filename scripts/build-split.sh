@@ -18,7 +18,8 @@ out="$root/dist"; rm -rf "$out"; mkdir -p "$out/web" "$out/app/app"
 sub() { sed -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__ROBOTS__#$ROBOTS#g" "$1" > "$2"; }
 
 LASTMOD="$(date -u +%Y-%m-%d)"
-SEC_HEADERS='/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  X-Frame-Options: SAMEORIGIN\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n  Strict-Transport-Security: max-age=31536000\n'
+WEB_HEADERS="/*\n  Strict-Transport-Security: max-age=15552000\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=(), interest-cohort=()\n  X-Frame-Options: SAMEORIGIN\n  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.niubision.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; base-uri 'self'; object-src 'none'\n/\n  ! Access-Control-Allow-Origin\n"
+APP_HEADERS="/*\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self \"https://www.paypal.com\"), usb=(), interest-cohort=()\n  X-Frame-Options: SAMEORIGIN\n  Cross-Origin-Opener-Policy: same-origin-allow-popups\n  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://www.paypal.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.niubision.com https://niubision-api.miguel-morales9.workers.dev https://ntfy.sh https://www.paypal.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://www.paypal.com; media-src 'self' https: blob:; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://www.paypal.com; object-src 'none'\n/\n  ! Access-Control-Allow-Origin\n"
 # ---- web (landing) ----
 cp -r "$root/web/assets" "$out/web/"
 sub "$root/web/index.html" "$out/web/index.html"
@@ -36,7 +37,7 @@ else
   printf 'User-agent: *\nDisallow: /\n' > "$out/web/robots.txt"
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/web/_headers"
 fi
-printf "$SEC_HEADERS" >> "$out/web/_headers"
+printf "$WEB_HEADERS" >> "$out/web/_headers"
 printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n/assets/*\n  Cache-Control: public, max-age=604800\n' >> "$out/web/_headers"
 
 # ---- app (own origin, root scope) ----
@@ -76,7 +77,7 @@ app_ld = {"@context": "https://schema.org", "@graph": [
    "image": APP + "/og.jpg", "screenshot": [APP + "/screenshot-phone.png", APP + "/screenshot-wide.png"],
    "publisher": {"@id": WEB + "/#business"}, "author": {"@id": WEB + "/#miguel"}, "isAccessibleForFree": False,
    "offers": {"@type": "Offer", "price": "39", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
-  {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/NiuBision"]},
+  {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/NiuBision", "https://www.facebook.com/61553061513345", "https://www.instagram.com/niubision/"], "address": {"@type": "PostalAddress", "addressLocality": "Arecibo", "addressRegion": "PR", "addressCountry": "US"}},
   {"@type": "Person", "@id": WEB + "/#miguel", "name": "Miguel Morales", "url": WEB + "/"}]}
 s, nld = re.subn(r'<script type="application/ld\+json">.*?</script>', lambda m: '<script type="application/ld+json">' + json.dumps(app_ld, ensure_ascii=False) + '</script>', s, count=1, flags=re.S)
 assert nld == 1
@@ -103,7 +104,7 @@ PY
 if [ "$env" = preview ]; then printf 'User-agent: *\nDisallow: /\n' > "$out/app/robots.txt"; printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/app/_headers"
 else printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$APP_URL" > "$out/app/robots.txt"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc><lastmod>%s</lastmod></url></urlset>\n' "$APP_URL" "$LASTMOD" > "$out/app/sitemap.xml"; fi
-printf "$SEC_HEADERS" >> "$out/app/_headers"
+printf "$APP_HEADERS" >> "$out/app/_headers"
 printf '/sw.js\n  Cache-Control: no-cache\n/config.js\n  Cache-Control: no-cache\n' >> "$out/app/_headers"
 python3 "$root/scripts/optimize-app.py" "$out/app"
 printf '/app/img/*\n  Cache-Control: public, max-age=31536000, immutable\n' >> "$out/app/_headers"
