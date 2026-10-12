@@ -19815,13 +19815,17 @@ function afterPaint() {
 function nbDataReady() { return !!(window.NBexercises && window.NBroutinesStock) && (!window.NB_VIEWS_SRC || !!window.__nbViews); }
 let nbDataP = null;
 let nbDataFailed = false;
-function nbLoadScript(src) {
+function nbLoadScript(src, retry) {
   return new Promise((resolve) => {
     const el = document.createElement("script");
     el.src = src;
     el.async = true;
     el.onload = () => resolve(true);
-    el.onerror = () => { el.remove(); resolve(false); };
+    el.onerror = () => {
+      el.remove();
+      if (retry === 0) return resolve(false);
+      setTimeout(() => { nbLoadScript(src + (src.indexOf("?") < 0 ? "?r=1" : "&r=1"), 0).then(resolve); }, 900);
+    };
     document.head.appendChild(el);
   });
 }
@@ -20048,7 +20052,11 @@ async function boot() {
     if (!nbDataReady() && (window.NB_DATA_SRC || window.NB_VIEWS_SRC)) {
       // Signed-in views need the data before first paint; the gate/splash does not (load it right after).
       if (state.role && !state.splash) await nbLoadData();
-      else nbLoadData();
+      else {
+        // Gate/splash first: fetch the chunks after the page's load event so they don't compete with the LCP.
+        const kick = () => setTimeout(() => { nbLoadData(); }, 0);
+        if (document.readyState === "complete") kick(); else window.addEventListener("load", kick, { once: true });
+      }
     }
     if (window.NBexercises && window.NBexercises.length) state.exercises = window.NBexercises;
     else if (window.NB_DATA_SRC) { /* set by nbLoadData() when the chunk arrives */ }
