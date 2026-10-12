@@ -38,7 +38,7 @@ else
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/web/_headers"
 fi
 printf "$WEB_HEADERS" >> "$out/web/_headers"
-printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n/assets/*\n  Cache-Control: public, max-age=604800\n' >> "$out/web/_headers"
+printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n  ! Access-Control-Allow-Origin\n/assets/*\n  Cache-Control: public, max-age=604800\n' >> "$out/web/_headers"
 
 # ---- app (own origin, root scope) ----
 cp "$root/app/app.js" "$root/app/styles.css" "$out/app/app/"
