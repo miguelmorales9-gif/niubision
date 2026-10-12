@@ -11,3 +11,41 @@ id = "ced5c36d5b1b4d35a8d522a78d9e448e"
 #   VAPID_PRIVATE_KEY
 #   VAPID_SUBJECT   (optional, mailto:…)
 #   COACH_PIN
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Per-IP rate limits (Workers Rate Limiting API; period must be 10 or 60 s)
+[[ratelimits]]
+name = "RL_AUTH"
+namespace_id = "1101"
+simple = { limit = 10, period = 60 }
+[[ratelimits]]
+name = "RL_CODE"
+namespace_id = "1102"
+simple = { limit = 20, period = 60 }
+[[ratelimits]]
+name = "RL_PAY"
+namespace_id = "1103"
+simple = { limit = 20, period = 60 }
+[[ratelimits]]
+name = "RL_IPN"
+namespace_id = "1104"
+simple = { limit = 60, period = 60 }
+[[ratelimits]]
+name = "RL_WRITE"
+namespace_id = "1105"
+simple = { limit = 60, period = 60 }
+[[ratelimits]]
+name = "RL_LOG"
+namespace_id = "1106"
+simple = { limit = 10, period = 60 }
+[[ratelimits]]
+name = "RL_TEST"
+namespace_id = "1107"
+simple = { limit = 5, period = 10 }
+[[ratelimits]]
+name = "RL_READ"
+namespace_id = "1108"
+simple = { limit = 300, period = 60 }

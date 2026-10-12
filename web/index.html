@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<script>(function(){var n=0,s={};function r(k,m,st){try{m=String(m||"").slice(0,300);if(!m||/^Script error/.test(m)||n>=3||s[m])return;s[m]=1;n++;var b=JSON.stringify({src:"web",kind:k,msg:m,stack:String(st||"").slice(0,1500),path:location.pathname,v:"web"});navigator.sendBeacon&&navigator.sendBeacon("https://api.niubision.com/api/log",new Blob([b],{type:"text/plain"}));}catch(e){}}addEventListener("error",function(e){e&&e.message&&r("error",e.message,e.error&&e.error.stack)});addEventListener("unhandledrejection",function(e){var x=e&&e.reason;r("rejection",x&&x.message||String(x),x&&x.stack)});})();</script>
 <script>(function(){var h=location.hash.replace(/^#\/?/,"");if(/^(privacy|privacidad|terms|terminos)$/i.test(h)||/(^|&)(n|nube|t|ticket)=/.test(h)){location.replace("__APP_URL__/"+location.search+location.hash);}if("serviceWorker"in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});}).catch(function(){});}})();</script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
