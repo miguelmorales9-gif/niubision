@@ -19810,7 +19810,49 @@ function afterPaint() {
     setTimeout(() => maybeWeekRecap(false), 700);
   }
 }
+// ---- Lazy data chunk (exercise library + stock routines). Build moves the data to /app/data.<hash>.js
+// and sets window.NB_DATA_SRC; in the single-file source the data is inline and this is a no-op. ----
+function nbDataReady() { return !!(window.NBexercises && window.NBroutinesStock) && (!window.NB_VIEWS_SRC || !!window.__nbViews); }
+let nbDataP = null;
+let nbDataFailed = false;
+function nbLoadScript(src) {
+  return new Promise((resolve) => {
+    const el = document.createElement("script");
+    el.src = src;
+    el.async = true;
+    el.onload = () => resolve(true);
+    el.onerror = () => { el.remove(); resolve(false); };
+    document.head.appendChild(el);
+  });
+}
+function nbLoadData() {
+  if (nbDataReady()) return Promise.resolve(true);
+  if (!window.NB_DATA_SRC && !window.NB_VIEWS_SRC) return Promise.resolve(false);
+  if (nbDataP) return nbDataP;
+  const jobs = [];
+  if (window.NB_DATA_SRC && !(window.NBexercises && window.NBroutinesStock)) jobs.push(nbLoadScript(window.NB_DATA_SRC));
+  if (window.NB_VIEWS_SRC && !window.__nbViews) jobs.push(nbLoadScript(window.NB_VIEWS_SRC));
+  nbDataP = Promise.all(jobs).then(() => {
+    if (window.NBroutinesStock && !window.NBroutines) window.NBroutines = window.NBroutinesStock;
+    if (window.NBexercises && window.NBexercises.length) state.exercises = window.NBexercises;
+    const ok = nbDataReady();
+    nbDataP = null;
+    nbDataFailed = !ok;
+    return ok;
+  });
+  return nbDataP;
+}
 function render() {
+  if (!nbDataReady() && (window.NB_DATA_SRC || window.NB_VIEWS_SRC) && !state.splash && state.role) {
+    if (nbDataFailed) {
+      nbDataFailed = false;
+      const el = document.getElementById("app");
+      if (el) el.innerHTML = "<section class='screen'><h2>NiuBision</h2><p class='muted'>No se pudo cargar la app. Revise su conexión.</p><button class='btn primary' type='button' onclick='location.reload()'>Reintentar</button></section>";
+      return;
+    }
+    nbLoadData().then(() => render());
+    return;
+  }
   if (state.role === "client" && isRevoked(state.profile && state.profile.accessCode, state.profile && state.profile.clientId)) {
     lockOutClient();
   }
@@ -20003,7 +20045,13 @@ async function boot() {
   if (rename[state.profile.plan]) state.profile.plan = rename[state.profile.plan];
   (Array.isArray(state.clients) ? state.clients : []).forEach((c) => { if (rename[c.plan]) c.plan = rename[c.plan]; });
   try {
+    if (!nbDataReady() && (window.NB_DATA_SRC || window.NB_VIEWS_SRC)) {
+      // Signed-in views need the data before first paint; the gate/splash does not (load it right after).
+      if (state.role && !state.splash) await nbLoadData();
+      else nbLoadData();
+    }
     if (window.NBexercises && window.NBexercises.length) state.exercises = window.NBexercises;
+    else if (window.NB_DATA_SRC) { /* set by nbLoadData() when the chunk arrives */ }
     else {
       const res = await fetch("data/exercises.json");
       state.exercises = await res.json();
