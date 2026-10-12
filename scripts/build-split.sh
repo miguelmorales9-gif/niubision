@@ -72,5 +72,7 @@ PY
 if [ "$env" = preview ]; then printf 'User-agent: *\nDisallow: /\n' > "$out/app/robots.txt"; printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/app/_headers"
 else printf 'User-agent: *\nAllow: /\n' > "$out/app/robots.txt"; fi
 printf '/sw.js\n  Cache-Control: no-cache\n/config.js\n  Cache-Control: no-cache\n' >> "$out/app/_headers"
+python3 "$root/scripts/optimize-app.py" "$out/app"
+printf '/app/img/*\n  Cache-Control: public, max-age=31536000, immutable\n' >> "$out/app/_headers"
 # assetlinks.json is intentionally NOT copied: see PLAYSTORE.md (template only).
 echo "built $env: web=$WEB_URL app=$APP_URL -> $out"

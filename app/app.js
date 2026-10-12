@@ -11242,6 +11242,7 @@ async function cloudRegisterStudio() {
 }
 async function ensureCloud() {
   if (!isOnline()) return { ok: false, offline: true };
+  if (state.role !== "coach") return { ok: false, skipped: true }; // only the coach registers/pushes the studio (needs PIN)
   try {
     await cloudRegisterStudio();
     const p = await cloudPush();
