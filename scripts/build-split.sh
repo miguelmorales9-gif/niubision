@@ -50,7 +50,9 @@ s = s.replace("https://niubision.com/#privacy", APP + "/?view=privacy").replace(
 s = s.replace("https://niubision.com/manifest.webmanifest", "/manifest.webmanifest")
 s = re.sub(r'<link rel="sitemap"[^>]*>\n?', "", s)
 s = re.sub(r'https://niubision\.com/(?=[a-z0-9_-]+\.(png|jpg|svg))', APP + "/", s)
-s = s.replace("https://niubision.com/", WEB + "/")  # canonical, hreflang, JSON-LD ids -> marketing site
+s = re.sub(r'<link rel="canonical"[^>]*>', '<link rel="canonical" href="%s/">' % APP, s, count=1)  # app is its own canonical
+s = re.sub(r'[ \t]*<link rel="alternate" hreflang="[^"]*"[^>]*>\n?', "", s)  # no hreflang on the app
+s = s.replace("https://niubision.com/", WEB + "/")  # JSON-LD ids, og -> marketing site
 s = s.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta name="robots" content="%s">' % ROBOTS, 1)
 s = s.replace('<p><a href="' + APP + '/?view=privacy">', '<p><a href="' + WEB + '/">niubision.com</a> · <a href="' + APP + '/?view=privacy">', 1)
 open(f"{out}/index.html", "w", encoding="utf-8").write(s)
