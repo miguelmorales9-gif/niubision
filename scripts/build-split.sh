@@ -2,6 +2,8 @@
 # Build the split architecture: marketing landing (web/) + app at its own root.
 #   NB_ENV=preview    bash scripts/build-split.sh   -> dist/web, dist/app (pages.dev URLs, noindex)
 #   NB_ENV=production bash scripts/build-split.sh   -> niubision.com / niubision.app (indexable)
+# Deploy: (cd dist/web-project && wrangler pages deploy ../web --project-name niubision-web --branch main)
+#         wrangler pages deploy dist/app --project-name niubision-app --branch main
 # Single source of truth for cross-links: the case block below (WEB_URL / APP_URL).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,6 +21,11 @@ sub() { sed -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__
 cp -r "$root/web/assets" "$out/web/"
 sub "$root/web/index.html" "$out/web/index.html"
 cp "$root/web/404.html" "$out/web/404.html"
+cp "$root/web/sw.js" "$out/web/sw.js"   # self-unregistering: retires old app SW on niubision.com
+# Pages Functions live outside the static dir (wrangler reads ./functions from the cwd):
+#   cd dist/web-project && wrangler pages deploy ../web --project-name niubision-web
+mkdir -p "$out/web-project/functions"; sub "$root/web/functions/_middleware.js" "$out/web-project/functions/_middleware.js"
+for f in google4d9e616e9d676137.html d5b45a2523994bee80acf6eec24fbe1c.txt; do cp "$root/$f" "$out/web/"; done  # Search Console + IndexNow
 if [ "$env" = production ]; then
   printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$WEB_URL" > "$out/web/robots.txt"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc></url></urlset>\n' "$WEB_URL" > "$out/web/sitemap.xml"
@@ -26,6 +33,7 @@ else
   printf 'User-agent: *\nDisallow: /\n' > "$out/web/robots.txt"
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/web/_headers"
 fi
+printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n/assets/*\n  Cache-Control: public, max-age=604800\n' >> "$out/web/_headers"
 
 # ---- app (own origin, root scope) ----
 cp "$root/app/app.js" "$root/app/styles.css" "$out/app/app/"
