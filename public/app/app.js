@@ -10120,6 +10120,10 @@ const CR_CLOUD = "";
 const REST_CLOUD = "";
 const GH_STUDIO = "";
 const CLOUD_API = "https://api.niubision.com/api";
+/* Split web/app: URLs come from /config.js (window.NB_ENV); production fallback below. */
+function nbAppUrl() { try { const u = window.NB_ENV && window.NB_ENV.APP_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://niubision.app"; }
+function nbWebUrl() { try { const u = window.NB_ENV && window.NB_ENV.WEB_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://niubision.com"; }
+function nbAppHost() { try { return new URL(nbAppUrl()).host; } catch (e) { return "niubision.app"; } }
 const CLOUD_API_CUSTOM = "https://niubision-api.miguel-morales9.workers.dev/api";
 const NB_CLOUD = {
   key: "NIUBI",
@@ -10147,7 +10151,7 @@ function isOnline() {
 function isPagesHost() {
   try {
     const h = location.hostname || "";
-    return /niubision\.com$/i.test(h)
+    return /niubision\.com$/i.test(h) || /(^|\.)niubision\.app$/i.test(h)
       || /github\.io$/i.test(h)
       || /\.pages\.dev$/i.test(h)
       || /niubision-ui-preview\.pages\.dev$/i.test(h);
@@ -10362,7 +10366,7 @@ function pingCoach(title, text) {
     pingCoach._at = now;
     /* Prefer server Web Push when this device (or coach) subscribed; ntfy stays quiet optional fallback. */
     if (!store.get("nb_webpush")) {
-      ntfyPost(ntfyTopic(), text, { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: "https://niubision.com/", Priority: "high" });
+      ntfyPost(ntfyTopic(), text, { Title: String(title || "NiuBision"), Tags: "weight_lifter", Click: nbAppUrl() + "/", Priority: "high" });
     }
   }
   try {
@@ -10500,7 +10504,7 @@ function cloudUrl() {
   if (raw && raw.charAt(0) === "/") return raw;
   if (raw) {
     try {
-      const u = new URL(raw, location.href || "https://niubision.com");
+      const u = new URL(raw, location.href || nbAppUrl());
       return (u.origin + u.pathname).replace(/\/$/, "");
     } catch (e) {}
   }
@@ -11688,7 +11692,7 @@ function codeWaText(c, routineName) {
   let msg = "NiuBision\nHola " + ((c && c.name) || "cliente") + ".\n";
   if (rt) msg += "Su rutina: " + rt + ".\n";
   if (code) msg += "Su código de acceso es: " + code + "\n";
-  msg += "\nAbra niubision.com → Entrar → pegue el código.\nSee the work. Enjoy the day.";
+  msg += "\nAbra " + nbAppHost() + " → Entrar → pegue el código.\nSee the work. Enjoy the day.";
   return msg;
 }
 function assignWaText(c, r) {
@@ -11696,7 +11700,7 @@ function assignWaText(c, r) {
   const code = (c && c.accessCode) || "";
   let msg = "NiuBision\nHola " + ((c && c.name) || "cliente") + ".\n";
   msg += "Le asigné: " + name + ".\n";
-  msg += "Abra niubision.com → Entrar";
+  msg += "Abra " + nbAppHost() + " → Entrar";
   if (code) msg += " → código " + code;
   msg += ".\nSee the work. Enjoy the day.";
   return msg;
@@ -13544,7 +13548,7 @@ function bindStudioOps() {
     const c = state.clients.find((x) => x.id === b.dataset.askrenew);
     if (!c) return;
     const left = daysLeft(c);
-    const msg = `NiuBision\nHola ${c.name}. Su plan ${c.plan} ${left != null && left < 0 ? "ya venció" : "vence en " + left + " días"}. Renueve en niubision.com → Plan → Renovar ahora. PayPal ${payCfg().paypal} o ATH ${payCfg().ath}.`;
+    const msg = `NiuBision\nHola ${c.name}. Su plan ${c.plan} ${left != null && left < 0 ? "ya venció" : "vence en " + left + " días"}. Renueve en ${nbAppHost()} → Plan → Renovar ahora. PayPal ${payCfg().paypal} o ATH ${payCfg().ath}.`;
     window.open(waLink(msg), "_blank");
   });
   $$("[data-gotpay]").forEach((b) => {
@@ -14235,7 +14239,7 @@ function paypalHref(amount, item, invoice) {
   const safe = paypalSafe(payCfg().paypal);
   if (!safe.ok) return "";
   const inv = String(invoice || "").slice(0, 40);
-  const ret = "https://niubision.com/?pago=ok" + (inv ? "&inv=" + encodeURIComponent(inv) : "");
+  const ret = nbAppUrl() + "/?pago=ok" + (inv ? "&inv=" + encodeURIComponent(inv) : "");
   if (safe.email) {
     const q = new URLSearchParams({
       cmd: "_xclick",
@@ -14248,7 +14252,7 @@ function paypalHref(amount, item, invoice) {
       invoice: inv,
       custom: inv,
       "return": ret,
-      cancel_return: "https://niubision.com/?pago=cancel",
+      cancel_return: nbAppUrl() + "/?pago=cancel",
       notify_url: "https://api.niubision.com/api/paypal",
       rm: "2"
     });
@@ -14556,7 +14560,7 @@ async function runPay(method, planLabel) {
   const item = "NiuBision — " + (info.name || planLabel);
   const row = recordPay(planLabel, payLabel(method), "iniciado");
   if (!originOk()) {
-    toast("Abra niubision.com con candado (https) para pagar");
+    toast("Abra " + nbAppHost() + " con candado (https) para pagar");
   }
   if (method === "paypal") {
     const href = paypalHref(info.amount, item, row.invoice || row.id);
@@ -14649,6 +14653,7 @@ function applyHash() {
   if (viewQ && /^(price|about|coach|social|work|home|people)$/.test(viewQ)) {
     if (!state.role) state.role = "guest";
     state.view = viewQ;
+    if (state.role === "guest") { state.splash = false; state._deepLinked = true; }
   }
   stashPendingCode(q.get("c") || q.get("code"));
   const raw = String(location.hash || "").replace(/^#/, "");
@@ -17246,7 +17251,7 @@ function aboutView() {
       <button class="btn primary" data-view="price">Ver planes</button>
       <button class="btn ghost" data-view="coach">Conoce a tu entrenador</button>
     </div>
-    <p class="muted" style="margin-top:16px">niubision.com</p>
+    <p class="muted" style="margin-top:16px"><a href="${nbWebUrl()}/">niubision.com</a></p>
     <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button> · <button type="button" class="legal-link" id="seeTerms">Términos</button></p>
   </section>`;
 }
@@ -17999,7 +18004,7 @@ function appOrigin() {
       return location.origin;
     }
   } catch (e) {}
-  return "https://niubision.com";
+  return nbAppUrl();
 }
 function upsertClientFromAssign(a) {
   if (!a || !a.name) return null;
@@ -18217,7 +18222,7 @@ function showShare(c) {
     : ensureAccessCode(c);
   if (c) c.accessCode = code;
   persist();
-  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra niubision.com, mantenga el logo, toque Entrar y pegue esos 6 dígitos.`;
+  const msg = `NiuBision\nHola ${c.name}.\nSu código de acceso es: ${code}\nPlan: ${c.plan}\n\nAbra ${nbAppHost()}, mantenga el logo, toque Entrar y pegue esos 6 dígitos.`;
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `<div class="sheet">
@@ -19155,14 +19160,14 @@ function bindChrome() {
   $$("[data-wa]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.wa);
     if (!c) return;
-    const msg = "NiuBision\nHola " + c.name + ".\n" + (c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n") + "Plan: " + (c.plan || "") + "\n\nAbra niubision.com → Entrar → pegue el código.";
+    const msg = "NiuBision\nHola " + c.name + ".\n" + (c.accessCode ? "Su código de acceso es: " + c.accessCode + "\n" : "El código de 6 dígitos se envía cuando el pago esté hecho.\n") + "Plan: " + (c.plan || "") + "\n\nAbra " + nbAppHost() + " → Entrar → pegue el código.";
     window.open(waClientLink(c, msg), "_blank");
   });
   $$("[data-wa-legal]").forEach((b) => b.onclick = () => {
     const c = state.clients.find((x) => x.id === b.dataset.waLegal);
     if (!c) return;
     const gaps = clientLegalGaps(c).join(", ");
-    const msg = "NiuBision\nHola " + c.name + ".\nPara recibir su código falta firmar en la app: " + gaps + ".\nAbra niubision.com → elija el plan → complete relevo, PAR-Q y contrato.";
+    const msg = "NiuBision\nHola " + c.name + ".\nPara recibir su código falta firmar en la app: " + gaps + ".\nAbra " + nbAppHost() + " → elija el plan → complete relevo, PAR-Q y contrato.";
     window.open(waClientLink(c, msg), "_blank");
   });
   $$("[data-assignwa]").forEach((b) => b.onclick = () => {
@@ -19655,6 +19660,7 @@ function applyDeepLink() {
   state.splash = false;
   state.role = state.role || "guest";
   state.view = (view === "terms" || view === "terminos") ? "terms" : "privacy";
+  state._deepLinked = true;
 }
 async function boot() {
   applyDeepLink();
@@ -19725,7 +19731,7 @@ async function boot() {
       }
     }
   }
-  if (state.role === "guest") state.role = null;
+  if (state.role === "guest" && !state._deepLinked) state.role = null; /* keep guest when opened via ?view= deep link (web → app) */
   if (!store.get("nb_pin_server_seen")) {
     if (state.pinHash || (state.pin && String(state.pin).length >= 4)) store.set("nb_pin_server", 1);
     store.set("nb_pin_server_seen", 1);

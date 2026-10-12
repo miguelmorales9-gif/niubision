@@ -1,3 +1,4 @@
 cloud/.wrangler/
 .vapid-local.json
 *.pem
+dist/
