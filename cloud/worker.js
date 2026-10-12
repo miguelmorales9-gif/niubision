@@ -696,6 +696,66 @@ async function notifyClient(env, row, clientId, accessCode, title, body, url, ta
   return r;
 }
 
+// ---- Push: coach templates, client daily-reminder prefs, quiet hours (America/Puerto_Rico) ----
+const PUSH_TZ = "America/Puerto_Rico";
+const QUIET_START = 21; // 9 PM
+const QUIET_END = 8;    // 8 AM
+const PUSH_TEMPLATES = {
+  plan: { title: "Nuevo plan", body: "Miguel le preparó un plan nuevo. Ábralo en Hoy.", url: "/?view=work", tag: "nb-plan" },
+  today: { title: "Sesión de hoy", body: "Su sesión de hoy está lista. Cuando pueda, ábrala en Hoy.", url: "/?view=work", tag: "nb-today" },
+  daily: { title: "Sesión de hoy", body: "Recordatorio: su sesión de hoy le espera en NiuBision.", url: "/?view=work", tag: "nb-daily" }
+};
+function prNow(ms) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: PUSH_TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(ms == null ? Date.now() : ms));
+  const g = (t) => (parts.find((x) => x.type === t) || {}).value;
+  return { day: g("year") + "-" + g("month") + "-" + g("day"), hour: Number(g("hour")) % 24 };
+}
+function isQuiet(hour) { return hour >= QUIET_START || hour < QUIET_END; }
+function pushPrefs(row) {
+  const b = pushBucket(row);
+  if (!b.prefs || typeof b.prefs !== "object") b.prefs = {};
+  return b.prefs;
+}
+function normHour(h) {
+  const n = Math.round(Number(h));
+  if (!isFinite(n)) return 9;
+  return Math.min(QUIET_START - 1, Math.max(QUIET_END, n));
+}
+function clientOf(row, idn, body) {
+  const clients = (row.state && row.state.clients) || [];
+  const code = String((body && body.accessCode) || idn.code || "").replace(/\D/g, "").slice(0, 6);
+  const cid = String((body && body.clientId) || idn.clientId || "");
+  return clients.find((c) => c && ((cid && String(c.id) === cid) || (/^\d{6}$/.test(code) && String(c.accessCode || "") === code))) || null;
+}
+// Daily reminder (Cron, hourly). Opt-in only (prefs[clientId].daily === true), never in quiet hours,
+// once per PR day, skipped if the client already logged today.
+async function runDailyReminders(env, nowMs) {
+  const row = await rowOf(env, "NIUBI");
+  const { day, hour } = prNow(nowMs);
+  const out = { ev: "cron_reminder", day, hour, optedIn: 0, due: 0, sent: 0, skipped: 0 };
+  if (isQuiet(hour)) { out.quiet = true; console.log(JSON.stringify(out)); return out; }
+  const prefs = pushPrefs(row);
+  const clients = (row.state && row.state.clients) || [];
+  let dirty = false;
+  for (const cid of Object.keys(prefs)) {
+    const p = prefs[cid];
+    if (!p || p.daily !== true) continue;
+    out.optedIn += 1;
+    if (normHour(p.hour) !== hour || p.lastSent === day) continue;
+    const c = clients.find((x) => x && String(x.id) === cid);
+    if (!c || c.archived) { out.skipped += 1; continue; }
+    if (c.lastSeen === day || (c.lastSession && c.lastSession.date === day)) { out.skipped += 1; continue; }
+    out.due += 1;
+    const r = await deliverPush(env, row, clientSubs(row, cid, ""), PUSH_TEMPLATES.daily);
+    out.sent += r.sent;
+    p.lastSent = day; dirty = true;
+    if (r.gone) dirty = true;
+  }
+  if (dirty) await putRow(env, row);
+  console.log(JSON.stringify(out));
+  return out;
+}
+
 async function handle(req, env) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/$/, "") || "/";
@@ -720,7 +780,7 @@ async function handle(req, env) {
   if (limited) return limited;
   if (path === "/api/rl-test") return json({ ok: true, probe: true });
   if (path === "/api/log" || path === "/api/log/summary") return handleLog(req, env, url, method);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 34, push: !!(env && env.VAPID_PUBLIC_KEY) });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: dbMode(env), v: 35, push: !!(env && env.VAPID_PUBLIC_KEY) });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -799,6 +859,44 @@ async function handle(req, env) {
     return json({ ok: true });
   }
 
+
+  if (path === "/api/push/prefs") {
+    const idn = await identity(req, env, url);
+    const body = method === "POST" ? await req.json().catch(() => ({})) : {};
+    const c = clientOf(idn.row, idn, body);
+    if (idn.role !== "client" || !c) return json({ error: "Auth de cliente requerida" }, 401);
+    const prefs = pushPrefs(idn.row);
+    if (method === "POST") {
+      const cur = prefs[c.id] || {};
+      prefs[c.id] = { daily: body.daily === true, hour: normHour(body.hour != null ? body.hour : cur.hour), lastSent: cur.lastSent || "", at: Date.now() };
+      await putRow(env, idn.row);
+    }
+    const p = prefs[c.id] || { daily: false, hour: 9 };
+    return json({ ok: true, daily: p.daily === true, hour: normHour(p.hour), quiet: [QUIET_START, QUIET_END], tz: PUSH_TZ });
+  }
+
+  if (path === "/api/push/send" && method === "POST") {
+    const idn = await identity(req, env, url);
+    if (idn.role !== "coach") return json({ error: "Auth de coach requerida" }, 401);
+    const body = await req.json().catch(() => ({}));
+    const tpl = PUSH_TEMPLATES[body.kind === "plan" ? "plan" : body.kind === "today" ? "today" : ""];
+    if (!tpl) return json({ error: "Tipo de aviso inválido" }, 400);
+    const self = body.target === "self";
+    const { hour } = prNow();
+    if (!self && isQuiet(hour)) return json({ error: "Horario silencioso (9 PM a 8 AM). Intente más tarde.", code: "quiet" }, 409);
+    let targets;
+    if (self) targets = coachSubs(idn.row);
+    else {
+      const c = ((idn.row.state && idn.row.state.clients) || []).find((x) => x && String(x.id) === String(body.clientId || ""));
+      if (!c) return json({ error: "Cliente no encontrado" }, 404);
+      targets = clientSubs(idn.row, c.id, c.accessCode);
+    }
+    if (!targets.length) return json({ ok: false, sent: 0, error: self ? "Este equipo no tiene avisos activos" : "El cliente no tiene avisos activos", code: "nosubs" }, 200);
+    const payload = self ? Object.assign({}, tpl, { title: "Prueba · " + tpl.title, tag: tpl.tag + "-test" }) : tpl;
+    const r = await deliverPush(env, idn.row, targets, payload);
+    if (r.gone) await putRow(env, idn.row);
+    return json({ ok: r.sent > 0, sent: r.sent, gone: r.gone });
+  }
 
   if (path === "/api/push/vapid" && method === "GET") {
     const vapid = vapidCfg(env);
@@ -1202,5 +1300,9 @@ export default {
       console.error(JSON.stringify({ level: "error", ev: "worker_exception", path, method: request.method, msg: String(err && err.message || err).slice(0, 300), stack: String(err && err.stack || "").slice(0, 1500) }));
       return json({ error: String(err && err.message ? err.message : err) }, 500);
     }
+  },
+  async scheduled(event, env, ctx) {
+    try { await runDailyReminders(env, event && event.scheduledTime); }
+    catch (err) { console.error(JSON.stringify({ level: "error", ev: "cron_exception", msg: String(err && err.message || err).slice(0, 300) })); }
   }
 };
