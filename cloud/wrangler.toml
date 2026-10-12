@@ -57,3 +57,6 @@ simple = { limit = 5, period = 10 }
 name = "RL_READ"
 namespace_id = "1108"
 simple = { limit = 300, period = 60 }
+
+[triggers]
+crons = ["0 * * * *"]

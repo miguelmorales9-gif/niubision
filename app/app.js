@@ -12008,6 +12008,34 @@ function pushSubJson(sub) {
   if (!j || !j.endpoint || !j.keys) return null;
   return { endpoint: j.endpoint, expirationTime: j.expirationTime || null, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
 }
+async function pushApi(path, body, method) {
+  const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  const tok = authHeader();
+  if (tok) headers.Authorization = "Bearer " + tok;
+  const bases = apiBases();
+  for (let i = 0; i < bases.length; i++) {
+    try {
+      const res = await cloudGet(bases[i] + path, method === "GET" ? { method: "GET", headers } : { method: "POST", headers, body: JSON.stringify(body || {}) });
+      const j = await res.json().catch(() => ({}));
+      if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 409 || res.ok) return Object.assign({ status: res.status }, j);
+    } catch (e) {}
+  }
+  return { ok: false, error: "Sin conexión a la nube" };
+}
+function pushIosHint() {
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  const ios = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1);
+  const stand = typeof window !== "undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone);
+  if (!ios || stand) return "";
+  return `<p class="muted push-ios-hint">En iPhone o iPad (iOS 16.4 o más reciente), los avisos solo llegan con la app instalada: toque Compartir → Añadir a pantalla de inicio y ábrala desde el ícono.</p>`;
+}
+async function coachSendPush(c, kind) {
+  const label = kind === "plan" ? "nuevo plan" : "sesión de hoy";
+  if (!c || !confirm("¿Enviar aviso de " + label + " a " + (c.name || "este cliente") + "?")) return;
+  const r = await pushApi("/push/send", { kind, clientId: c.id });
+  if (r && r.ok) toast("Aviso enviado");
+  else toast((r && r.error) || "No se pudo enviar el aviso");
+}
 async function postPushSubscription(sub) {
   const payload = pushSubJson(sub);
   if (!payload) return { ok: false };
@@ -12916,11 +12944,14 @@ function openClientTimeline(c) {
     ${rows.length ? rows.map((e) => `<div class="list-row timeline-row"><div><strong>${escapeHtml(e.title)}</strong><div class="muted">${escapeHtml(e.detail)}</div><div class="muted" style="font-size:11px">${escapeHtml(fmtTimelineWhen(e.at))}</div></div><span class="st-chip">${escapeHtml(e.kind)}</span></div>`).join("") : "<p class='muted'>Aún no hay eventos locales de este cliente.</p>"}
     <div class="actions" style="margin-top:12px">
       <button class="btn ghost" type="button" data-weekpdf="${escAttr(c.id)}">PDF de la semana</button>
+      <button class="btn ghost" type="button" data-push="plan">Avisar: nuevo plan</button>
+      <button class="btn ghost" type="button" data-push="today">Avisar: sesión de hoy</button>
       <button class="btn ghost" type="button" id="closeSheet">Cerrar</button>
     </div>
   </div>`;
   document.body.appendChild(modal);
   modal.querySelector("#closeSheet").onclick = () => modal.remove();
+  modal.querySelectorAll("[data-push]").forEach((b) => { b.onclick = () => coachSendPush(c, b.getAttribute("data-push")); });
   const wp = modal.querySelector("[data-weekpdf]");
   if (wp) wp.onclick = () => { printWeekPdf(c); };
 }
@@ -13483,6 +13514,14 @@ function clientOpsCards() {
       <p class="muted">Última sync: ${escapeHtml(lastSyncLabel())}. Permiso: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "activado" : "apagado"}${store.get("nb_webpush") ? " · Web Push" : ""}.</p>
       <button class="btn ghost" id="enableClientAlerts" type="button">Activar avisos</button>
       <button class="btn ghost" id="clientSyncNow" type="button">Sincronizar ahora</button>
+      ${state.role === "client" ? `<div class="push-daily" style="margin-top:10px">
+        <label class="check"><input type="checkbox" id="dailyRemind" ${store.get("nb_daily_remind", 0) ? "checked" : ""}> Recordatorio diario de entrenamiento</label>
+        <label class="muted" style="display:block;margin-top:6px">Hora (Puerto Rico):
+          <select id="dailyHour" class="field" style="width:auto;display:inline-block">${Array.from({ length: 13 }, (_, i) => i + 8).map((h) => `<option value="${h}" ${Number(store.get("nb_daily_hour", 9)) === h ? "selected" : ""}>${(h % 12) || 12}:00 ${h < 12 ? "AM" : "PM"}</option>`).join("")}</select>
+        </label>
+        <p class="muted" style="font-size:12px">No enviamos avisos de 9 PM a 8 AM. Si ya entrenó hoy, no le recordamos.</p>
+      </div>` : ""}
+      ${pushIosHint()}
     </div>`;
 }
 function bindStudioOps() {
@@ -13506,6 +13545,29 @@ function bindStudioOps() {
     }
     render();
   };
+  const drm = $("#dailyRemind");
+  const dhr = $("#dailyHour");
+  const saveDaily = async () => {
+    const daily = !!(drm && drm.checked);
+    const hour = Number((dhr && dhr.value) || 9);
+    if (daily) {
+      const ok = await ensureNotifyPermission();
+      if (!ok) { if (drm) drm.checked = false; return toast("Permita las notificaciones del navegador"); }
+      const sub = await subscribeWebPush().catch(() => ({ ok: false }));
+      if (!sub || !sub.ok) { if (drm) drm.checked = false; return toast("No se pudo activar Web Push en este equipo"); }
+    }
+    const r = await pushApi("/push/prefs", { daily, hour, clientId: String((state.profile && state.profile.id) || (state.settings && state.settings.clientId) || ""), accessCode: String((state.profile && state.profile.accessCode) || "").replace(/\D/g, "").slice(0, 6) });
+    if (r && r.ok) {
+      store.set("nb_daily_remind", r.daily ? 1 : 0);
+      store.set("nb_daily_hour", r.hour);
+      toast(r.daily ? "Recordatorio diario activo" : "Recordatorio diario apagado");
+    } else {
+      if (drm) drm.checked = !daily;
+      toast((r && r.error) || "No se pudo guardar");
+    }
+  };
+  if (drm) drm.onchange = saveDaily;
+  if (dhr) dhr.onchange = () => { if (drm && drm.checked) saveDaily(); else store.set("nb_daily_hour", Number(dhr.value)); };
   const csn = $("#clientSyncNow");
   if (csn) csn.onclick = async () => {
     csn.disabled = true;
@@ -15836,6 +15898,8 @@ function openStudioSettings() {
       <p class="muted">Estado: ${typeof Notification !== "undefined" && Notification.permission === "granted" ? "<span class='ok'>permitidas</span>" : (typeof Notification !== "undefined" && Notification.permission === "denied" ? "<span class='warn'>bloqueadas</span>" : "sin pedir")}${store.get("nb_webpush") ? " · <span class='ok'>Web Push</span>" : ""}</p>
       <button class="btn primary" id="enableAlerts">Activar avisos</button>
       <button class="btn ghost" id="copyAlerts" type="button">Copiar canal ntfy</button>
+      <button class="btn ghost" id="testPushSelf" type="button">Probar aviso en este equipo</button>
+      ${pushIosHint()}
     </div>
     <div class="card">
       <h3>Nube del estudio</h3>
@@ -15876,6 +15940,11 @@ function openStudioSettings() {
     store.set("nb_auto_code", on ? 1 : 0);
     persist();
     toast(on ? "Al confirmar se muestra la ficha del código. WhatsApp no se abre solo." : "Al confirmar no se abre la ficha. WhatsApp no se abre solo.");
+  };
+  const tps = $("#testPushSelf", modal);
+  if (tps) tps.onclick = async () => {
+    const r = await pushApi("/push/send", { kind: "today", target: "self" });
+    toast(r && r.ok ? "Aviso de prueba enviado a este equipo" : ((r && r.error) || "No se pudo enviar"));
   };
   const al = $("#enableAlerts", modal);
   if (al) al.onclick = async () => {
