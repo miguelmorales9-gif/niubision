@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Build the split architecture: marketing landing (web/) + app at its own root.
 #   NB_ENV=preview    bash scripts/build-split.sh   -> dist/web, dist/app (pages.dev URLs, noindex)
-#   NB_ENV=production bash scripts/build-split.sh   -> niubision.com / app.niubision.com (indexable)
+#   NB_ENV=production bash scripts/build-split.sh   -> niubision.com / niubision.app (indexable)
 # Single source of truth for cross-links: the case block below (WEB_URL / APP_URL).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 env="${NB_ENV:-preview}"
 case "$env" in
-  production) WEB_URL="https://niubision.com"; APP_URL="https://app.niubision.com"; ROBOTS="index, follow" ;;
+  production) WEB_URL="https://niubision.com"; APP_URL="https://niubision.app"; ROBOTS="index, follow" ;;
   preview)    WEB_URL="https://web.niubision-ui-preview.pages.dev"; APP_URL="https://app.niubision-ui-preview.pages.dev"; ROBOTS="noindex, nofollow" ;;
   *) echo "NB_ENV must be preview|production" >&2; exit 1 ;;
 esac

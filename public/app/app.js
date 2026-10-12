@@ -10121,9 +10121,9 @@ const REST_CLOUD = "";
 const GH_STUDIO = "";
 const CLOUD_API = "https://api.niubision.com/api";
 /* Split web/app: URLs come from /config.js (window.NB_ENV); production fallback below. */
-function nbAppUrl() { try { const u = window.NB_ENV && window.NB_ENV.APP_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://app.niubision.com"; }
+function nbAppUrl() { try { const u = window.NB_ENV && window.NB_ENV.APP_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://niubision.app"; }
 function nbWebUrl() { try { const u = window.NB_ENV && window.NB_ENV.WEB_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://niubision.com"; }
-function nbAppHost() { try { return new URL(nbAppUrl()).host; } catch (e) { return "app.niubision.com"; } }
+function nbAppHost() { try { return new URL(nbAppUrl()).host; } catch (e) { return "niubision.app"; } }
 const CLOUD_API_CUSTOM = "https://niubision-api.miguel-morales9.workers.dev/api";
 const NB_CLOUD = {
   key: "NIUBI",
@@ -10151,7 +10151,7 @@ function isOnline() {
 function isPagesHost() {
   try {
     const h = location.hostname || "";
-    return /niubision\.com$/i.test(h)
+    return /niubision\.com$/i.test(h) || /(^|\.)niubision\.app$/i.test(h)
       || /github\.io$/i.test(h)
       || /\.pages\.dev$/i.test(h)
       || /niubision-ui-preview\.pages\.dev$/i.test(h);
