@@ -17,6 +17,9 @@ cmp -s "$root/app/app.js" "$root/public/app/app.js" || { echo "app/app.js and pu
 out="$root/dist"; rm -rf "$out"; mkdir -p "$out/web" "$out/app/app"
 sub() { sed -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__ROBOTS__#$ROBOTS#g" "$1" > "$2"; }
 
+LASTMOD="$(date -u +%Y-%m-%d)"
+WEB_HEADERS="/*\n  Strict-Transport-Security: max-age=15552000\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=(), interest-cohort=()\n  X-Frame-Options: SAMEORIGIN\n  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.niubision.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; base-uri 'self'; object-src 'none'\n/\n  ! Access-Control-Allow-Origin\n"
+APP_HEADERS="/*\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self \"https://www.paypal.com\"), usb=(), interest-cohort=()\n  X-Frame-Options: SAMEORIGIN\n  Cross-Origin-Opener-Policy: same-origin-allow-popups\n  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://www.paypal.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.niubision.com https://niubision-api.miguel-morales9.workers.dev https://ntfy.sh https://www.paypal.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://www.paypal.com; media-src 'self' https: blob:; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self' https://www.paypal.com; object-src 'none'\n/\n  ! Access-Control-Allow-Origin\n"
 # ---- web (landing) ----
 cp -r "$root/web/assets" "$out/web/"
 sub "$root/web/index.html" "$out/web/index.html"
@@ -28,11 +31,13 @@ mkdir -p "$out/web-project/functions"; sub "$root/web/functions/_middleware.js" 
 for f in google4d9e616e9d676137.html d5b45a2523994bee80acf6eec24fbe1c.txt; do cp "$root/$f" "$out/web/"; done  # Search Console + IndexNow
 if [ "$env" = production ]; then
   printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$WEB_URL" > "$out/web/robots.txt"
-  printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc></url></urlset>\n' "$WEB_URL" > "$out/web/sitemap.xml"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc><lastmod>%s</lastmod></url></urlset>\n' "$WEB_URL" "$LASTMOD" > "$out/web/sitemap.xml"
+  sed -i '/class="preview-note"/d' "$out/web/index.html"   # preview-only banner
 else
   printf 'User-agent: *\nDisallow: /\n' > "$out/web/robots.txt"
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/web/_headers"
 fi
+printf "$WEB_HEADERS" >> "$out/web/_headers"
 printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n/assets/*\n  Cache-Control: public, max-age=604800\n' >> "$out/web/_headers"
 
 # ---- app (own origin, root scope) ----
@@ -55,6 +60,33 @@ s = re.sub(r'[ \t]*<link rel="alternate" hreflang="[^"]*"[^>]*>\n?', "", s)  # n
 s = s.replace("https://niubision.com/", WEB + "/")  # JSON-LD ids, og -> marketing site
 s = s.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta name="robots" content="%s">' % ROBOTS, 1)
 s = s.replace('<p><a href="' + APP + '/?view=privacy">', '<p><a href="' + WEB + '/">niubision.com</a> · <a href="' + APP + '/?view=privacy">', 1)
+# --- app SEO: own identity (avoid duplicating niubision.com), WebApplication JSON-LD, noindex for param views ---
+AT = "NiuBision App · Su plan y la sesión de hoy | Miguel Morales"
+AD = "La app de NiuBision: su plan escrito, la sesión de hoy y el contacto con su entrenador, Miguel Morales (DRD, licencia 9798-3322359). Entre con su código de 6 dígitos."
+s = re.sub(r'<title>[^<]*</title>', '<title>%s</title>' % AT, s, count=1)
+s = re.sub(r'<meta name="description" content="[^"]*">', '<meta name="description" content="%s">' % AD, s, count=1)
+for k in ("og:title", "twitter:title"):
+    s = re.sub(r'<meta (property|name)="%s" content="[^"]*">' % k, lambda m: '<meta %s="%s" content="%s">' % (m.group(1), k, AT), s, count=1)
+for k in ("og:description", "twitter:description"):
+    s = re.sub(r'<meta (property|name)="%s" content="[^"]*">' % k, lambda m: '<meta %s="%s" content="%s">' % (m.group(1), k, AD), s, count=1)
+s = re.sub(r'<meta property="og:url" content="[^"]*">', '<meta property="og:url" content="%s/">' % APP, s, count=1)
+app_ld = {"@context": "https://schema.org", "@graph": [
+  {"@type": "WebApplication", "@id": APP + "/#app", "name": "NiuBision", "alternateName": "NiuBision App", "url": APP + "/",
+   "description": AD, "applicationCategory": "HealthApplication", "applicationSubCategory": "Entrenamiento personal",
+   "operatingSystem": "Web, Android, iOS", "browserRequirements": "Requiere JavaScript", "inLanguage": "es-PR",
+   "image": APP + "/og.jpg", "screenshot": [APP + "/screenshot-phone.png", APP + "/screenshot-wide.png"],
+   "publisher": {"@id": WEB + "/#business"}, "author": {"@id": WEB + "/#miguel"}, "isAccessibleForFree": False,
+   "offers": {"@type": "Offer", "price": "39", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
+  {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/NiuBision", "https://www.facebook.com/61553061513345", "https://www.instagram.com/niubision/"], "address": {"@type": "PostalAddress", "addressLocality": "Arecibo", "addressRegion": "PR", "addressCountry": "US"}},
+  {"@type": "Person", "@id": WEB + "/#miguel", "name": "Miguel Morales", "url": WEB + "/"}]}
+s, nld = re.subn(r'<script type="application/ld\+json">.*?</script>', lambda m: '<script type="application/ld+json">' + json.dumps(app_ld, ensure_ascii=False) + '</script>', s, count=1, flags=re.S)
+assert nld == 1
+# pre-render text (seen before JS / by non-JS crawlers): app-specific, links to the marketing site
+s, nh = re.subn(r'<p>Sitio oficial de Miguel Morales[^<]*</p>', '<p>App de clientes de NiuBision: el plan escrito, la sesión de hoy y el contacto con su entrenador, Miguel Morales, certificado por el DRD, licencia 9798-3322359. Planes y precios en <a href="%s/">niubision.com</a>.</p>' % WEB, s, count=1)
+assert nh == 1
+# any query (?pago, ?c, ?inv, ?view=...) is a private/state URL: noindex, keep canonical root indexable
+s, nr = re.subn(r'(<meta name="robots" content="[^"]*">)', lambda m: m.group(1) + '\n<script>if(location.search){document.querySelectorAll(\'meta[name=robots]\').forEach(function(m){m.setAttribute("content","noindex, follow");});}</script>', s, count=1)
+assert nr == 1
 open(f"{out}/index.html", "w", encoding="utf-8").write(s)
 m = json.load(open(f"{root}/manifest.webmanifest", encoding="utf-8"))
 m["id"] = APP + "/"; m["start_url"] = "/"; m["scope"] = "/"
@@ -70,7 +102,9 @@ sw = sw.replace('  "/index.html",\n', '  "/index.html",\n  "/config.js",\n', 1)
 open(f"{out}/sw.js", "w", encoding="utf-8").write(sw)
 PY
 if [ "$env" = preview ]; then printf 'User-agent: *\nDisallow: /\n' > "$out/app/robots.txt"; printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/app/_headers"
-else printf 'User-agent: *\nAllow: /\n' > "$out/app/robots.txt"; fi
+else printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$APP_URL" > "$out/app/robots.txt"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc><lastmod>%s</lastmod></url></urlset>\n' "$APP_URL" "$LASTMOD" > "$out/app/sitemap.xml"; fi
+printf "$APP_HEADERS" >> "$out/app/_headers"
 printf '/sw.js\n  Cache-Control: no-cache\n/config.js\n  Cache-Control: no-cache\n' >> "$out/app/_headers"
 python3 "$root/scripts/optimize-app.py" "$out/app"
 printf '/app/img/*\n  Cache-Control: public, max-age=31536000, immutable\n' >> "$out/app/_headers"
