@@ -13861,6 +13861,131 @@ function loadSession(rt) {
     })
   };
 }
+// ---- Progress (inline SVG, real logged data only) ----
+function nbNum(v) {
+  const n = parseFloat(String(v == null ? "" : v).replace(",", "."));
+  return isFinite(n) && n > 0 ? n : null;
+}
+function nbDayKey(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function nbWeekStart(key) {
+  const d = new Date(String(key) + "T12:00:00");
+  d.setDate(d.getDate() - mondayWeekIndex(d));
+  return nbDayKey(d);
+}
+function nbShortDate(key) {
+  const p = String(key || "").split("-");
+  return p.length === 3 ? Number(p[2]) + "/" + Number(p[1]) : String(key || "");
+}
+function nbByDate(list, pick) {
+  const m = new Map();
+  (list || []).forEach((r) => {
+    if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.date || ""))) return;
+    const y = pick(r);
+    if (y != null) m.set(r.date, y);
+  });
+  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([x, y]) => ({ x, y }));
+}
+function progressChartSvg(series, unit, label) {
+  const ok = series.filter((s) => s.pts.length >= 2);
+  if (!ok.length) return `<p class="muted nb-chart-empty">Registre al menos dos días para ver la tendencia.</p>`;
+  const W = 320, H = 132, L = 34, R = 10, T = 12, B = 22;
+  const xs = [...new Set(ok.flatMap((s) => s.pts.map((p) => p.x)))].sort();
+  const ys = ok.flatMap((s) => s.pts.map((p) => p.y));
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if (hi - lo < 1) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+  const xi = (x) => L + (xs.length === 1 ? 0 : (xs.indexOf(x) / (xs.length - 1)) * (W - L - R));
+  const yi = (y) => T + (1 - (y - lo) / (hi - lo)) * (H - T - B);
+  const fmt = (v) => (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10);
+  const grid = [0, 0.5, 1].map((f) => {
+    const v = lo + (hi - lo) * (1 - f); const y = T + f * (H - T - B);
+    return `<line x1="${L}" x2="${W - R}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="nb-chart-grid"/><text x="${L - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" class="nb-chart-tick">${fmt(v)}</text>`;
+  }).join("");
+  const lines = ok.map((s) => {
+    const pts = s.pts.map((p) => xi(p.x).toFixed(1) + "," + yi(p.y).toFixed(1)).join(" ");
+    const last = s.pts[s.pts.length - 1];
+    return `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${xi(last.x).toFixed(1)}" cy="${yi(last.y).toFixed(1)}" r="3.6" fill="${s.color}"/>`;
+  }).join("");
+  const desc = ok.map((s) => {
+    const a = s.pts[0].y, b = s.pts[s.pts.length - 1].y, d = Math.round((b - a) * 10) / 10;
+    return (s.name ? s.name + ": " : "") + fmt(b) + " " + unit + " (" + (d > 0 ? "+" : "") + d + " desde " + nbShortDate(s.pts[0].x) + ")";
+  });
+  const legend = ok.length > 1 || ok[0].name ? `<div class="nb-chart-legend">${ok.map((s, i) => `<span><i style="background:${s.color}"></i>${escapeHtml(desc[i])}</span>`).join("")}</div>` : `<p class="nb-chart-delta">${escapeHtml(desc[0])}</p>`;
+  return `<svg class="nb-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escAttr(label + ". " + desc.join(". "))}" preserveAspectRatio="none">${grid}${lines}
+    <text x="${L}" y="${H - 6}" class="nb-chart-tick">${escapeHtml(nbShortDate(xs[0]))}</text><text x="${W - R}" y="${H - 6}" text-anchor="end" class="nb-chart-tick">${escapeHtml(nbShortDate(xs[xs.length - 1]))}</text></svg>${legend}`;
+}
+function progressStrengthData() {
+  const by = new Map();
+  (state.history || []).forEach((h) => {
+    if (!h || !h.date) return;
+    (h.loads || []).forEach((l) => {
+      const w = nbNum(l && l.w);
+      if (!w || !l.name) return;
+      const m = by.get(l.name) || new Map();
+      m.set(h.date, Math.max(m.get(h.date) || 0, w));
+      by.set(l.name, m);
+    });
+  });
+  return [...by.entries()].map(([name, m]) => ({ name, pts: [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([x, y]) => ({ x, y })) }))
+    .sort((a, b) => b.pts.length - a.pts.length || (a.name < b.name ? -1 : 1));
+}
+function progressChartsHtml() {
+  const c = selfClient() || currentClient();
+  const wl = (c && c.weighins && c.weighins.length) ? c.weighins : (state.weighins || []);
+  const weight = nbByDate(wl, (r) => nbNum(r.kg)).slice(-24);
+  const ml = (c && c.measures && c.measures.length) ? c.measures : (state.measures || []);
+  const meas = [["Cintura", "waist", "var(--ember)"], ["Cadera", "hip", "var(--mint)"], ["Pecho", "chest", "var(--cream)"]]
+    .map(([name, k, color]) => ({ name, color, pts: nbByDate(ml, (r) => nbNum(r[k])).slice(-24) }));
+  const str = progressStrengthData();
+  const pick = str.find((s) => s.name === state._strEx) || str[0];
+  return `<div class="card nb-progress">
+      <h3>Progreso</h3>
+      <p class="muted">Solo lo que usted registró. Sin estimados.</p>
+      <h4 class="nb-chart-h">Peso corporal</h4>
+      ${progressChartSvg([{ name: "", color: "var(--ember)", pts: weight }], "lb", "Peso corporal")}
+      <h4 class="nb-chart-h">Medidas</h4>
+      ${progressChartSvg(meas, "in", "Medidas")}
+      <h4 class="nb-chart-h">Fuerza · mejor carga del día</h4>
+      ${str.length ? `<div class="nb-chips">${str.slice(0, 4).map((s) => `<button type="button" class="chip${s === pick ? " on" : ""}" data-strex="${escAttr(s.name)}">${escapeHtml(s.name)}</button>`).join("")}</div>
+      ${progressChartSvg([{ name: "", color: "var(--mint)", pts: pick.pts.slice(-24) }], "lb", "Fuerza " + pick.name)}` : `<p class="muted nb-chart-empty">Cuando cierre series con peso, verá su carga aquí.</p>`}
+    </div>`;
+}
+function weeklyAchievements(rt) {
+  const hist = (state.history || []).filter((h) => h && /^\d{4}-\d{2}-\d{2}$/.test(String(h.date || "")));
+  const thisWeek = nbWeekStart(todayKey());
+  const days = new Set(hist.filter((h) => nbWeekStart(h.date) === thisWeek).map((h) => h.date));
+  const sets = hist.filter((h) => nbWeekStart(h.date) === thisWeek).reduce((n, h) => n + (Number(h.doneSets) || 0), 0);
+  const weeks = new Set(hist.map((h) => nbWeekStart(h.date)));
+  let wk = 0;
+  const cur = new Date(thisWeek + "T12:00:00");
+  if (!weeks.has(thisWeek)) cur.setDate(cur.getDate() - 7);
+  while (weeks.has(nbDayKey(cur))) { wk++; cur.setDate(cur.getDate() - 7); }
+  const target = Math.max(1, (rt && rt.days) || 3);
+  const out = [];
+  if (hist.length) out.push({ t: "Primera sesión", d: "Desde " + nbShortDate(hist.map((h) => h.date).sort()[0]) });
+  if (days.size >= target) out.push({ t: "Semana completa", d: days.size + " de " + target + " días" });
+  if (wk >= 2) out.push({ t: "Racha de " + wk + " semanas", d: "Semanas seguidas con al menos una sesión" });
+  progressStrengthData().forEach((s) => {
+    const before = s.pts.filter((p) => nbWeekStart(p.x) < thisWeek).map((p) => p.y);
+    const now = s.pts.filter((p) => nbWeekStart(p.x) === thisWeek).map((p) => p.y);
+    if (before.length && now.length && Math.max(...now) > Math.max(...before)) out.push({ t: "Récord: " + s.name, d: Math.max(...now) + " lb (antes " + Math.max(...before) + ")" });
+  });
+  const c = selfClient() || currentClient();
+  const wl = (c && c.weighins && c.weighins.length) ? c.weighins : (state.weighins || []);
+  const since = new Date(); since.setDate(since.getDate() - 28);
+  if (nbByDate(wl, (r) => nbNum(r.kg)).filter((p) => p.x >= nbDayKey(since)).length >= 3) out.push({ t: "Constancia en el peso", d: "3 o más registros en 4 semanas" });
+  return { days: days.size, target, sets, weekStreak: wk, items: out.slice(0, 6) };
+}
+function weeklyAchievementsHtml(rt) {
+  const a = weeklyAchievements(rt);
+  return `<div class="card nb-achv">
+      <h3>Esta semana</h3>
+      <div class="nb-achv-stats"><span><b>${a.days}/${a.target}</b> días</span><span><b>${a.sets}</b> series</span><span><b>${a.weekStreak}</b> sem. seguidas</span></div>
+      ${a.items.length ? `<div class="nb-achv-list">${a.items.map((x) => `<div class="nb-achv-item"><strong>${escapeHtml(x.t)}</strong><span class="muted">${escapeHtml(x.d)}</span></div>`).join("")}</div>` : `<p class="muted">Sus logros aparecen aquí cuando registre sesiones.</p>`}
+    </div>`;
+}
 function streak() {
   const days = [...new Set(state.history.map((h) => h.date))].sort().reverse();
   if (!days.length) return 0;
@@ -16151,10 +16276,12 @@ function homeView() {
     ${restHome ? `<div class="card"><h3>Hoy · ${escapeHtml(calendarWeekdayName())}</h3><p class="muted">${escapeHtml(rt.name)} · hoy descanso del plan. No hay sesión.${nextTrainingWeekdayName(rt) ? " El próximo entrenamiento es el " + escapeHtml(nextTrainingWeekdayName(rt).toLowerCase()) + "." : ""}</p><div class="actions"><button class="btn ghost" data-view="work">Ver la semana</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : (day ? `<div class="card"><h3>Hoy · ${escapeHtml(programDayLabel(diHome, day, daysPlan.length))}</h3><p class="muted">${escapeHtml(rt.name)} · ${(day.items||[]).length} ejercicios</p>${dayPreviewHtml(day)}<div class="actions"><button class="btn primary" data-view="work">Abrir el día</button><button class="btn ghost" data-view="book">Biblioteca</button></div></div>` : "")}
     ${!basePlan && !checked ? `<div class="card"><h3>${sunday ? "Check-in del domingo" : "Check-in de la semana"}</h3><p class="muted">Veinte segundos. Energía y molestia.</p><button class="btn ghost" id="openCheck">Hacer check-in</button></div>` : ""}
     ${restHome || (state.history || []).some((h) => h.date === todayKey()) ? "" : `<div class="actions"><button class="btn primary" data-view="work">Entrenar ahora</button></div>`}
+    ${weeklyAchievementsHtml(rt)}
     <button class="btn ghost" id="toggleMore" style="margin-top:12px">Peso, medidas y fotos</button>
     <div id="moreStudio" class="more-fold" hidden>
       ${(state.history || []).slice(-4).reverse().length ? `<div class="card"><h3>Últimas sesiones</h3>${(state.history || []).slice(-4).reverse().map((h) => `<div class="list-row"><div><strong>${escapeHtml(h.day || "Sesión")}</strong><div class="muted">${escapeHtml(h.date)} · ${h.doneSets}/${h.total} series</div></div></div>`).join("")}</div>` : ""}
       ${slimClientOps()}
+      ${progressChartsHtml()}
       <div class="card">
         <h3>Peso corporal</h3>
         <p class="muted">Último registro: ${lastWeight()}. Solo un número para ver tendencia. No es diagnóstico.</p>
@@ -19115,6 +19242,9 @@ function bindChrome() {
     if (!n) return toast("Escriba su nombre");
     state.profile.name = n; persist(); render();
   };
+  document.querySelectorAll("[data-strex]").forEach((b) => {
+    b.onclick = () => { state._strEx = b.getAttribute("data-strex"); const keep = $("#moreStudio") && !$("#moreStudio").hidden; render(); if (keep) { const m = $("#moreStudio"); if (m) m.hidden = false; } };
+  });
   const sk = $("#saveKg");
   if (sk) sk.onclick = () => {
     const kg = ($("#kgIn").value || "").trim();
