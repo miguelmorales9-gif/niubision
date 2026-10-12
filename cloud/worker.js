@@ -266,7 +266,7 @@ const RL = {
 function rlBucket(path, method) {
   if (path === "/" || path === "/health" || path === "/api/health") return null;
   if (path === "/api/rl-test") return "test";
-  if (path === "/api/auth/login" || path === "/api/login" || path === "/api/studio" || path === "/api/export" || path === "/api/revoke") return "auth";
+  if (path === "/api/auth/login" || path === "/api/login" || path === "/api/studio" || path === "/api/export" || path === "/api/revoke" || path === "/api/admin/daily-summary") return "auth";
   if (path.indexOf("/api/log") === 0) return method === "POST" ? "log" : "auth";
   if (path === "/api/redeem" || path === "/api/receipt" || path === "/api/paid" || path === "/api/auth/me" || path === "/api/me") return "code";
   if (path === "/api/paypal") return "ipn";
@@ -756,6 +756,58 @@ async function runDailyReminders(env, nowMs) {
   return out;
 }
 
+// ---- Daily summary (read-only): GET /api/admin/daily-summary[?day=YYYY-MM-DD], PIN header or SUMMARY_TOKEN ----
+function safeEq(a, b) {
+  a = String(a || ""); b = String(b || "");
+  if (!a || !b || a.length !== b.length) return false;
+  let x = 0;
+  for (let i = 0; i < a.length; i++) x |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return x === 0;
+}
+function prDayRange(day) {
+  const [y, m, d] = day.split("-").map(Number);
+  const start = Date.UTC(y, m - 1, d, 4); // America/Puerto_Rico = UTC-4, no DST
+  return [start, start + 86400000];
+}
+async function dailySummary(env, day) {
+  const row = await rowOf(env, "NIUBI");
+  const st = row.state || {};
+  const [t0, t1] = prDayRange(day);
+  const inDay = (v) => {
+    if (v == null || v === "") return false;
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10) === day;
+    const n = Number(v);
+    return isFinite(n) && n >= t0 && n < t1;
+  };
+  const clients = (st.clients || []).filter(Boolean);
+  const active = clients.filter((c) => inDay(c.lastSeen) || (c.lastSession && inDay(c.lastSession.date)));
+  const sessClients = clients.filter((c) => c.lastSession && inDay(c.lastSession.date));
+  const studioSessions = (st.history || []).filter((h) => h && inDay(h.date));
+  const leads = (st.inbox || []).filter((n) => n && n.type === "lead" && inDay(n.at));
+  const pays = (st.payments || []).filter((p) => p && inDay(p.date || p.at || p.paidAt));
+  const sum = pays.reduce((n, p) => n + (Number(String(p.amount || "").replace(/[^0-9.]/g, "")) || 0), 0);
+  const errors = { total: 0, distinct: 0, top: [], source: "none" };
+  if (dbMode(env) !== "kv" && env.DB) {
+    try {
+      const rs = await env.DB.prepare("SELECT src, kind, msg, n FROM logs WHERE t >= ? AND t < ? ORDER BY n DESC").bind(t0, t1).all();
+      const items = rs.results || [];
+      errors.source = "d1";
+      errors.distinct = items.length;
+      errors.total = items.reduce((n, r) => n + (Number(r.n) || 1), 0);
+      errors.top = items.slice(0, 5).map((r) => ({ n: Number(r.n) || 1, where: String(r.src || ""), kind: String(r.kind || ""), msg: String(r.msg || "").slice(0, 140) }));
+    } catch (e) { errors.source = "error"; }
+  }
+  return {
+    ok: true, day, tz: PUSH_TZ, generatedAt: new Date().toISOString(),
+    activeClients: { count: active.length, names: active.map((c) => String(c.name || "").split(" ")[0]).slice(0, 50) },
+    sessionsLogged: { clients: sessClients.length, studioDevice: studioSessions.length, total: sessClients.length + studioSessions.length },
+    newLeads: { count: leads.length, items: leads.slice(0, 20).map((n) => ({ name: String(n.name || "").split(" ")[0], plan: String(n.plan || "") })) },
+    payments: { count: pays.length, totalUsd: Math.round(sum * 100) / 100, items: pays.slice(0, 20).map((p) => ({ plan: String(p.plan || ""), amount: String(p.amount || ""), method: String(p.method || ""), status: String(p.status || "") })) },
+    errors,
+    totals: { clients: clients.length }
+  };
+}
+
 async function handle(req, env) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/$/, "") || "/";
@@ -780,7 +832,7 @@ async function handle(req, env) {
   if (limited) return limited;
   if (path === "/api/rl-test") return json({ ok: true, probe: true });
   if (path === "/api/log" || path === "/api/log/summary") return handleLog(req, env, url, method);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: dbMode(env), v: 35, push: !!(env && env.VAPID_PUBLIC_KEY) });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: dbMode(env), v: 36, push: !!(env && env.VAPID_PUBLIC_KEY) });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
@@ -859,6 +911,16 @@ async function handle(req, env) {
     return json({ ok: true });
   }
 
+
+  if (path === "/api/admin/daily-summary" && method === "GET") {
+    const tok = String(req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    const okPin = pinOk(env, String(req.headers.get("x-nb-pin") || ""));
+    const okTok = !!(env && env.SUMMARY_TOKEN) && safeEq(tok, String(env.SUMMARY_TOKEN));
+    if (!okPin && !okTok) return json({ error: "No autorizado" }, 401);
+    let day = String(url.searchParams.get("day") || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) day = prNow(Date.now() - 86400000).day;
+    return json(await dailySummary(env, day), 200, { "cache-control": "no-store" });
+  }
 
   if (path === "/api/push/prefs") {
     const idn = await identity(req, env, url);
