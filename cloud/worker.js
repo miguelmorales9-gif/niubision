@@ -1,3 +1,4 @@
+import { dbMode, d1ReadRow, d1WriteRow } from "./db.js";
 import { sendWebPush } from "./webpush.js";
 const COACH_MAIL = "miguel.morales9@gmail.com";
 const LEGACY = "nb-cloud-v1";
@@ -291,6 +292,7 @@ async function rateLimited(req, env, path, method) {
 
 // ---- Client error reports (POST /api/log), PII-scrubbed, deduped, KV TTL 30 days ----
 const LOG_TTL = 30 * 24 * 3600;
+const LOG_DAY_MAX_D1 = 1000; // D1 free tier: 100k writes/day
 const LOG_DAY_MAX = 50; // unique errors stored per UTC day (=> max 100 KV writes/day)
 const LOG_ORIGINS = /^https:\/\/((www\.)?niubision\.(app|com)|([a-z0-9-]+\.)?niubision-(app|web)\.pages\.dev|localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i;
 function scrub(v, max) {
@@ -335,6 +337,20 @@ async function handleLog(req, env, url, method) {
     // Per unique error: 2 writes (record + day index). Cap LOG_DAY_MAX uniques/day => <= 2*LOG_DAY_MAX writes.
     // Over cap (or duplicate today): Workers Logs only (console line above).
     const day = new Date(rec.t).toISOString().slice(0, 10);
+    if (dbMode(env) !== "kv") {
+      try {
+        const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM logs WHERE day = ?").bind(day).first();
+        if (((c && c.n) || 0) < LOG_DAY_MAX_D1) {
+          await env.DB.prepare(`INSERT INTO logs (h, day, t, n, src, kind, msg, stack, path, line, col, v, ua, country) VALUES (?,?,?,1,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(h, day) DO UPDATE SET n = n + 1, t = excluded.t`).bind(h, day, rec.t, rec.src, rec.kind, rec.msg, rec.stack, rec.path, rec.line, rec.col, rec.v, rec.ua, rec.country).run();
+        } else {
+          await env.DB.prepare("UPDATE logs SET n = n + 1, t = ? WHERE h = ? AND day = ?").bind(rec.t, h, day).run();
+        }
+        return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } });
+      } catch (e) {
+        console.error(JSON.stringify({ level: "error", ev: "d1_log_failed", msg: String(e && e.message || e) }));
+      }
+    }
     const mem = (globalThis.__nbLogDay && globalThis.__nbLogDay.day === day) ? globalThis.__nbLogDay : (globalThis.__nbLogDay = { day, full: false, seen: new Set() });
     if (!mem.full && !mem.seen.has(h)) {
       const idxKey = "logday:" + day;
@@ -359,8 +375,12 @@ async function handleLog(req, env, url, method) {
     const hours = Math.min(24 * 30, Math.max(1, Number(url.searchParams.get("hours")) || 24 * 30));
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit")) || 50));
     const since = Date.now() - hours * 3600 * 1000;
-    const list = await env.STUDIO.list({ prefix: "log:", limit });
     const items = [];
+    if (dbMode(env) !== "kv") {
+      const rs = await env.DB.prepare("SELECT src, kind, msg, stack, path, line, col, v, ua, country, t, h, n FROM logs WHERE t >= ? ORDER BY t DESC LIMIT ?").bind(since, limit).all();
+      (rs.results || []).forEach((r) => items.push(r));
+    }
+    const list = items.length ? { keys: [] } : await env.STUDIO.list({ prefix: "log:", limit });
     for (const k of list.keys) {
       const v = await env.STUDIO.get(k.name);
       if (!v) continue;
@@ -369,7 +389,7 @@ async function handleLog(req, env, url, method) {
     }
     if (url.pathname.replace(/\/$/, "") === "/api/log/summary") {
       const g = {};
-      items.forEach((r) => { const k = r.src + " · " + r.msg; g[k] = g[k] || { n: 0, last: 0, v: r.v, path: r.path }; g[k].n++; g[k].last = Math.max(g[k].last, r.t); });
+      items.forEach((r) => { const k = r.src + " · " + r.msg; g[k] = g[k] || { n: 0, last: 0, v: r.v, path: r.path }; g[k].n += Number(r.n) || 1; g[k].last = Math.max(g[k].last, r.t); });
       return json({ ok: true, hours, distinct: Object.keys(g).length, groups: Object.entries(g).map(([k, x]) => Object.assign({ key: k }, x)).sort((a, b) => b.last - a.last) });
     }
     return json({ ok: true, hours, count: items.length, items });
@@ -383,16 +403,44 @@ function newToken() {
   return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function rowOf(env, key) {
+async function kvRow(env, key) {
   const raw = await env.STUDIO.get(key);
-  if (raw) return JSON.parse(raw);
+  return raw ? JSON.parse(raw) : null;
+}
+async function rowOf(env, key) {
+  const mode = dbMode(env);
+  if (mode === "kv") {
+    const r = await kvRow(env, key);
+    if (r) return r;
+  } else {
+    let d = null;
+    try { d = await d1ReadRow(env, key); } catch (e) { console.error(JSON.stringify({ level: "error", ev: "d1_read_failed", key, msg: String(e && e.message || e) })); }
+    if (mode === "d1" && d) return d;
+    const k = await kvRow(env, key);
+    // D1 wins only when it has seen a dual-write (rev > 0) at least as new as KV; migrated rev-0 rows defer to KV.
+    if (d && (!k || ((Number(d._rev) || 0) > 0 && (Number(d._rev) || 0) >= (Number(k._rev) || 0)))) return d;
+    if (k) {
+      if (d) console.log(JSON.stringify({ level: "warn", ev: "d1_stale_kv_fallback", key, d1: d._rev, kv: k._rev }));
+      return k;
+    }
+    if (d) return d;
+  }
   const row = { studioKey: key, token: newToken(), state: {} };
-  await env.STUDIO.put(key, JSON.stringify(row));
+  await putRow(env, row);
   return row;
 }
 
 async function putRow(env, row) {
-  await env.STUDIO.put(row.studioKey, JSON.stringify(row));
+  const mode = dbMode(env);
+  row._rev = (Number(row._rev) || 0) + 1;
+  if (mode !== "d1") await env.STUDIO.put(row.studioKey, JSON.stringify(row));
+  if (mode !== "kv") {
+    try { await d1WriteRow(env, row); }
+    catch (e) {
+      console.error(JSON.stringify({ level: "error", ev: "d1_write_failed", key: row.studioKey, msg: String(e && e.message || e) }));
+      if (mode === "d1") throw e;
+    }
+  }
 }
 
 function bearer(req, url) {
@@ -663,11 +711,16 @@ async function handle(req, env) {
     });
   }
   if (!env || !env.STUDIO) return json({ error: "Falta el KV STUDIO" }, 500);
+  if (path === "/api/health" && url.searchParams.get("db") === "1") {
+    let d1 = null;
+    try { d1 = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM studios").first()).n : null; } catch (e) { d1 = "error"; }
+    return json({ ok: true, mode: dbMode(env), d1Studios: d1 });
+  }
   const limited = await rateLimited(req, env, path, method);
   if (limited) return limited;
   if (path === "/api/rl-test") return json({ ok: true, probe: true });
   if (path === "/api/log" || path === "/api/log/summary") return handleLog(req, env, url, method);
-  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 33, push: !!(env && env.VAPID_PUBLIC_KEY) });
+  if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: "kv", v: 34, push: !!(env && env.VAPID_PUBLIC_KEY) });
 
   if ((path === "/api/auth/login" || path === "/api/login") && method === "POST") {
     const body = await req.json().catch(() => ({}));
