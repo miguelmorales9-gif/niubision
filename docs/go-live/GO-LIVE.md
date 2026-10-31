@@ -2,11 +2,23 @@
 
 Todo esto se ejecuta **solo después del OK explícito de Miguel**. Hasta entonces, `go-live.sh` corre en modo ensayo: imprime cada comando y no ejecuta nada.
 
-## Decisiones que necesito antes (Miguel)
-1. **Dominio final de NFW** (`NFW_ORIGIN`). Hoy NFW solo vive en `*.nfw-preview.pages.dev`.
-2. **Correo de NFW en producción**: dominio verificado en Resend, `MAIL_FROM` y `RESEND_API_KEY`. Sin esto, en producción no llegan los enlaces para entrar (`DEV_MAGIC_LINK` se apaga).
-3. **Permisos de la llave restringida live** (`rk_live_`). Debe poder escribir Products, Prices, Coupons, Customers, Checkout Sessions, Subscriptions, Billing Portal y Webhook Endpoints. Si no los tiene, el paso 3 falla sin crear nada a medias (es idempotente): se amplían los permisos en el Dashboard y se repite.
-4. **Redondeo del IVU**: los 8 precios caen en medio centavo exacto y se redondean hacia arriba (43.49, 108.16…). Si prefiere hacia abajo, es un cambio de una línea.
+## Decisiones (ya tomadas por Miguel el 31-oct)
+- Dominio de NFW: **https://workouts.niubision.app**. Pages `nfw-preview` lleva el dominio propio y la ruta `workouts.niubision.app/api/*` va al Worker `nfw-api`. Mismo origen para APP_ORIGIN, CORS, las URL de regreso de Stripe (portal: `/#/cuenta`) y el webhook `https://workouts.niubision.app/api/stripe/webhook`.
+- IVU: se redondea hacia arriba en el medio centavo (se queda así).
+- Correo: Resend, remitente `NiuBision Fitness Workouts <acceso@niubision.app>`. Llave «NFW» solo para enviar, limitada a niubision.app, guardada en `/home/box/.nfw-secrets/resend_nfw.txt`.
+
+## Pendiente: DNS de Resend en la zona niubision.app (Cloudflare → DNS, solo agregar)
+| Tipo | Nombre | Valor |
+|---|---|---|
+| TXT | resend._domainkey | (clave DKIM que muestra Resend → Domains → niubision.app) |
+| MX (prioridad 10) | send | feedback-smtp.us-east-1.amazonses.com |
+| TXT | send | v=spf1 include:amazonses.com ~all |
+| CNAME (solo DNS, nube gris) | rsend | send.forge.rmta.net |
+
+El DMARC actual (`p=reject; adkim=s; aspf=s`) se queda: DKIM con d=niubision.app pasa la alineación estricta. No se tocan los registros raíz ni niubision.com. Después: Resend → Verify, y poner `MAIL_FROM` en el Worker.
+
+## Pendiente: llave live de Stripe
+Confirmar que la llave restringida live (`rk_live_`) puede escribir Products, Prices, Coupons, Customers, Checkout Sessions, Subscriptions, Billing Portal y Webhook Endpoints.
 
 ## Lista (≈10 min)
 | # | Paso | Comando | Verificación |
