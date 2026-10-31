@@ -24,10 +24,11 @@ Una app web **no puede impedir capturas de pantalla** ni grabaciones (ni fotos c
 | Cabeceras app (`build-split.sh`) | `X-Frame-Options: DENY`, CSP **aplicada** `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests`, Permissions-Policy + `display-capture=()`, serial/hid/bluetooth. La CSP completa sigue en *Report-Only* porque la app usa scripts/estilos en línea. |
 | Cookies | La app no usa cookies (token Bearer en `sessionStorage`). |
 
-### Hallazgos pendientes (no cambiados para no romper producción)
-- `studioToken` (`row.token`) es un token de coach **sin vencimiento**; conviene retirarlo del cliente y usar sólo la sesión.
-- `/api/report` acepta cualquier código de acceso válido sin sesión (`byCode`).
-- `?pin=` en la URL puede quedar en registros; con TOTP activo ya no sirve.
+### Riesgos cerrados (antes pendientes)
+- **Token fijo del estudio**: `row.token` ya no autoriza nada. `studioToken` y `/api/studio` devuelven una **sesión de coach** que vence (12 h absoluto, 30 min sin uso). Tras desplegar, el coach entra de nuevo con su PIN una vez.
+- **`/api/report`** exige sesión del propio cliente (o coach); conocer un código ya no basta (401). La app vuelve a entrar sola con el código guardado y reintenta una vez.
+- **Credenciales en la URL**: `?pin=` y `?token=` se ignoran; el PIN va en `X-Nb-Pin` o en el cuerpo, el token en `Authorization: Bearer`.
+- El resumen diario (`/api/admin/daily-summary`) sigue igual: `Authorization: Bearer SUMMARY_TOKEN` o `X-Nb-Pin`.
 
 ### Activar TOTP (cuando Miguel apruebe desplegar el worker)
 1. Escanear `/home/box/.nfw-secrets/niubision_coach_totp_qr.png` con Google Authenticator / 1Password / Authy.

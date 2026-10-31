@@ -87,3 +87,32 @@ test("Autorización: un cliente no lee el estudio; coach necesita PIN + TOTP", a
   env.STUDIO._m.set("NIUBI", JSON.stringify(saved));
   assert.equal((await call(w, env, "/api/auth/me", "GET", null, c.j.token)).status, 401);
 });
+
+test("Riesgos cerrados: token fijo, /api/report sin sesión, ?pin= en URL; resumen diario sigue", async () => {
+  const w = (await import("../cloud/worker.js")).default;
+  const row = { studioKey: "NIUBI", token: "f".repeat(40), state: { clients: [{ id: "cA", name: "Prueba A", accessCode: "111111" }] }, sessions: {} };
+  const env = { STUDIO: kv({ NIUBI: JSON.stringify(row) }), COACH_PIN: "9876", SUMMARY_TOKEN: "s".repeat(32) };
+  // token fijo del estudio ya no autoriza
+  assert.equal((await call(w, env, "/api/state", "GET", null, "f".repeat(40))).status, 404);
+  // /api/report: sólo con código, sin sesión -> 401
+  assert.equal((await call(w, env, "/api/report", "POST", { accessCode: "111111", clientId: "cA", report: {} })).status, 401);
+  const a = await call(w, env, "/api/auth/login", "POST", { role: "client", code: "111111" });
+  assert.equal((await call(w, env, "/api/report", "POST", { accessCode: "111111", clientId: "cA", report: {} }, a.j.token)).status, 200);
+  // ?pin= y ?token= ya no autorizan
+  assert.equal((await call(w, env, "/api/export?pin=9876", "GET")).status, 403);
+  assert.equal((await call(w, env, "/api/admin/daily-summary?pin=9876", "GET")).status, 401);
+  // PIN por cabecera/cuerpo sigue
+  const r = await w.fetch(new Request("https://x/api/export", { headers: { "x-nb-pin": "9876" } }), env, { waitUntil() {} });
+  assert.equal(r.status, 200);
+  // coach: studioToken = sesión que vence
+  const c = await call(w, env, "/api/auth/login", "POST", { role: "coach", pin: "9876" });
+  assert.equal(c.j.studioToken, c.j.token);
+  assert.equal((await call(w, env, "/api/state", "GET", null, c.j.studioToken)).status, 200);
+  const st = await call(w, env, "/api/studio", "POST", { pin: "9876" });
+  assert.equal(st.status, 200); assert.notEqual(st.j.token, row.token); assert.ok(st.j.exp > Date.now());
+  // resumen diario (rutina): Bearer SUMMARY_TOKEN y x-nb-pin
+  const s1 = await w.fetch(new Request("https://x/api/admin/daily-summary", { headers: { authorization: "Bearer " + "s".repeat(32) } }), env, { waitUntil() {} });
+  assert.equal(s1.status, 200);
+  const s2 = await w.fetch(new Request("https://x/api/admin/daily-summary", { headers: { "x-nb-pin": "9876" } }), env, { waitUntil() {} });
+  assert.equal(s2.status, 200);
+});

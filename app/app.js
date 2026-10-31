@@ -10812,8 +10812,9 @@ async function cloudPushClient() {
     }
   } catch (e) {}
   if (!isOnline()) return { ok: false, offline: true };
-  const token = authHeader();
+  let token = authHeader();
   const bases = apiBases();
+  let relogged = false;
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/report", {
@@ -10822,6 +10823,12 @@ async function cloudPushClient() {
         body: JSON.stringify({ clientId: report.clientId, accessCode: report.accessCode, report })
       });
       if (res.ok) { try { store.set("nb_last_sync_at", Date.now()); } catch (e) {} return { ok: true }; }
+      /* Sesión vencida: el servidor ya exige sesión para /report. Volver a entrar con el código guardado y reintentar una vez. */
+      if ((res.status === 401 || res.status === 404) && !relogged && report.accessCode) {
+        relogged = true;
+        const j = await authLogin("client", report.accessCode).catch(() => null);
+        if (j && j.token) { token = j.token; i -= 1; continue; }
+      }
     } catch (e) {}
   }
   if (await mirrorPublic("report", { clients: [{ id: report.clientId, accessCode: report.accessCode, report }] })) {

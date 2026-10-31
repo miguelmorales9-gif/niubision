@@ -28,7 +28,7 @@ Cloud payload always includes **pending + recently approved** `programRequests`.
 ## Backup
 - Local: Ajustes → **Descargar respaldo** (`backupPayload` JSON: clients, legal, payments, inbox, programRequests).
 - Restore: file picker in Ajustes / Gente (merge-friendly for programRequests).
-- Cloud: Ajustes → **Descargar de la nube** hits `GET /api/export?pin=…` when auth/pin allows.
+- Cloud: Ajustes → **Descargar de la nube** hits `GET /api/export` (PIN en cabecera `X-Nb-Pin`, nunca en la URL) when auth/pin allows.
 
 ## Push / notifications
 - **Web Push (VAPID) — preferred:** Worker secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, optional `VAPID_SUBJECT` (`mailto:…`). Public key is **never** committed as a private secret; client fetches it from `GET /api/push/vapid`. Subscribe via Ajustes / Plan → Activar avisos → `pushManager.subscribe` → `POST /api/push/subscribe` (coach session/PIN or client code). SW already handles `push` + `notificationclick`.
