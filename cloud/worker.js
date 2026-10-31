@@ -246,7 +246,12 @@ function json(body, status, extra) {
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
       "access-control-allow-headers": "Content-Type, Authorization, X-Nb-Pin",
-      "access-control-expose-headers": "Retry-After"
+      "access-control-expose-headers": "Retry-After",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "no-referrer",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
     }, extra || {})
   });
 }
@@ -446,26 +451,67 @@ async function putRow(env, row) {
 function bearer(req, url) {
   const h = req.headers.get("authorization") || "";
   const m = /^Bearer\s+(.+)$/i.exec(h);
-  return (m && m[1].trim()) || url.searchParams.get("token") || "";
+  return (m && m[1].trim()) || ""; // ?token= ya no se acepta (quedaba en registros)
 }
 
 function pinOf(req, url, body) {
-  return String((body && body.pin) || url.searchParams.get("pin") || req.headers.get("x-nb-pin") || "");
+  return String((body && body.pin) || req.headers.get("x-nb-pin") || ""); // ?pin= ya no se acepta
 }
 
 function coachPin(env) {
   return String((env && env.COACH_PIN) || "").trim();
 }
-function pinOk(env, got) {
+function pinMatch(env, got) {
   const want = coachPin(env);
   if (!want) return false;
-  return String(got || "") === want;
+  return safeEq(got, want);
+}
+// Con segundo factor activo (COACH_TOTP_SECRET) el PIN suelto ya no autoriza nada:
+// hay que entrar por /api/auth/login con PIN + código y usar la sesión.
+function pinOk(env, got) {
+  if (totpOn(env)) return false;
+  return pinMatch(env, got);
+}
+
+// ---- TOTP (RFC 6238, SHA-1, 6 dígitos, 30 s, ±1 paso) ----
+function totpOn(env) { return !!String((env && env.COACH_TOTP_SECRET) || "").trim(); }
+function b32decode(str) {
+  const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const clean = String(str || "").toUpperCase().replace(/[^A-Z2-7]/g, "");
+  let bits = 0, val = 0; const out = [];
+  for (const ch of clean) { val = (val << 5) | A.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
+  return new Uint8Array(out);
+}
+async function totpAt(secret, step) {
+  const key = await crypto.subtle.importKey("raw", b32decode(secret), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const msg = new Uint8Array(8); let x = step;
+  for (let i = 7; i >= 0; i--) { msg[i] = x & 255; x = Math.floor(x / 256); }
+  const h = new Uint8Array(await crypto.subtle.sign("HMAC", key, msg));
+  const o = h[19] & 15;
+  const n = ((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3];
+  return String(n % 1000000).padStart(6, "0");
+}
+async function totpOk(secret, code, now) {
+  const c = String(code || "").replace(/\D/g, "");
+  if (c.length !== 6) return false;
+  const t = Math.floor((now || Date.now()) / 30000);
+  for (const d of [-1, 0, 1]) if (safeEq(await totpAt(secret, t + d), c)) return true;
+  return false;
+}
+
+// ---- Sesiones: vencimiento absoluto + por inactividad ----
+const SESSION_RULES = { coach: { abs: 12 * 3600 * 1000, idle: 30 * 60 * 1000 }, client: { abs: 8 * 3600 * 1000, idle: 2 * 3600 * 1000 } };
+function sessionAlive(s, now) {
+  if (!s || !(s.exp > now)) return false;
+  const r = SESSION_RULES[s.role] || SESSION_RULES.client;
+  const last = Number(s.last || 0);
+  if (last && now - last > r.idle) return false;
+  return true;
 }
 
 
+// El token fijo del estudio (row.token) ya no autoriza: el coach usa sólo sesiones que vencen.
 function tokOk(row, tok) {
-  if (!tok || !row) return false;
-  if (tok === row.token) return true;
   return false;
 }
 
@@ -473,7 +519,7 @@ function pruneSessions(row) {
   const now = Date.now();
   const s = row.sessions || {};
   Object.keys(s).forEach((k) => {
-    if (!s[k] || s[k].exp < now) delete s[k];
+    if (!sessionAlive(s[k], now)) delete s[k];
   });
   row.sessions = s;
   const f = row.fails || {};
@@ -521,7 +567,10 @@ async function identity(req, env, url) {
   pruneSessions(row);
   if (tokOk(row, tok)) return { row, role: "coach", token: tok };
   const s = (row.sessions || {})[tok];
-  if (s && s.exp > Date.now()) {
+  const now = Date.now();
+  if (sessionAlive(s, now)) {
+    // Renovar "última actividad" sin escribir en cada petición (máx. 1 escritura / 5 min).
+    if (!s.last || now - s.last > 5 * 60 * 1000) { s.last = now; try { await putRow(env, row); } catch (_) {} }
     return { row, role: s.role, clientId: s.clientId || "", code: s.code || "", token: tok };
   }
   return { row, role: null, token: tok };
@@ -844,16 +893,24 @@ async function handle(req, env) {
       return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
     }
     if (role === "coach") {
-      if (!(pinOk(env, body.pin))) {
+      if (!(pinMatch(env, body.pin))) {
         rateHit(row, "coach");
         await putRow(env, row);
         return json({ error: "Clave incorrecta" }, 403);
       }
+      if (totpOn(env)) {
+        if (!body.totp) return json({ error: "Falta el código de verificación", totp: true }, 401);
+        if (!(await totpOk(env.COACH_TOTP_SECRET, body.totp))) {
+          rateHit(row, "coach");
+          await putRow(env, row);
+          return json({ error: "Código de verificación incorrecto", totp: true }, 401);
+        }
+      }
       rateClear(row, "coach");
       const token = newToken();
-      row.sessions[token] = { role: "coach", exp: Date.now() + 12 * 3600 * 1000 };
+      row.sessions[token] = { role: "coach", exp: Date.now() + SESSION_RULES.coach.abs, last: Date.now() };
       await putRow(env, row);
-      return json({ ok: true, role: "coach", token, exp: row.sessions[token].exp, studioToken: row.token });
+      return json({ ok: true, role: "coach", token, exp: row.sessions[token].exp, studioToken: token });
     }
     const digits = String(body.code || "").replace(/\D/g, "");
     if (digits.length !== 6) return json({ error: "Código de 6 dígitos" }, 400);
@@ -875,7 +932,8 @@ async function handle(req, env) {
       role: "client",
       clientId: hit.id,
       code: digits,
-      exp: Date.now() + 8 * 3600 * 1000
+      exp: Date.now() + SESSION_RULES.client.abs,
+      last: Date.now()
     };
     await putRow(env, row);
     return json({
@@ -1015,18 +1073,19 @@ async function handle(req, env) {
     let key = String(body.studioKey || url.searchParams.get("key") || "NIUBI").toUpperCase();
     if (!pinOk(env, pinOf(req, url, body))) return json({ error: "PIN de estudio requerido" }, 403);
     const row = await rowOf(env, key || "NIUBI");
-    if (!row.token || row.token === LEGACY) {
-      row.token = newToken();
-      await putRow(env, row);
-    }
-    return json({ ok: true, token: row.token });
+    pruneSessions(row);
+    const token = newToken();
+    row.sessions = row.sessions || {};
+    row.sessions[token] = { role: "coach", exp: Date.now() + SESSION_RULES.coach.abs, last: Date.now() };
+    await putRow(env, row);
+    return json({ ok: true, token, exp: row.sessions[token].exp });
   }
 
   if (path === "/api/export" && method === "GET") {
     const row = await rowOf(env, "NIUBI");
-    const pinMatches = pinOk(env, pinOf(req, url, {})); // x-nb-pin, body.pin, or query pin (back-compat)
-    const tok = bearer(req, url);
-    if (!pinMatches && !tokOk(row, tok)) return json({ error: "No" }, 403);
+    const pinMatches = pinOk(env, pinOf(req, url, {})); // x-nb-pin (no ?pin=)
+    const eid = await identity(req, env, url);
+    if (!pinMatches && eid.role !== "coach") return json({ error: "No" }, 403);
     return json({
       ok: true,
       studioKey: "NIUBI",
@@ -1334,9 +1393,9 @@ async function handle(req, env) {
     const clientId = String(body.clientId || idn.clientId || "");
     const byCode = code && ((idn.row.state && idn.row.state.clients) || []).some((c) => String(c.accessCode || "") === code);
     const allowed = idn.role === "coach"
-      || (idn.role === "client" && ((clientId && idn.clientId === clientId) || (code && idn.code === code)))
-      || byCode;
-    if (!allowed) return json({ error: "Estudio no encontrado" }, 404);
+      || (idn.role === "client" && ((clientId && idn.clientId === clientId) || (code && idn.code === code)));
+    void byCode; // ya no basta con conocer un código: hace falta sesión
+    if (!allowed) return json({ error: "Sesión requerida" }, 401);
     idn.row.state = mergeStudio(idn.row.state || {}, {
       _op: "report",
       clients: [{
@@ -1352,6 +1411,7 @@ async function handle(req, env) {
   return json({ error: "No encontrado" }, 404);
 }
 
+export { b32decode, totpAt, totpOk, sessionAlive, SESSION_RULES, safeEq, pinOk, pinMatch };
 export default {
   async fetch(request, env) {
     try {

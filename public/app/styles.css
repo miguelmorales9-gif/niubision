@@ -2099,3 +2099,11 @@ input[type=file].hidden {
 .nb-achv-stats b { color: var(--ember-2); font-size: 18px; margin-right: 3px; }
 .nb-achv-list { display: grid; gap: 8px; margin-top: 10px; }
 .nb-achv-item { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-left: 3px solid var(--mint); background: var(--ink-2); border-radius: 6px; }
+
+/* Seguridad: marca de agua + disuasivos (ver docs/seguridad.md) */
+.nb-wm{position:fixed;inset:0;z-index:2147483000;pointer-events:none;background-repeat:repeat;opacity:.05}
+body.nb-protect #app{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body.nb-protect #app img,body.nb-protect #app video{-webkit-user-drag:none;user-drag:none}
+body.nb-protect #app input,body.nb-protect #app textarea,body.nb-protect #app select,body.nb-protect #app [contenteditable="true"]{-webkit-user-select:text;user-select:text}
+:root.nb-hidden body.nb-protect #app{filter:blur(18px)}
+@media print{body.nb-protect #app{visibility:hidden}}

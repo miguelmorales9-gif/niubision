@@ -8,6 +8,7 @@
     "check:html": "bash scripts/check-html-sync.sh",
     "build": "bash scripts/build-html.sh",
     "build:html": "bash scripts/build-html.sh",
-    "prestart": "npm run sync:html"
+    "prestart": "npm run sync:html",
+    "test": "node --test test/*.test.mjs"
   }
 }

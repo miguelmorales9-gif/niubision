@@ -10812,8 +10812,9 @@ async function cloudPushClient() {
     }
   } catch (e) {}
   if (!isOnline()) return { ok: false, offline: true };
-  const token = authHeader();
+  let token = authHeader();
   const bases = apiBases();
+  let relogged = false;
   for (let i = 0; i < bases.length; i++) {
     try {
       const res = await cloudGet(bases[i] + "/report", {
@@ -10822,6 +10823,12 @@ async function cloudPushClient() {
         body: JSON.stringify({ clientId: report.clientId, accessCode: report.accessCode, report })
       });
       if (res.ok) { try { store.set("nb_last_sync_at", Date.now()); } catch (e) {} return { ok: true }; }
+      /* Sesión vencida: el servidor ya exige sesión para /report. Volver a entrar con el código guardado y reintentar una vez. */
+      if ((res.status === 401 || res.status === 404) && !relogged && report.accessCode) {
+        relogged = true;
+        const j = await authLogin("client", report.accessCode).catch(() => null);
+        if (j && j.token) { token = j.token; i -= 1; continue; }
+      }
     } catch (e) {}
   }
   if (await mirrorPublic("report", { clients: [{ id: report.clientId, accessCode: report.accessCode, report }] })) {
@@ -14175,11 +14182,11 @@ function authHeader() {
   if (a && a.token) return a.token;
   return (state.settings && state.settings.cloudToken) || NB_CLOUD.token;
 }
-async function authLogin(kind, secret) {
+async function authLogin(kind, secret, totp) {
   if (!isOnline()) return null;
   const bases = apiBases();
   const body = kind === "coach"
-    ? JSON.stringify({ role: "coach", pin: String(secret || "") })
+    ? JSON.stringify(totp ? { role: "coach", pin: String(secret || ""), totp: String(totp) } : { role: "coach", pin: String(secret || "") })
     : JSON.stringify({ role: "client", code: String(secret || "").replace(/\D/g, "") });
   let netFail = false;
   let denied = false;
@@ -14195,6 +14202,12 @@ async function authLogin(kind, secret) {
         authSet({ token: j.token, role: j.role, exp: j.exp, clientId: j.clientId || "" });
         if (j.studioToken) state.settings.cloudToken = j.studioToken;
         return j;
+      }
+      if (kind === "coach" && res.status === 401 && j && j.totp && !totp) {
+        /* Segundo factor: PIN correcto, falta el código de 6 dígitos de la app autenticadora. */
+        const code = (window.prompt("Código de verificación (app autenticadora, 6 dígitos)") || "").replace(/\D/g, "");
+        if (code.length === 6) return authLogin(kind, secret, code);
+        return null;
       }
       if (res.status === 401 || res.status === 403 || res.status === 429) denied = true;
       else netFail = true;
@@ -19846,6 +19859,59 @@ function nbLoadData() {
   });
   return nbDataP;
 }
+/* ---- Seguridad: marca de agua por usuario + disuasivos (no impide capturas; las identifica) ---- */
+const NB_PROTECT_GUEST = { price: 1, about: 1, coach: 1, social: 1, privacy: 1, terms: 1 };
+function nbWmText() {
+  const d = new Date().toISOString().slice(0, 10);
+  if (state.role === "coach") return "NiuBision · Coach · " + d;
+  const p = state.profile || {};
+  const who = [String(p.name || "").slice(0, 40), String(p.clientId || p.accessCode || "").slice(0, 8)].filter(Boolean).join(" · ");
+  return (who || "Cliente") + " · " + d;
+}
+function nbWmTile(text, dark) {
+  const esc = String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const w = Math.max(340, Math.round(esc.length * 7.4 + 40));
+  const fill = dark ? "#ffffff" : "#000000";
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='" + w + "' height='180'><text x='20' y='110' transform='rotate(-18 " + (w / 2) + " 90)' font-family='sans-serif' font-size='14' fill='" + fill + "'>" + esc + "</text></svg>";
+  return "url(\"data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg) + "\")";
+}
+let nbWmObs = null;
+function nbGuard() {
+  const on = (state.role === "client" || state.role === "coach") && !state.splash && !(state.role === "guest" && NB_PROTECT_GUEST[state.view]);
+  document.body.classList.toggle("nb-protect", !!on);
+  let el = document.getElementById("nbWm");
+  if (!on) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement("div"); el.id = "nbWm"; el.setAttribute("aria-hidden", "true"); document.body.appendChild(el); }
+  const dark = !document.documentElement.classList.contains("light") && document.documentElement.getAttribute("data-theme") !== "light";
+  el.className = "nb-wm";
+  el.removeAttribute("hidden");
+  el.removeAttribute("style");
+  el.style.backgroundImage = nbWmTile(nbWmText(), dark);
+  if (!nbWmObs && window.MutationObserver) {
+    nbWmObs = new MutationObserver(() => {
+      if (!document.body.classList.contains("nb-protect")) return;
+      const cur = document.getElementById("nbWm");
+      if (!cur || cur.hidden || cur.className !== "nb-wm" || !cur.style.backgroundImage || cur.style.display || cur.style.opacity || cur.style.visibility) { nbWmObs.disconnect(); nbWmObs = null; nbGuard(); }
+    });
+  }
+  if (nbWmObs) {
+    nbWmObs.disconnect();
+    nbWmObs.observe(document.body, { childList: true });
+    nbWmObs.observe(el, { attributes: true });
+  }
+}
+(function nbDeterrents() {
+  const isField = (t) => t && t.closest && t.closest("input, textarea, select, [contenteditable='true']");
+  document.addEventListener("contextmenu", (e) => { if (document.body.classList.contains("nb-protect") && !isField(e.target)) e.preventDefault(); });
+  document.addEventListener("dragstart", (e) => { if (document.body.classList.contains("nb-protect") && e.target && e.target.tagName === "IMG") e.preventDefault(); });
+  const hide = (h) => document.documentElement.classList.toggle("nb-hidden", !!h && document.body.classList.contains("nb-protect"));
+  document.addEventListener("visibilitychange", () => hide(document.hidden));
+  window.addEventListener("pagehide", () => hide(true));
+  window.addEventListener("blur", () => hide(true));
+  window.addEventListener("focus", () => hide(false));
+  window.addEventListener("pageshow", () => hide(false));
+})();
+
 function render() {
   if (!nbDataReady() && (window.NB_DATA_SRC || window.NB_VIEWS_SRC) && !state.splash && state.role) {
     if (nbDataFailed) {
@@ -19862,6 +19928,7 @@ function render() {
   }
   if (state.splash) {
     document.body.classList.remove("in-app");
+    try { nbGuard(); } catch (e) {}
     return renderGate();
   }
   if (state.role === "client" && !(state.profile && state.profile.unlocked) && !(typeof isPreviewDemoSeat === "function" && isPreviewDemoSeat())) {
@@ -19873,6 +19940,7 @@ function render() {
     store.set("nb_nav7", 1);
   }
   document.body.classList.toggle("in-app", !!state.role);
+  try { nbGuard(); } catch (e) {}
   if (!state.role) return renderGate();
   const html = viewBody();
   const app = $("#app");
