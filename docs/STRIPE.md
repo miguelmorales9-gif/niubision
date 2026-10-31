@@ -3,7 +3,7 @@
 - **No reemplaza nada**: PayPal y ATH Móvil siguen igual. La opción «Tarjeta» solo aparece si `config.js` trae `STRIPE: true` (hoy solo en la vista previa).
 - **Pago único** por el monto del plan, igual que el enlace de PayPal (`_xclick`). Sin suscripción recurrente.
 - **Precios**: los de `PLANS` en `app/app.js`, copiados en `cloud/stripe.js` (`NB_PLANS`); una prueba verifica que coincidan. El servidor fija el monto (no confía en el cliente).
-- **IVU**: la app dice «Precio final, sin IVU»; Stripe cobra el mismo monto, sin sumar impuesto.
+- **IVU**: todos los precios incluyen el IVU de Puerto Rico (11.5 %): total = round(base × 1.115) en centavos. Stripe cobra ese total (unit_amount en centavos de NB_PLANS[].cents) y la descripción muestra base + IVU.
 - **Webhook** `POST /api/stripe/webhook` (firma verificada, idempotente): `checkout.session.completed` marca el pago «recibido» (igual que el IPN de PayPal), avisa al coach y al cliente y envía el recibo.
 - El Worker **rechaza llaves live** salvo `STRIPE_LIVE_OK="1"` (solo con el OK de Miguel).
 

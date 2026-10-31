@@ -1,5 +1,5 @@
 // Stripe Checkout para NiuBision (junto a PayPal y ATH Móvil; no los reemplaza).
-// Pago único por el monto del plan, igual que el enlace de PayPal (_xclick): precio final, sin IVU, como dice la app.
+// Pago único por el monto del plan, igual que el enlace de PayPal (_xclick): precio final con IVU de Puerto Rico (11.5 %) incluido, como dice la app.
 // Inerte sin STRIPE_SECRET_KEY. Rechaza llaves live salvo STRIPE_LIVE_OK="1" (solo con el OK de Miguel).
 // Precios: tabla del servidor (no confía en el monto del cliente). Espejo de PLANS en app/app.js.
 export const NB_PLANS = [
@@ -12,6 +12,10 @@ export const NB_PLANS = [
   { id: "presencial", name: "Sesión en gimnasio", price: 55 },
   { id: "ai", name: "Armado de rutina", price: 12 }
 ];
+// IVU PR 11.5 %: total = base × 1.115 redondeado al centavo (mitad hacia arriba), en enteros.
+export const IVU_MILLI = 115;
+export function ivuCents(base) { const b = Math.round(Number(base) * 100); const t = Math.floor((b * (1000 + IVU_MILLI) + 500) / 1000); return { base: b, ivu: t - b, total: t }; }
+for (const p of NB_PLANS) p.cents = ivuCents(p.price).total;
 export function planOf(label) {
   const raw = String(label || "");
   if (/rutina con ia|ia · rutina/i.test(raw)) return NB_PLANS.find((p) => p.id === "ai");
@@ -52,7 +56,7 @@ export async function createCheckout(env, body, appUrl, fetcher = fetch) {
   const ids = priceIds(env);
   const line = ids[plan.id]
     ? { price: ids[plan.id], quantity: 1 }
-    : { price_data: { currency: "usd", unit_amount: plan.price * 100, product_data: { name: "NiuBision — " + plan.name } }, quantity: 1 };
+    : { price_data: { currency: "usd", unit_amount: plan.cents, product_data: { name: "NiuBision — " + plan.name, description: "IVU incluido · base " + (plan.price).toFixed(2) + " USD + IVU 11.5 % " + (ivuCents(plan.price).ivu / 100).toFixed(2) + " USD" } }, quantity: 1 };
   const email = String(body.email || "").trim();
   const meta = { invoice: inv, plan: plan.name, plan_id: plan.id, clientId: String(body.clientId || "").slice(0, 60), name: String(body.name || "").slice(0, 80) };
   const params = {
@@ -69,7 +73,7 @@ export async function createCheckout(env, body, appUrl, fetcher = fetch) {
     payment_intent_data: { metadata: meta, description: "NiuBision — " + plan.name }
   };
   const s = await stripeApi(env, "POST", "/checkout/sessions", params, fetcher);
-  return { url: s.url, id: s.id, amount: String(plan.price), plan: plan.name };
+  return { url: s.url, id: s.id, amount: (plan.cents / 100).toFixed(2), plan: plan.name };
 }
 const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 export async function signPayload(secret, payload, t = Math.floor(Date.now() / 1000)) {
