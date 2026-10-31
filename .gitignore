@@ -2,3 +2,4 @@ cloud/.wrangler/
 .vapid-local.json
 *.pem
 dist/
+cloud/*.local.toml

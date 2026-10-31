@@ -1,5 +1,6 @@
 import { dbMode, d1ReadRow, d1WriteRow } from "./db.js";
 import { sendWebPush } from "./webpush.js";
+import { stripeMode, createCheckout as stripeCheckout, verifySignature as stripeVerify, stripeApi } from "./stripe.js";
 const COACH_MAIL = "miguel.morales9@gmail.com";
 const LEGACY = "nb-cloud-v1";
 
@@ -274,7 +275,8 @@ function rlBucket(path, method) {
   if (path === "/api/auth/login" || path === "/api/login" || path === "/api/studio" || path === "/api/export" || path === "/api/revoke" || path === "/api/admin/daily-summary") return "auth";
   if (path.indexOf("/api/log") === 0) return method === "POST" ? "log" : "auth";
   if (path === "/api/redeem" || path === "/api/receipt" || path === "/api/paid" || path === "/api/auth/me" || path === "/api/me") return "code";
-  if (path === "/api/paypal") return "ipn";
+  if (path === "/api/paypal" || path === "/api/stripe/webhook") return "ipn";
+  if (path === "/api/stripe/checkout") return "pay";
   if (path === "/api/pay" || path === "/api/lead" || path === "/api/program-request" || path === "/api/report" || path.indexOf("/api/push/") === 0 && method === "POST") return "pay";
   if (method !== "GET" && method !== "HEAD") return "write";
   return "read";
@@ -577,6 +579,7 @@ async function identity(req, env, url) {
 }
 
 async function mailReceipt(row) {
+  if (globalThis.__NB_PREVIEW) { console.log(JSON.stringify({ ev: "mail_receipt_preview_skip", plan: row && row.plan })); return; }
   const addrs = [COACH_MAIL];
   const extra = String(row.email || row.clientEmail || "").trim();
   if (extra && extra !== COACH_MAIL) addrs.push(extra);
@@ -858,6 +861,7 @@ async function dailySummary(env, day) {
 }
 
 async function handle(req, env) {
+  globalThis.__NB_PREVIEW = !!(env && env.NB_PREVIEW === "1");
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/$/, "") || "/";
   const method = req.method.toUpperCase();
@@ -1289,6 +1293,65 @@ async function handle(req, env) {
     }
     await notifyCoach(env, row, "Pago PayPal", (cl.name || pay.name || "Cliente") + " · " + (params.get("mc_gross") || "") + " USD", "/?view=inbox", "nb-pay");
     return json({ ok: true });
+  }
+
+  // ---- Stripe Checkout (además de PayPal y ATH; ver cloud/stripe.js) ----
+  if (path === "/api/stripe/config" && method === "GET") {
+    const mode = stripeMode(env);
+    return json({ enabled: mode === "test" || mode === "live", mode });
+  }
+  if (path === "/api/stripe/checkout" && method === "POST") {
+    const mode = stripeMode(env);
+    if (mode === "rejected") return json({ error: "Stripe solo acepta llaves de prueba aquí" }, 400);
+    if (mode === "off") return json({ error: "Pago con tarjeta no disponible" }, 501);
+    const body = await req.json().catch(() => ({}));
+    let out;
+    try { out = await stripeCheckout(env, body, String(env.APP_URL || "https://niubision.app").replace(/\/$/, "")); }
+    catch (e) { return json({ error: e.message || "stripe_error" }, e.status === 400 ? 400 : 502); }
+    const invoice = String(body.invoice || "").replace(/[^\w-]/g, "").slice(0, 40);
+    const row = await rowOf(env, "NIUBI");
+    row.state = mergeStudio(row.state || {}, { _op: "pay", payments: [{
+      id: invoice, invoice, ref: String(body.ref || ("NB-" + invoice.replace(/\D/g, "").slice(-6))),
+      date: new Date().toISOString().slice(0, 10), plan: out.plan, amount: out.amount, method: "Tarjeta (Stripe)",
+      status: "iniciado", name: body.name || "Cliente", clientId: body.clientId || "", email: body.email || "", stripeSession: out.id
+    }] });
+    await putRow(env, row);
+    return json({ ok: true, url: out.url, amount: out.amount, plan: out.plan });
+  }
+  if (path === "/api/stripe/webhook" && method === "POST") {
+    const mode = stripeMode(env);
+    if ((mode !== "test" && mode !== "live") || !env.STRIPE_WEBHOOK_SECRET) return json({ error: "stripe_inactivo" }, 501);
+    const raw = await req.text();
+    if (!await stripeVerify(env.STRIPE_WEBHOOK_SECRET, raw, req.headers.get("stripe-signature"))) return json({ error: "firma_invalida" }, 400);
+    let ev; try { ev = JSON.parse(raw); } catch (e) { return json({ error: "json" }, 400); }
+    if (!!ev.livemode !== (mode === "live")) return json({ error: "modo_incorrecto" }, 400);
+    const seenKey = "stripe_evt:" + ev.id;
+    if (env.STUDIO && await env.STUDIO.get(seenKey)) return json({ ok: true, duplicate: true });
+    if (env.STUDIO) await env.STUDIO.put(seenKey, "1", { expirationTtl: 7 * 24 * 3600 });
+    const o = (ev.data && ev.data.object) || {};
+    const meta = o.metadata || {};
+    const invoice = String(meta.invoice || o.client_reference_id || "");
+    const row = await rowOf(env, "NIUBI");
+    const pay = ((row.state && row.state.payments) || []).find((p) => invoice && (p.id === invoice || p.invoice === invoice)) || {};
+    if ((ev.type === "checkout.session.completed" && o.payment_status === "paid") || ev.type === "checkout.session.async_payment_succeeded") {
+      const amount = String(((o.amount_total || 0) / 100).toFixed(2)).replace(/\.00$/, "");
+      row.state = mergeStudio(row.state || {}, { _op: "paid", invoice, clientId: pay.clientId || meta.clientId || "", name: pay.name || meta.name || "", amount, method: "Tarjeta (Stripe)" });
+      await putRow(env, row);
+      const cl = ((row.state && row.state.clients) || []).find((c) => c.id === (pay.clientId || meta.clientId)) || {};
+      await mailReceipt({ date: new Date().toISOString().slice(0, 10), name: cl.name || pay.name || meta.name, plan: cl.plan || pay.plan || meta.plan, amount, method: "Tarjeta (Stripe)", status: "recibido", accessCode: cl.accessCode, email: cl.email || (o.customer_details && o.customer_details.email) });
+      if (cl.id || cl.accessCode) await notifyClient(env, row, cl.id, cl.accessCode, "Código listo", "Pago recibido. Su acceso ya está activo.", "/?view=work", "nb-code");
+      await notifyCoach(env, row, "Pago con tarjeta", (cl.name || pay.name || meta.name || "Cliente") + " · " + amount + " USD", "/?view=inbox", "nb-pay");
+      return json({ ok: true, paid: invoice });
+    }
+    if (ev.type === "checkout.session.async_payment_failed" || ev.type === "payment_intent.payment_failed" || ev.type === "checkout.session.expired") {
+      if (invoice && pay.id) {
+        row.state = mergeStudio(row.state || {}, { _op: "pay", payments: [Object.assign({}, pay, { status: ev.type === "checkout.session.expired" ? "sin completar" : "fallido" })] });
+        await putRow(env, row);
+      }
+      return json({ ok: true, status: ev.type });
+    }
+    if (ev.type === "charge.refunded") return json({ ok: true, ignored: "reembolso: revíselo en Stripe" });
+    return json({ ok: true, ignored: ev.type });
   }
 
   if (path === "/api/paid" && method === "POST") {

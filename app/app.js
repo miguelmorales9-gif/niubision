@@ -10139,12 +10139,14 @@ const JB_CLOUD = "";
 const CR_CLOUD = "";
 const REST_CLOUD = "";
 const GH_STUDIO = "";
-const CLOUD_API = "https://api.niubision.com/api";
+/* Vista previa: window.NB_ENV.API (config.js) dirige TODO el tráfico a un Worker de prueba; producción no lo define. */
+const NB_API_OVERRIDE = (function () { try { const u = window.NB_ENV && window.NB_ENV.API; return u && /^https:\/\//.test(u) ? String(u).replace(/\/$/, "") : ""; } catch (e) { return ""; } })();
+const CLOUD_API = NB_API_OVERRIDE || "https://api.niubision.com/api";
 /* Split web/app: URLs come from /config.js (window.NB_ENV); production fallback below. */
 function nbAppUrl() { try { const u = window.NB_ENV && window.NB_ENV.APP_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://niubision.app"; }
 function nbWebUrl() { try { const u = window.NB_ENV && window.NB_ENV.WEB_URL; if (u) return String(u).replace(/\/$/, ""); } catch (e) {} return "https://niubision.com"; }
 function nbAppHost() { try { return new URL(nbAppUrl()).host; } catch (e) { return "niubision.app"; } }
-const CLOUD_API_CUSTOM = "https://niubision-api.miguel-morales9.workers.dev/api";
+const CLOUD_API_CUSTOM = NB_API_OVERRIDE || "https://niubision-api.miguel-morales9.workers.dev/api";
 const NB_CLOUD = {
   key: "NIUBI",
   token: "",
@@ -10338,6 +10340,7 @@ function ntfyHeader(v) {
   return String(v || "").replace(/[^\u0000-\u00ff]/g, "");
 }
 function ntfyPost(topic, body, headers) {
+  try { if (window.NB_ENV && window.NB_ENV.NO_NOTIFY) return; } catch (e) {}
   ntfyPost._dead = ntfyPost._dead || {};
   ntfyPost._backoff = ntfyPost._backoff || {};
   if (ntfyPost._dead[topic]) return;
@@ -10474,6 +10477,7 @@ async function loadStudioPointer() {
   } catch (e) {}
 }
 function defaultCloudUrl() {
+  if (NB_API_OVERRIDE) return NB_API_OVERRIDE;
   const fromSet = state.settings && String(state.settings.cloudUrl || "").trim();
   if (fromSet && /^https:\/\//i.test(fromSet) && !/crudcrud|jsonblob|restful-api/i.test(fromSet)) {
     return fromSet.replace(/\/$/, "");
@@ -10488,6 +10492,7 @@ function defaultCloudUrl() {
   return CLOUD_API;
 }
 function apiBases() {
+  if (NB_API_OVERRIDE) return [NB_API_OVERRIDE];
   const out = [];
   const add = (u) => {
     const n = String(u || "").replace(/\/$/, "");
@@ -14440,7 +14445,7 @@ function paypalSafe(raw) {
 function paySecureHtml() {
   return `<div class="pay-secure">
     <span class="k">Seguridad en pagos digitales</span>
-    <p>NiuBision no pide ni guarda números de tarjeta, PIN, CVV ni claves de ATH Móvil. El dinero se mueve en PayPal o ATH Móvil.</p>
+    <p>NiuBision no pide ni guarda números de tarjeta, PIN, CVV ni claves de ATH Móvil. El dinero se mueve en PayPal o ATH Móvil${stripeOn() ? ", o con tarjeta en la página segura de Stripe" : ""}.</p>
     <ul>
       <li>Confirme el monto antes de salir de la app.</li>
       <li>Pague solo con estos botones. Nadie del estudio le pedirá su clave.</li>
@@ -14489,6 +14494,23 @@ function paypalHref(amount, item, invoice) {
   if (safe.me) return "https://www.paypal.com/paypalme/" + encodeURIComponent(safe.me);
   return "";
 }
+/* Stripe (tarjeta) aparece solo si config.js lo activa (NB_ENV.STRIPE) y el Worker lo confirma. PayPal y ATH no cambian. */
+function stripeOn() { try { return !!(window.NB_ENV && window.NB_ENV.STRIPE); } catch (e) { return false; } }
+async function stripeCheckoutUrl(row) {
+  const bases = apiBases();
+  const c = selfClient() || currentClient();
+  const payload = { plan: row.plan, invoice: row.invoice || row.id, ref: row.ref, name: row.name, clientId: row.clientId || "", email: (c && c.email) || (state.profile && state.profile.email) || "" };
+  let last = "No se pudo abrir el pago con tarjeta";
+  for (const base of bases) {
+    try {
+      const r = await fetch(base + "/stripe/checkout", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(payload) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.url && /^https:\/\/checkout\.stripe\.com\//.test(j.url)) return j.url;
+      if (j.error) last = j.error;
+    } catch (e) {}
+  }
+  throw new Error(last);
+}
 function payMethods(planLabel) {
   const info = planPriceOf(planLabel);
   const cfg = payCfg();
@@ -14497,7 +14519,7 @@ function payMethods(planLabel) {
   return [
     { id: "paypal", mark: "PP", cls: "paypal", name: "PayPal", hint: pp.ok ? "Cobro cifrado de " + info.amount + " USD · " + maskDest(cfg.paypal, "paypal") : "El estudio aún no puso un PayPal válido" },
     { id: "ath", mark: "ATH", cls: "ath", name: "ATH Móvil", hint: athNum ? "Enviar al que " + maskDest(cfg.ath, "ath") : "Ponga el número ATH en el estudio" }
-  ];
+  ].concat(stripeOn() ? [{ id: "stripe", mark: "VISA", cls: "stripe", name: "Tarjeta", hint: "Crédito o débito con Stripe · " + info.amount + " USD" }] : []);
 }
 function payButtonsHtml(planLabel) {
   const cfg = payCfg();
@@ -14564,11 +14586,12 @@ function recordPay(planLabel, method, status) {
   return row;
 }
 function payLabel(id) {
-  return ({ paypal: "PayPal", ath: "ATH Móvil" })[id] || id;
+  return ({ paypal: "PayPal", ath: "ATH Móvil", stripe: "Tarjeta (Stripe)" })[id] || id;
 }
 function payDestHint(method) {
   const cfg = payCfg();
   if (method === "paypal") return maskDest(cfg.paypal, "paypal") || "PayPal del estudio";
+  if (method === "stripe") return "página segura de Stripe";
   return maskDest(cfg.ath, "ath") || "ATH Móvil del estudio";
 }
 async function watchInvoice(inv) {
@@ -14796,6 +14819,18 @@ async function runPay(method, planLabel) {
     window.open(href, "_blank", "noopener,noreferrer");
     notifyPay(planLabel, "PayPal");
     showPayReceipt(row);
+    return;
+  }
+  if (method === "stripe") {
+    notifyPay(planLabel, "Tarjeta (Stripe)");
+    try {
+      const url = await stripeCheckoutUrl(row);
+      persist();
+      location.href = url;
+    } catch (e) {
+      toast(String(e.message || "No se pudo abrir el pago con tarjeta") + ". Puede usar PayPal o ATH Móvil.");
+      showPayReceipt(row);
+    }
     return;
   }
   if (method === "ath") {
