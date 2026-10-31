@@ -2108,3 +2108,5 @@ body.nb-protect #app img,body.nb-protect #app video{-webkit-user-drag:none;user-
 body.nb-protect #app input,body.nb-protect #app textarea,body.nb-protect #app select,body.nb-protect #app [contenteditable="true"]{-webkit-user-select:text;user-select:text}
 :root.nb-hidden body.nb-protect #app{filter:blur(18px)}
 @media print{body.nb-protect #app{visibility:hidden}}
+
+.nb-sr-h1 { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0; }

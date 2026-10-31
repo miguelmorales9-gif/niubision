@@ -45,7 +45,9 @@ cp "$root/app/app.js" "$root/app/styles.css" "$out/app/app/"
 for f in favicon.svg logo.png icon-*.png screenshot-phone.png screenshot-wide.png og.jpg intro-poster.jpg intro.mp4 studios.json; do
   [ -e "$root/$f" ] && cp "$root"/$f "$out/app/" 2>/dev/null || true
 done
-printf 'window.NB_ENV = { ENV: "%s", WEB_URL: "%s", APP_URL: "%s" };\n' "$env" "$WEB_URL" "$APP_URL" > "$out/app/config.js"
+# NB_STRIPE=1 muestra «Tarjeta (Stripe)» en la app (solo cuando el Worker tenga la llave y STRIPE_LIVE_OK, con el OK de Miguel).
+stripe_flag=""; [ "${NB_STRIPE:-0}" = "1" ] && stripe_flag=', STRIPE: true'
+printf 'window.NB_ENV = { ENV: "%s", WEB_URL: "%s", APP_URL: "%s"%s };\n' "$env" "$WEB_URL" "$APP_URL" "$stripe_flag" > "$out/app/config.js"
 python3 - "$root" "$out/app" "$WEB_URL" "$APP_URL" "$ROBOTS" <<'PY'
 import sys, re, json
 root, out, WEB, APP, ROBOTS = sys.argv[1:]

@@ -14877,6 +14877,7 @@ function openPayConfirm(method, planLabel) {
     <p class="tagline">Confirmar pago</p>
     <h2>${escapeHtml(info.amount ? info.amount + " USD" : "Monto del plan")}</h2>
     <p>${escapeHtml(info.name || planLabel)}</p>
+    ${ivuSplit(info.amount) ? `<p class="muted ivu-line">${escapeHtml(ivuLine(info.amount))}</p>` : ""}
     <p class="muted">${escapeHtml(name)} · destino ${escapeHtml(payDestHint(method))}</p>
     ${paySecureHtml()}
     <button class="btn primary" id="payGo">Pagar con ${name}</button>
@@ -15173,7 +15174,7 @@ function openPedirBeats(routineId) {
 }
 function renderGate() {
   if (state.splash) {
-    $("#app").innerHTML = `<section class="splash splash-hybrid" id="splash">
+    $("#app").innerHTML = `<section class="splash splash-hybrid" id="splash" role="main">
       <div class="orb" id="orb"></div>
       <button class="splash-logo-wrap" id="holdLogo" aria-label="Mantenga pulsado el logo hasta completar el anillo" oncontextmenu="return false">
         <svg class="ring ring-hold" viewBox="0 0 120 120" aria-hidden="true">
@@ -15410,14 +15411,7 @@ function bindSplash() {
     if (!ring) return;
     ring.style.strokeDashoffset = String(100 - v);
     wrap && wrap.style.setProperty("--hold", String(v));
-    wrap && wrap.setAttribute("aria-valuenow", String(Math.round(v)));
   };
-  if (wrap) {
-    wrap.setAttribute("role", "progressbar");
-    wrap.setAttribute("aria-valuemin", "0");
-    wrap.setAttribute("aria-valuemax", "100");
-    wrap.setAttribute("aria-valuenow", "0");
-  }
   paintRing(0);
   const go = () => {
     if (gone) return;
@@ -16079,7 +16073,7 @@ function openStudioSettings() {
     </div>
     <div class="card">
       <h3>Métodos de pago</h3>
-      <p class="muted">NiuBision no cobra tarjetas. El dinero sale en PayPal o ATH Móvil.</p>
+      <p class="muted">NiuBision no guarda tarjetas. El dinero sale en PayPal o ATH Móvil${stripeOn() ? ", o en la página segura de Stripe" : ""}.</p>
       ${paySecureHtml()}
       <input class="field" id="payPaypal" placeholder="PayPal: email o paypal.me/suusuario" value="${escAttr(payCfg().paypal)}">
       <input class="field" id="payAth" placeholder="ATH Móvil: 787 555 0000" value="${escAttr(payCfg().ath)}">
@@ -17581,7 +17575,7 @@ function termsView() {
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Términos y cancelación</h2>
     <p>NiuBision es entrenamiento personal y coaching en línea en Puerto Rico, dirigido por Miguel Morales. No es un gimnasio con sede ni una tienda de ropa.</p>
     <h3>Pago</h3>
-    <p>Precio final, IVU de Puerto Rico (11.5 %) incluido. El recibo separa base e IVU. PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038). El cobro lo confirman ellos. NiuBision no guarda tarjetas. El código de 6 dígitos se envía cuando Miguel pulse «Confirmar pago» o «Pago recibido · dar código», no al pulsar «Pagar con…».</p>
+    <p>Precio final, IVU de Puerto Rico (11.5 %) incluido. El recibo separa base e IVU. PayPal (miguel.morales9@gmail.com) o ATH Móvil (7874544038)${stripeOn() ? ", o tarjeta en la página segura de Stripe (el código llega solo al confirmarse el pago)" : ""}. El cobro lo confirman ellos. NiuBision no guarda tarjetas. El código de 6 dígitos se envía cuando Miguel pulse «Confirmar pago» o «Pago recibido · dar código», no al pulsar «Pagar con…».</p>
     <h3>Mes en curso</h3>
     <p>El mes que ya pagó no se reembolsa. Si cancela, avise por WhatsApp. No se cobra el mes siguiente. No hay prorrateo a mitad de mes.</p>
     <h3>12 semanas</h3>
@@ -17662,7 +17656,7 @@ function pricesView() {
     <h2 style="font-family:var(--display);font-size:26px;margin-bottom:8px">Qué paga y qué recibe</h2>
     ${planProgressHtml()}
     ${chip}
-    <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD e incluyen el IVU de Puerto Rico (11.5 %). Precio final. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision.</p>
+    <p class="muted" style="margin-bottom:14px">Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD e incluyen el IVU de Puerto Rico (11.5 %). Precio final. El cobro sale por PayPal o ATH Móvil${stripeOn() ? ", o con tarjeta en la página segura de Stripe" : ""}; NiuBision no guarda tarjetas.</p>
     <div class="card">
       <h3>Cómo elegir</h3>
       <ul class="include">
@@ -17715,7 +17709,7 @@ function pricesView() {
     </div>
     <div class="card">
       <h3>Cómo pagar</h3>
-      <p class="muted">PayPal y ATH Móvil. Precio final, IVU incluido. Después del contrato se abre esta misma lista.</p>
+      <p class="muted">PayPal y ATH Móvil${stripeOn() ? ", o tarjeta con Stripe" : ""}. Precio final, IVU incluido. Después del contrato se abre esta misma lista.</p>
       ${paySecureHtml()}
       ${state.role === "guest" ? `<p class="muted">El pago se abre después del relevo y el contrato. El código llega cuando Miguel confirme PayPal o ATH, no al pulsar pagar.</p>` : payButtonsHtml((state.profile && state.profile.plan) || "NiuBision Estándar")}
       ${state.role !== "guest" ? `<button class="btn ghost" id="openPay">Pagar un plan ya contratado</button>` : ""}
@@ -18625,11 +18619,11 @@ function guestTourHtml() {
   if (state.role && state.role !== "guest") return "";
   return `<div class="card guest-tour" id="guestTour">
     <p class="tagline">Primera vez</p>
-    <h3>Así entra a NiuBision</h3>
+    <h3 role="heading" aria-level="2">Así entra a NiuBision</h3>
     <ol class="tour-steps">
       <li><strong>Planes</strong> — escoja el suyo</li>
       <li><strong>Confianza</strong> — relevo y PAR-Q</li>
-      <li><strong>Pagar</strong> — PayPal o ATH</li>
+      <li><strong>Pagar</strong> — PayPal, ATH${stripeOn() ? " o tarjeta" : ""}</li>
       <li><strong>Código</strong> — llega por WhatsApp</li>
       <li><strong>Entrar</strong> — péguelo aquí</li>
     </ol>
@@ -19818,7 +19812,17 @@ function viewOrder() {
   return ["work", "programas", "home", "price", "habit", "book"];
 }
 let viewGen = 0;
+function nbEnsureH1() {
+  const stage = document.getElementById("viewStage");
+  if (!stage || stage.querySelector("h1")) return;
+  const h = document.createElement("h1");
+  h.className = "nb-sr-h1";
+  const first = stage.querySelector("h2");
+  h.textContent = "NiuBision" + (first && first.textContent.trim() ? " · " + first.textContent.trim().slice(0, 60) : "");
+  stage.prepend(h);
+}
 function afterPaint() {
+  try { nbEnsureH1(); } catch (e) {}
   guardLogoMedia(document.querySelector(".app-header .brand"));
   $$("img").forEach((img) => { img.onerror = () => { img.style.opacity = ".35"; }; });
   $$("[data-preview-ex]").forEach((b) => {
