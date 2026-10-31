@@ -9504,7 +9504,7 @@ const PLANS = [
       "Sin videollamada. Sin check-in semanal. Sin corrección de técnica por video.",
       "Precio final, IVU (11.5 %) incluido. Pago por PayPal o ATH Móvil."
     ] },
-  { id: "estandar", eyebrow: "El plan de la mayoría", name: "NiuBision Estándar", price: "141.61", base: "127", unit: "al mes", featured: true,
+  { id: "estandar", eyebrow: "El plan de la mayoría", name: "NiuBision Estándar", price: "143.84", base: "129", unit: "al mes", featured: true,
     simple: "El trabajo, todas las semanas: plan, check-in, hábitos y corrección de técnica por video.",
     forWho: "Quien quiere que alguien revise la semana y corrija la técnica, sin una llamada cada siete días.",
     includes: "Todo lo de Base, más check-in semanal, hábitos y 2 videos de técnica al mes.",
@@ -9531,13 +9531,13 @@ const PLANS = [
       "Precio final, IVU (11.5 %) incluido."
     ] },
   { id: "estandar12", eyebrow: "Compromiso · ahorro", name: "NiuBision Estándar · 12 semanas", price: "389.14", base: "349", unit: "pago único", featured: false,
-    simple: "Tres meses de Estándar pagados de una vez. 389.14 USD en total, IVU incluido: cerca de 130 USD al mes (ahorro de ~8%).",
-    forWho: "Quien ya decidió 12 semanas y quiere pagar menos que mes a mes (141.61 × 3 = 424.83).",
+    simple: "Tres meses de Estándar pagados de una vez. 389.14 USD en total, IVU incluido: cerca de 130 USD al mes (ahorro de ~10%).",
+    forWho: "Quien ya decidió 12 semanas y quiere pagar menos que mes a mes (143.84 × 3 = 431.52).",
     includes: "El mismo servicio que Estándar durante 12 semanas corridas.",
     not: "No se prorratea si abandona a mitad. No incluye llamadas Premium.",
     detail: [
       "Mismo contenido que Estándar durante 12 semanas.",
-      "Un solo pago de 389.14 USD en vez de 424.83 USD (3 meses a 141.61).",
+      "Un solo pago de 389.14 USD en vez de 431.52 USD (3 meses a 143.84).",
       "Ahorro de cerca del 8 por ciento.",
       "El período empieza el día del pago.",
       "Precio final, IVU (11.5 %) incluido."
@@ -17662,7 +17662,7 @@ function pricesView() {
       <ul class="include">
         <li><strong>Evaluación 43.49</strong> — primera vez. 40 minutos. Si luego toma 8 semanas o más, se descuenta.</li>
         <li><strong>Base 108.16/mes</strong> — ya sabe entrenar. Plan escrito y un ajuste al mes. Sin llamada.</li>
-        <li><strong>Estándar 141.61/mes</strong> — el de la mayoría. Check-in semanal y 2 videos de técnica al mes.</li>
+        <li><strong>Estándar 143.84/mes</strong> — el de la mayoría. Check-in semanal y 2 videos de técnica al mes.</li>
         <li><strong>Premium 219.66/mes</strong> — Estándar más una videollamada semanal. Cupo de 8.</li>
         <li><strong>12 semanas</strong> — el mismo servicio, un solo pago, con ahorro. No se prorratea.</li>
         <li><strong>Gimnasio 61.33</strong> — sesión presencial. Ejecuta el plan; no lo sustituye. Packs caducan.</li>
@@ -17671,7 +17671,7 @@ function pricesView() {
     </div>
     <div class="card compare">
       <div class="h"></div><div class="h">Base</div><div class="h">Estándar</div><div class="h">Premium</div>
-      <div>Precio (IVU incl.)</div><div>108.16 USD/mes</div><div>141.61 USD/mes</div><div>219.66 USD/mes</div>
+      <div>Precio (IVU incl.)</div><div>108.16 USD/mes</div><div>143.84 USD/mes</div><div>219.66 USD/mes</div>
       <div>Plan escrito</div><div>sí</div><div>sí</div><div>sí</div>
       <div>Ajuste</div><div>1 / mes</div><div>según check-in</div><div>llamada semanal</div>
       <div>Hábitos en la app</div><div>—</div><div>sí</div><div>sí</div>
