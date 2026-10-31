@@ -590,12 +590,13 @@ async function mailReceipt(row) {
     "Fecha: " + (row.date || ""),
     "Cliente: " + (row.name || "Cliente"),
     "Plan: " + (row.plan || ""),
-    "Monto: " + (row.amount || "—") + " USD",
+    ...(nbIvu(row.amount) ? ["Base: " + nbIvu(row.amount).base + " USD", "IVU (11.5 %): " + nbIvu(row.amount).ivu + " USD"] : []),
+    "Total, IVU incluido: " + (row.amount || "—") + " USD",
     "Método: " + (row.method || ""),
     "Estado: " + (row.status || "recibido"),
     row.accessCode ? "Código: " + row.accessCode : "",
     "",
-    "Precio final. NiuBision no cobra IVU."
+    "Precio final, IVU de Puerto Rico (11.5 %) incluido."
   ].filter(Boolean).join("\n");
   for (let i = 0; i < addrs.length; i++) {
     try {
@@ -1491,3 +1492,10 @@ export default {
     catch (err) { console.error(JSON.stringify({ level: "error", ev: "cron_exception", msg: String(err && err.message || err).slice(0, 300) })); }
   }
 };
+
+function nbIvu(total) {
+  const c = Math.round(Number(String(total || "").replace(/[^\d.]/g, "")) * 100);
+  if (!c) return null;
+  const b = Math.round(c * 1000 / 1115);
+  return { base: (b / 100).toFixed(2), ivu: ((c - b) / 100).toFixed(2) };
+}

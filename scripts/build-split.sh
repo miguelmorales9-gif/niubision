@@ -76,7 +76,7 @@ app_ld = {"@context": "https://schema.org", "@graph": [
    "operatingSystem": "Web, Android, iOS", "browserRequirements": "Requiere JavaScript", "inLanguage": "es-PR",
    "image": APP + "/og.jpg", "screenshot": [APP + "/screenshot-phone.png", APP + "/screenshot-wide.png"],
    "publisher": {"@id": WEB + "/#business"}, "author": {"@id": WEB + "/#miguel"}, "isAccessibleForFree": False,
-   "offers": {"@type": "Offer", "price": "39", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
+   "offers": {"@type": "Offer", "price": "43.49", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
   {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/NiuBision", "https://www.facebook.com/61553061513345", "https://www.instagram.com/niubision/"], "address": {"@type": "PostalAddress", "addressLocality": "Arecibo", "addressRegion": "PR", "addressCountry": "US"}},
   {"@type": "Person", "@id": WEB + "/#miguel", "name": "Miguel Morales", "url": WEB + "/"}]}
 s, nld = re.subn(r'<script type="application/ld\+json">.*?</script>', lambda m: '<script type="application/ld+json">' + json.dumps(app_ld, ensure_ascii=False) + '</script>', s, count=1, flags=re.S)
