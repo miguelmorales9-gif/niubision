@@ -7,7 +7,7 @@ export const NB_PLANS = [
   { id: "base", name: "NiuBision Base", price: 97 },
   { id: "estandar12", name: "NiuBision Estándar · 12 semanas", price: 349 },
   { id: "premium12", name: "NiuBision Premium · 12 semanas", price: 529 },
-  { id: "estandar", name: "NiuBision Estándar", price: 127 },
+  { id: "estandar", name: "NiuBision Estándar", price: 129 },
   { id: "premium", name: "NiuBision Premium", price: 197 },
   { id: "presencial", name: "Sesión en gimnasio", price: 55 },
   { id: "ai", name: "Armado de rutina", price: 12 }

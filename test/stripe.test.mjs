@@ -8,11 +8,11 @@ const R = (p) => readFileSync(new URL("../" + p, import.meta.url), "utf8");
 test("Stripe: precios del servidor = PLANS de la app (IVU 11.5 % incluido)", () => {
   const s = R("app/app.js");
   for (const p of NB_PLANS) assert.match(s, new RegExp('id: "' + p.id + '", eyebrow: "[^"]*", name: "' + p.name + '", price: "' + (p.cents / 100).toFixed(2) + '", base: "' + p.price + '"'));
-  const want = { eval: 4349, base: 10816, estandar: 14161, premium: 21966, estandar12: 38914, premium12: 58984, presencial: 6133, ai: 1338 };
+  const want = { eval: 4349, base: 10816, estandar: 14384, premium: 21966, estandar12: 38914, premium12: 58984, presencial: 6133, ai: 1338 };
   for (const p of NB_PLANS) assert.equal(p.cents, want[p.id], p.id);
   assert.ok(!/sin IVU|no cobra IVU/i.test(s + R("cloud/worker.js") + R("web/index.html")));
   assert.equal(planOf("NiuBision Estándar · 12 semanas").price, 349);
-  assert.equal(planOf("NiuBision Estándar").price, 127);
+  assert.equal(planOf("NiuBision Estándar").price, 129);
   assert.equal(planOf("Armado de rutina 12 USD").price, 12);
   assert.equal(planOf("algo raro"), null);
 });
@@ -64,7 +64,7 @@ test("App: planPriceOf no confunde 12 semanas con el mensual (bug 127/197)", () 
   assert.equal(fn.planPriceOf("NiuBision Estándar · 12 semanas").amount, "389.14");
   assert.equal(fn.planPriceOf("NiuBision Premium · 12 semanas").amount, "589.84");
   assert.equal(fn.planPriceOf("NiuBision Premium · 12 semanas 589.84 USD").amount, "589.84");
-  assert.equal(fn.planPriceOf("NiuBision Estándar").amount, "141.61");
+  assert.equal(fn.planPriceOf("NiuBision Estándar").amount, "143.84");
   assert.equal(fn.planPriceOf("NiuBision Premium").amount, "219.66");
   assert.equal(fn.planPriceOf("Evaluación").amount, "43.49");
   assert.deepEqual(fn.ivuSplit("43.49"), { base: "39.00", ivu: "4.49", total: "43.49" });

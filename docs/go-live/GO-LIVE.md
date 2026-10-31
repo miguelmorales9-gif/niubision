@@ -4,6 +4,7 @@ Todo esto se ejecuta **solo después del OK explícito de Miguel**. Hasta entonc
 
 ## Decisiones (ya tomadas por Miguel el 31-oct)
 - Dominio de NFW: **https://workouts.niubision.app**. Pages `nfw-preview` lleva el dominio propio y la ruta `workouts.niubision.app/api/*` va al Worker `nfw-api`. Mismo origen para APP_ORIGIN, CORS, las URL de regreso de Stripe (portal: `/#/cuenta`) y el webhook `https://workouts.niubision.app/api/stripe/webhook`.
+- Web de producción: `scripts/prod-web.mjs` (lo llama go-live.sh) escribe config.js, pone el nombre del manifest en **«NiuBision Fitness Workouts»** y quita «vista previa» del título, la descripción y el aviso. La vista previa conserva su etiqueta.
 - IVU: se redondea hacia arriba en el medio centavo (se queda así).
 - Correo: Resend, remitente `NiuBision Fitness Workouts <acceso@niubision.app>`. Llave «NFW» solo para enviar, limitada a niubision.app, guardada en `/home/box/.nfw-secrets/resend_nfw.txt`.
 
