@@ -8,7 +8,7 @@ const R = (p) => readFileSync(new URL("../" + p, import.meta.url), "utf8");
 test("Stripe: precios del servidor = PLANS de la app (IVU 11.5 % incluido)", () => {
   const s = R("app/app.js");
   for (const p of NB_PLANS) assert.match(s, new RegExp('id: "' + p.id + '", eyebrow: "[^"]*", name: "' + p.name + '", price: "' + (p.cents / 100).toFixed(2) + '", base: "' + p.price + '"'));
-  const want = { eval: 4349, base: 10816, estandar: 14384, premium: 21966, estandar12: 38914, premium12: 58984, presencial: 6133, ai: 1338 };
+  const want = { eval: 4349, base: 10816, estandar: 14384, estandarFundador: 11038, premium: 21966, estandar12: 38914, premium12: 58984, presencial: 6133, ai: 1338 };
   for (const p of NB_PLANS) assert.equal(p.cents, want[p.id], p.id);
   assert.ok(!/sin IVU|no cobra IVU/i.test(s + R("cloud/worker.js") + R("web/index.html")));
   assert.equal(planOf("NiuBision Estándar · 12 semanas").price, 349);
@@ -69,4 +69,18 @@ test("App: planPriceOf no confunde 12 semanas con el mensual (bug 127/197)", () 
   assert.equal(fn.planPriceOf("Evaluación").amount, "43.49");
   assert.deepEqual(fn.ivuSplit("43.49"), { base: "39.00", ivu: "4.49", total: "43.49" });
   assert.deepEqual(fn.ivuSplit("589.84"), { base: "529.00", ivu: "60.84", total: "589.84" });
+});
+
+test("precio fundador Estándar: 110.38, 5 cupos, solo clientes activos", async () => {
+  const m = await import("../cloud/stripe.js");
+  assert.equal(m.planOf("NiuBision Estándar · Precio fundador").id, "estandarFundador");
+  assert.equal(m.planOf("NiuBision Estándar").id, "estandar");
+  const F = "NiuBision Estándar · Precio fundador";
+  const mk = (n, extra = {}) => Array.from({ length: n }, (_, i) => ({ id: "c" + i, plan: F, unpaid: false, ...extra }));
+  assert.equal(m.founderLeft({ clients: mk(2).concat(mk(3, { unpaid: true }).map((c, i) => ({ ...c, id: "u" + i }))) }), 3);
+  const full = { clients: mk(5) };
+  assert.equal(m.founderLeft(full), 0);
+  assert.equal(m.founderAllowed(full, "nuevo"), false);
+  assert.equal(m.founderAllowed(full, "c1"), true);
+  assert.equal(m.founderLeft({ clients: mk(5), revoked: [{ clientId: "c0" }] }), 1);
 });

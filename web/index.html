@@ -390,6 +390,7 @@
   .tier .checks { gap: 10px; font-size: 15px; flex: 1; align-content: start; }
   .tier .not { margin-top: 20px; margin-bottom: 8px; padding-top: 14px; border-top: 1px dashed rgba(243,237,227,.28); font-size: 14px; color: var(--muted); line-height: 1.45; }
   .tier .not b { color: var(--soft); font-weight: 700; display: block; margin-bottom: 4px; letter-spacing: .02em; }
+  .tier .founder-note { margin: 4px 0 14px; font-size: 14px; color: var(--muted); line-height: 1.45; } .tier .founder-note b { color: var(--ember-2, #FFB066); }
   .tier .btn { margin-top: auto; width: 100%; }
 
   /* Estándar · semana */
@@ -826,7 +827,7 @@
         <div class="nfw-plans">
           <article class="nfw-plan"><span class="label">Gratis</span><h3>Programa de inicio</h3><div class="price">0<small>USD · sin tarjeta</small></div><p>Un programa completo de cuerpo entero para empezar con buena técnica.</p></article>
           <article class="nfw-plan most"><span class="label">Premium · 7 días gratis</span><h3>Premium</h3><div class="price">11.14<small>USD / mes · IVU incluido</small></div><p>O <b>66.89 USD / año</b>. Precio fundador: <b>55.74 USD el primer año</b> para los primeros 100 suscriptores anuales. La app le dice cuánto subir, versión corta y de casa, y los 59 programas.</p></article>
-          <article class="nfw-plan"><span class="label">Con entrenador</span><h3>Coaching</h3><div class="price">143.84<small>USD / mes · IVU incluido</small></div><p>Todo Premium, más su coach: ajusta programa, cargas y progresión, con check-in semanal y mensajes en la app. Precio fundador: <b>110.38 USD / mes</b> para los primeros 5 cupos. Mismo precio regular que NiuBision Estándar.</p></article>
+          <article class="nfw-plan"><span class="label">Con entrenador · en niubision.app</span><h3>Entrene con Miguel</h3><div class="price">143.84<small>USD / mes · IVU incluido</small></div><p>El coaching ya no se compra dentro de NiuBision Fitness Workouts: es NiuBision Estándar, 1:1 con Miguel, y se contrata en <a href="__APP_URL__/?view=price&amp;plan=estandarFundador">niubision.app</a>. Precio fundador: <b>110.38 USD / mes</b> para los primeros 5.</p></article>
           <a class="btn btn-primary" href="__NFW_URL__/">Abrir NiuBision Fitness Workouts</a>
           <p class="muted-note">Se cancela cuando quiera desde la app.</p>
         </div>
@@ -871,7 +872,8 @@
             <li>Biblioteca de hábitos de entrenamiento y recuperación</li>
           </ul>
           <p class="not"><b>No incluye</b>Videollamada semanal. Eso es Premium.</p>
-          <a class="btn btn-primary" href="__APP_URL__/?view=price">Elegir Estándar en la app</a>
+          <p class="founder-note"><b>Precio fundador 110.38 USD/mes para los primeros 5<span data-founder-left></span>.</b> IVU incluido. Se mantiene mientras su plan siga activo; si cancela, lo pierde.</p>
+          <a class="btn btn-primary" href="__APP_URL__/?view=price&amp;plan=estandar">Elegir Estándar en la app</a>
         </article>
 
         <article class="tier reveal">
@@ -1153,6 +1155,15 @@
   } else {
     revealEls.forEach(function (el) { el.classList.add("in"); });
   }
+})();
+</script>
+<script>
+(function () {
+  var els = document.querySelectorAll("[data-founder-left]"); if (!els.length || !window.fetch) return;
+  fetch("__API_URL__/founder", { headers: { Accept: "application/json" } }).then(function (r) { return r.json(); }).then(function (j) {
+    if (typeof j.left !== "number") return;
+    for (var i = 0; i < els.length; i++) els[i].textContent = j.left > 0 ? " — quedan " + j.left : " — agotados";
+  }).catch(function () {});
 })();
 </script>
 </body>

@@ -1,6 +1,6 @@
 import { dbMode, d1ReadRow, d1WriteRow } from "./db.js";
 import { sendWebPush } from "./webpush.js";
-import { stripeMode, createCheckout as stripeCheckout, verifySignature as stripeVerify, stripeApi } from "./stripe.js";
+import { stripeMode, createCheckout as stripeCheckout, verifySignature as stripeVerify, stripeApi, isFounderPlan, founderAllowed, founderLeft, FOUNDER_LIMIT } from "./stripe.js";
 const COACH_MAIL = "miguel.morales9@gmail.com";
 const LEGACY = "nb-cloud-v1";
 
@@ -1196,6 +1196,7 @@ async function handle(req, env) {
       return json({ error: "Demasiados intentos. Espere 15 minutos." }, 429);
     }
     rateHit(row, payKey, 30);
+    if (isFounderPlan(body.plan) && !founderAllowed(row.state, String(body.clientId || ""))) return json({ error: "cupos_fundador_agotados" }, 409);
     const invoice = String(body.invoice || body.id || ("p" + Date.now()));
     const payPhone = String(body.phone || "");
     const payment = {
@@ -1241,6 +1242,7 @@ async function handle(req, env) {
     const row = await rowOf(env, "NIUBI");
     if (ct.indexOf("json") >= 0) {
       const body = JSON.parse(raw || "{}");
+      if (isFounderPlan(body.plan) && !founderAllowed(row.state, String(body.clientId || ""))) return json({ error: "cupos_fundador_agotados" }, 409);
       const invoice = String(body.invoice || body.id || ("p" + Date.now()));
       const payment = {
         id: invoice,
@@ -1301,11 +1303,16 @@ async function handle(req, env) {
     const mode = stripeMode(env);
     return json({ enabled: mode === "test" || mode === "live", mode });
   }
+  if (path === "/api/founder" && method === "GET") {
+    const row = await rowOf(env, "NIUBI");
+    return json({ plan: "NiuBision Estándar · Precio fundador", price: "110.38", limit: FOUNDER_LIMIT, left: founderLeft(row.state) }, 200, { "cache-control": "public, max-age=60" });
+  }
   if (path === "/api/stripe/checkout" && method === "POST") {
     const mode = stripeMode(env);
     if (mode === "rejected") return json({ error: "Stripe solo acepta llaves de prueba aquí" }, 400);
     if (mode === "off") return json({ error: "Pago con tarjeta no disponible" }, 501);
     const body = await req.json().catch(() => ({}));
+    if (isFounderPlan(body.plan)) { const frow = await rowOf(env, "NIUBI"); if (!founderAllowed(frow.state, String(body.clientId || ""))) return json({ error: "cupos_fundador_agotados" }, 409); }
     let out;
     try { out = await stripeCheckout(env, body, String(env.APP_URL || "https://niubision.app").replace(/\/$/, "")); }
     catch (e) { return json({ error: e.message || "stripe_error" }, e.status === 400 ? 400 : 502); }
