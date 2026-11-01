@@ -7,6 +7,8 @@ export const NB_PLANS = [
   { id: "base", name: "NiuBision Base", price: 97 },
   { id: "estandar12", name: "NiuBision Estándar · 12 semanas", price: 349 },
   { id: "premium12", name: "NiuBision Premium · 12 semanas", price: 529 },
+  // Precio fundador de Estándar (coaching 1:1): 110.38 USD/mes total fijado por Miguel. Base 99.00 + IVU 11.38 (el IVU se separa desde el total).
+  { id: "estandarFundador", name: "NiuBision Estándar · Precio fundador", price: 99, cents: 11038 },
   { id: "estandar", name: "NiuBision Estándar", price: 129 },
   { id: "premium", name: "NiuBision Premium", price: 197 },
   { id: "presencial", name: "Sesión en gimnasio", price: 55 },
@@ -15,7 +17,23 @@ export const NB_PLANS = [
 // IVU PR 11.5 %: total = base × 1.115 redondeado al centavo (mitad hacia arriba), en enteros.
 export const IVU_MILLI = 115;
 export function ivuCents(base) { const b = Math.round(Number(base) * 100); const t = Math.floor((b * (1000 + IVU_MILLI) + 500) / 1000); return { base: b, ivu: t - b, total: t }; }
-for (const p of NB_PLANS) p.cents = ivuCents(p.price).total;
+for (const p of NB_PLANS) p.cents = p.cents || ivuCents(p.price).total;
+// Cupos fundador: 5. Cuentan solo clientes activos (pagados y no revocados) con el plan fundador. Si cancela, sale y libera el cupo.
+export const FOUNDER_PLAN = "estandarFundador";
+export const FOUNDER_LIMIT = 5;
+export function isFounderPlan(label) { const p = planOf(label); return !!(p && p.id === FOUNDER_PLAN); }
+export function founderClients(state) {
+  const s = state || {};
+  const deadIds = new Set((s.revoked || []).map((r) => String((r && r.clientId) || "")).filter(Boolean));
+  const dead = new Set((s.revoked || []).map((r) => String((r && r.code) || "")).filter((c) => /^\d{6}$/.test(c)));
+  return (s.clients || []).filter((c) => c && c.unpaid === false && isFounderPlan(c.plan) && !(c.id && deadIds.has(String(c.id))) && !(c.accessCode && dead.has(String(c.accessCode))));
+}
+export function founderLeft(state) { return Math.max(0, FOUNDER_LIMIT - founderClients(state).length); }
+/** ¿Puede iniciar un pago fundador? Sí si quedan cupos o si ya es cliente fundador activo (renovación). */
+export function founderAllowed(state, clientId) {
+  if (founderLeft(state) > 0) return true;
+  return !!clientId && founderClients(state).some((c) => c.id === clientId);
+}
 export function planOf(label) {
   const raw = String(label || "");
   if (/rutina con ia|ia · rutina/i.test(raw)) return NB_PLANS.find((p) => p.id === "ai");
@@ -56,7 +74,7 @@ export async function createCheckout(env, body, appUrl, fetcher = fetch) {
   const ids = priceIds(env);
   const line = ids[plan.id]
     ? { price: ids[plan.id], quantity: 1 }
-    : { price_data: { currency: "usd", unit_amount: plan.cents, product_data: { name: "NiuBision — " + plan.name, description: "IVU incluido · base " + (plan.price).toFixed(2) + " USD + IVU 11.5 % " + (ivuCents(plan.price).ivu / 100).toFixed(2) + " USD" } }, quantity: 1 };
+    : { price_data: { currency: "usd", unit_amount: plan.cents, product_data: { name: "NiuBision — " + plan.name, description: "IVU incluido · base " + (plan.price).toFixed(2) + " USD + IVU 11.5 % " + ((plan.cents - Math.round(plan.price * 100)) / 100).toFixed(2) + " USD" } }, quantity: 1 };
   const email = String(body.email || "").trim();
   const meta = { invoice: inv, plan: plan.name, plan_id: plan.id, clientId: String(body.clientId || "").slice(0, 60), name: String(body.name || "").slice(0, 80) };
   const params = {

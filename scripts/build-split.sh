@@ -10,14 +10,16 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 env="${NB_ENV:-preview}"
 case "$env" in
   production) WEB_URL="https://niubision.com"; APP_URL="https://niubision.app"; NFW_URL="https://workouts.niubision.app"; ROBOTS="index, follow" ;;
-  preview)    WEB_URL="https://web.niubision-ui-preview.pages.dev"; APP_URL="https://app.niubision-ui-preview.pages.dev"; NFW_URL="https://v3-premium.nfw-preview.pages.dev"; ROBOTS="noindex, nofollow" ;;
+  preview)    WEB_URL="${NB_WEB_URL:-https://web.niubision-ui-preview.pages.dev}"; APP_URL="${NB_APP_URL:-https://app.niubision-ui-preview.pages.dev}"; NFW_URL="https://v3-premium.nfw-preview.pages.dev"; ROBOTS="noindex, nofollow" ;;
   *) echo "NB_ENV must be preview|production" >&2; exit 1 ;;
 esac
+# API para el contador de cupos fundador en la web (NB_API sobrescribe, p. ej. el Worker de vista previa).
+if [ "$env" = production ]; then API_URL="${NB_API:-https://api.niubision.com/api}"; else API_URL="${NB_API:-https://niubision-api-stripe-preview.miguel-morales9.workers.dev/api}"; fi
 cmp -s "$root/app/app.js" "$root/public/app/app.js" || { echo "app/app.js and public/app/app.js differ" >&2; exit 1; }
 out="$root/dist"; rm -rf "$out"; mkdir -p "$out/web" "$out/app/app"
 # Tarjeta (Stripe) solo cuando esté activa: NB_STRIPE=1. Si no, PayPal y ATH Móvil.
 if [ "${NB_STRIPE:-0}" = 1 ]; then PAY_LD="PayPal, ATH Móvil, tarjeta (Stripe)"; PAY_FAQ="PayPal, ATH Móvil o tarjeta por Stripe"; else PAY_LD="PayPal, ATH Móvil"; PAY_FAQ="PayPal o ATH Móvil"; fi
-sub() { sed -e "s#__PAY_LD__#$PAY_LD#g" -e "s#__PAY_FAQ__#$PAY_FAQ#g" -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__ROBOTS__#$ROBOTS#g" -e "s#__NFW_URL__#$NFW_URL#g" "$1" > "$2"; }
+sub() { sed -e "s#__PAY_LD__#$PAY_LD#g" -e "s#__PAY_FAQ__#$PAY_FAQ#g" -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__ROBOTS__#$ROBOTS#g" -e "s#__NFW_URL__#$NFW_URL#g" -e "s#__API_URL__#$API_URL#g" "$1" > "$2"; }
 
 LASTMOD="$(date -u +%Y-%m-%d)"
 WEB_HEADERS="/*\n  Strict-Transport-Security: max-age=15552000\n  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), display-capture=(), interest-cohort=()\n  X-Frame-Options: DENY\n  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://cloudflareinsights.com https://api.niubision.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; base-uri 'self'; object-src 'none'\n/\n  ! Access-Control-Allow-Origin\n"

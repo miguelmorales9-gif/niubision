@@ -9518,6 +9518,18 @@ const PLANS = [
       "Sin videollamada semanal.",
       "Precio final, IVU (11.5 %) incluido."
     ] },
+  { id: "estandarFundador", eyebrow: "Fundador · 5 cupos", name: "NiuBision Estándar · Precio fundador", price: "110.38", base: "99", unit: "al mes", featured: false, founder: true,
+    simple: "El mismo coaching 1:1 de Estándar, a precio fundador para los primeros 5 clientes. Es el coaching que antes se ofrecía dentro de NiuBision Fitness Workouts.",
+    forWho: "Quien quiere a Miguel revisando su semana y entra entre los primeros 5.",
+    includes: "Todo Estándar: plan escrito, check-in semanal, 2 correcciones de técnica por video al mes y chat de lunes a viernes.",
+    not: "No incluye videollamada semanal ni sesiones de gimnasio. El precio fundador se pierde si cancela o deja de pagar un mes.",
+    detail: [
+      "Mismo servicio que NiuBision Estándar (143.84 USD/mes).",
+      "110.38 USD/mes mientras su plan siga activo, mes tras mes.",
+      "Si cancela o deja de pagar, pierde el precio fundador; si vuelve, paga el precio vigente.",
+      "Solo 5 cupos. El contador cuenta clientes con pago confirmado.",
+      "Precio final, IVU (11.5 %) incluido: base 99.00 + IVU 11.38."
+    ] },
   { id: "premium", eyebrow: "Dirección cercana", name: "NiuBision Premium", price: "219.66", base: "197", unit: "al mes", featured: false,
     simple: "Estándar más una videollamada semanal de 25 a 30 minutos y respuesta el mismo día laborable.",
     forWho: "Quien necesita hablar cada semana y ajustar el plan en vivo. Cupo de 8 personas.",
@@ -14934,6 +14946,8 @@ function applyHash() {
     state.view = viewQ;
     if (state.role === "guest") { state.splash = false; state._deepLinked = true; }
   }
+  const planQ = String(q.get("plan") || "").replace(/[^A-Za-z0-9]/g, "");
+  if (planQ && viewQ === "price") state._planAnchor = planQ.toLowerCase() === "estandarfundador" ? "estandarFundador" : planQ.toLowerCase();
   stashPendingCode(q.get("c") || q.get("code"));
   const raw = String(location.hash || "").replace(/^#/, "");
   if (!raw) return;
@@ -17648,7 +17662,23 @@ function planProgressHtml() {
     ${cta}
   </div>`;
 }
+// Cupos fundador (Estándar 110.38): el servidor cuenta clientes activos con pago confirmado.
+function loadFounderLeft() {
+  if (state._founderLoading || typeof state.founderLeft === "number") return;
+  state._founderLoading = true;
+  const base = apiBases()[0];
+  fetch(base + "/founder", { headers: { Accept: "application/json" } }).then((r) => r.json()).then((j) => {
+    if (typeof j.left === "number") { state.founderLeft = j.left; if (state.view === "price") render(); }
+  }).catch(() => {}).finally(() => { state._founderLoading = false; });
+}
+function founderNote(p) {
+  if (!p.founder) return "";
+  const n = state.founderLeft;
+  if (n === 0) return `<p class="warn" style="font-size:13px;margin-top:6px"><strong>Cupos fundador agotados.</strong> Elija NiuBision Estándar a 143.84 USD/mes.</p>`;
+  return `<p class="ok" style="margin-top:6px">Precio fundador 110.38 USD/mes para los primeros 5${typeof n === "number" ? " — quedan " + n : ""}.</p>`;
+}
 function pricesView() {
+  loadFounderLeft();
   const chip = state.role === "client" ? `<p>${packChip(selfClient())}</p>` : "";
   return `<section class="screen">
     ${guestTourHtml()}
@@ -17663,6 +17693,7 @@ function pricesView() {
         <li><strong>Evaluación 43.49</strong> — primera vez. 40 minutos. Si luego toma 8 semanas o más, se descuenta.</li>
         <li><strong>Base 108.16/mes</strong> — ya sabe entrenar. Plan escrito y un ajuste al mes. Sin llamada.</li>
         <li><strong>Estándar 143.84/mes</strong> — el de la mayoría. Check-in semanal y 2 videos de técnica al mes.</li>
+        <li><strong>Estándar fundador 110.38/mes</strong> — el mismo Estándar para los primeros 5 clientes, mientras el plan siga activo.</li>
         <li><strong>Premium 219.66/mes</strong> — Estándar más una videollamada semanal. Cupo de 8.</li>
         <li><strong>12 semanas</strong> — el mismo servicio, un solo pago, con ahorro. No se prorratea.</li>
         <li><strong>Gimnasio 61.33</strong> — sesión presencial. Ejecuta el plan; no lo sustituye. Packs caducan.</li>
@@ -17682,7 +17713,7 @@ function pricesView() {
       <div>Cupo</div><div>abierto</div><div>abierto</div><div>8 personas</div>
     </div>
     ${PLANS.map((p) => `
-      <article class="plan ${p.featured ? "featured" : ""}">
+      <article class="plan ${p.featured ? "featured" : ""}" id="plan-${p.id}">
         <div class="eyebrow">${p.eyebrow}</div>
         <h3>${p.name}</h3>
         <div class="price">${p.price} USD <small>${p.unit} · IVU incluido</small></div>
@@ -17691,8 +17722,9 @@ function pricesView() {
         ${p.forWho ? `<p class="muted" style="margin-top:8px"><strong>Para quién.</strong> ${p.forWho}</p>` : ""}
         ${p.includes ? `<p class="muted"><strong>Incluye.</strong> ${p.includes}</p>` : ""}
         ${p.not ? `<p class="warn" style="font-size:13px;margin-top:6px"><strong>No incluye.</strong> ${p.not}</p>` : ""}
+        ${founderNote(p)}
         <ul class="include">${p.detail.map((d) => `<li>${d}</li>`).join("")}</ul>
-        ${state.role === "guest" ? `<button class="btn ghost" data-need="${escAttr(p.name)}">Elegir</button>` : `<button class="btn ghost" data-want="${p.name} ${p.price} USD">Elegir</button>`}
+        ${p.founder && state.founderLeft === 0 && !(selfClient() && selfClient().plan === p.name) ? "" : state.role === "guest" ? `<button class="btn ghost" data-need="${escAttr(p.name)}">Elegir</button>` : `<button class="btn ghost" data-want="${p.name} ${p.price} USD">Elegir</button>`}
       </article>`).join("")}
     <div class="card">
       <h3>Preguntas que suelen quedar</h3>
@@ -19246,6 +19278,10 @@ function bindChrome() {
   $$("[data-ex]").forEach((c) => c.onclick = () => openExercise(c.dataset.ex));
   $$("[data-want]").forEach((b) => b.onclick = () => startOnboard(b.dataset.want));
   $$("[data-need]").forEach((b) => b.onclick = () => openNeedCode(b.dataset.need));
+  if (state._planAnchor && state.view === "price") {
+    const el = document.getElementById("plan-" + state._planAnchor);
+    if (el) { state._planAnchor = ""; setTimeout(() => el.scrollIntoView({ block: "start", behavior: "smooth" }), 60); }
+  }
   const progressCode = $("#progressCode");
   if (progressCode) progressCode.onclick = () => openCodeEntry();
   const progressLegal = $("#progressLegal");
