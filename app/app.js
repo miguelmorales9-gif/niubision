@@ -13540,6 +13540,10 @@ function clientOpsCards() {
       <p><strong>${escapeHtml(c.plan || state.profile.plan || "Estándar")}</strong></p>
       <p class="muted">${escapeHtml(vigencyHtml(c))}</p>
     </div>
+    <div class="card nb-nfw-note">
+      <h3>NFW Premium incluido</h3>
+      <p class="muted">Mientras su coaching esté activo, tiene NiuBision Fitness Workouts Premium sin costo. Entre en <a href="https://workouts.niubision.app" target="_blank" rel="noopener">workouts.niubision.app</a> con el mismo email que usa aquí${c.email ? ` (<strong>${escapeHtml(c.email)}</strong>)` : ""}.</p>
+    </div>
     <div class="card">
       <h3>Contrato y relevo</h3>
       ${hasLegal ? `<p class="ok">Firmados. Disponibles en este teléfono y en la nube.</p><button class="btn ghost" id="seeMyDossier">Ver documento</button>` : `<p class="muted">Si firmó en otro teléfono, pulse sincronizar o vuelva a abrir con su código.</p>`}
