@@ -1,3 +1,4 @@
+import { handleS2S } from "./s2s.js";
 import { clientGate, isSigned, canNotifyTraining, SIGN_PROMPT } from "./status.js";
 import { dbMode, d1ReadRow, d1WriteRow } from "./db.js";
 import { sendWebPush } from "./webpush.js";
@@ -276,7 +277,7 @@ function rlBucket(path, method) {
   if (path === "/api/auth/login" || path === "/api/login" || path === "/api/studio" || path === "/api/export" || path === "/api/revoke" || path === "/api/admin/daily-summary") return "auth";
   if (path.indexOf("/api/log") === 0) return method === "POST" ? "log" : "auth";
   if (path === "/api/redeem" || path === "/api/receipt" || path === "/api/paid" || path === "/api/auth/me" || path === "/api/me") return "code";
-  if (path === "/api/paypal" || path === "/api/stripe/webhook") return "ipn";
+  if (path === "/api/paypal" || path === "/api/stripe/webhook" || path === "/api/s2s/coaching-status") return "ipn";
   if (path === "/api/stripe/checkout") return "pay";
   if (path === "/api/pay" || path === "/api/lead" || path === "/api/program-request" || path === "/api/report" || path.indexOf("/api/push/") === 0 && method === "POST") return "pay";
   if (method !== "GET" && method !== "HEAD") return "write";
@@ -892,6 +893,10 @@ async function handle(req, env) {
   const limited = await rateLimited(req, env, path, method);
   if (limited) return limited;
   if (path === "/api/rl-test") return json({ ok: true, probe: true });
+  if (path === "/api/s2s/coaching-status" && method === "POST") {
+    const r = await handleS2S(req, env, async () => (await rowOf(env, "NIUBI")).state || {});
+    return json(r.body, r.status);
+  }
   if (path === "/api/log" || path === "/api/log/summary") return handleLog(req, env, url, method);
   if (path === "/" || path === "/api/health" || path === "/health") return json({ ok: true, db: dbMode(env), v: 36, push: !!(env && env.VAPID_PUBLIC_KEY) });
 

@@ -79,3 +79,25 @@ test("app: estado del coach derivado de firma + pago (misma regla que el servido
   assert.match(grab("function silentClients("), /canTrainingNotify/);
   assert.equal(R("app/app.js"), R("public/app/app.js"));
 });
+
+import { s2sSign, coachingActiveFor } from "../cloud/s2s.js";
+test("s2s NFW: coaching activo por email normalizado, firma HMAC obligatoria", async () => {
+  const st = { clients: [
+    mk({ id: "ok", email: "Ana@Ejemplo.com ", unpaid: false, waiver: SIG, contract: SIG }),
+    mk({ id: "np", email: "nopago@x.com", unpaid: true, waiver: SIG, contract: SIG }),
+    mk({ id: "nf", email: "nofirma@x.com", unpaid: false }),
+    mk({ id: "ve", email: "vencido@x.com", unpaid: false, waiver: SIG, contract: SIG, endDate: "2026-10-01" })
+  ] };
+  assert.equal(coachingActiveFor(st, "  ana@ejemplo.COM", NOW), true);
+  for (const e of ["nopago@x.com", "nofirma@x.com", "vencido@x.com", "otro@x.com", ""]) assert.equal(coachingActiveFor(st, e, NOW), false, e);
+  const store = new Map([["NIUBI", JSON.stringify({ studioKey: "NIUBI", state: st })]]);
+  const env = { NFW_S2S_SECRET: "s".repeat(40), STUDIO: { get: async (k) => store.get(k) || null, put: async () => {} } };
+  const call = async (email, sig, ts = Date.now()) => worker.fetch(new Request("https://api.x/api/s2s/coaching-status", { method: "POST", headers: { "content-type": "application/json", "x-nb-ts": String(ts), "x-nb-sig": sig }, body: JSON.stringify({ email }) }), env, {});
+  const realNow = Date.now();
+  let r = await call("ana@ejemplo.com", await s2sSign(env.NFW_S2S_SECRET, realNow, "ana@ejemplo.com"), realNow); assert.equal(r.status, 200);
+  const j = await r.json(); assert.deepEqual(j, { active: true });
+  r = await call("ana@ejemplo.com", "00"); assert.equal(r.status, 401);
+  const old = realNow - 10 * 60e3; r = await call("ana@ejemplo.com", await s2sSign(env.NFW_S2S_SECRET, old, "ana@ejemplo.com"), old); assert.equal(r.status, 401);
+  r = await call("ana@ejemplo.com", await s2sSign("otro", realNow, "ana@ejemplo.com"), realNow); assert.equal(r.status, 401);
+  delete env.NFW_S2S_SECRET; r = await call("ana@ejemplo.com", "x"); assert.equal(r.status, 503);
+});
