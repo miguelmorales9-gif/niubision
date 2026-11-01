@@ -11540,6 +11540,7 @@ function packChip(c) {
   if (!who) return "";
   const st = clientStatus(who);
   const left = daysLeft(who);
+  if (isPendingStatus(st)) return `<span class="st-chip warn">${escapeHtml(statusLabel(st))}</span>`;
   if (st === "vencido") return `<span class="st-chip warn">Pausado</span>`;
   if (st === "por vencer" && left != null && left >= 0) return `<span class="st-chip warn">Vence en ${left} días</span>`;
   if (st === "por vencer") return `<span class="st-chip warn">Por vencer</span>`;
@@ -11561,6 +11562,8 @@ function trainedToday() {
 }
 function nudgeGym() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
+  // Solo clientes con relevo + contrato firmados y pago confirmado vigente. Nunca invitados ni el coach.
+  if (state.role !== "client" || !canTrainingNotify(selfClient())) return;
   if (trainedToday()) return;
   if (store.get("nb_nudge_" + todayKey())) return;
   store.set("nb_nudge_" + todayKey(), 1);
@@ -11634,8 +11637,24 @@ function sessionsLeft(c) {
   if (!c || !c.sessionsTotal) return null;
   return Math.max(0, (+c.sessionsTotal || 0) - (+c.sessionsUsed || 0));
 }
+/* Firma = relevo + contrato firmados. Pago = confirmado (unpaid === false: Stripe pagado, PayPal capturado o ATH
+   confirmado por el coach) y no anulado. Registrarse, elegir plan o un pago iniciado no cuentan. Misma regla que cloud/status.js. */
+function clientSignedDocs(c) {
+  if (!c) return false;
+  attachLegalToClient(c);
+  const ok = (d) => !!(d && typeof d === "object" && (d.signature || d.date));
+  const k = ok(c.contract) || (state.contracts || []).some((x) => x && c.id && x.clientId === c.id && ok(x));
+  return ok(c.waiver) && k;
+}
+function clientPaidConfirmed(c) {
+  return !!(c && c.unpaid === false && !c.archived && !isRevoked(c.accessCode, c.id));
+}
 function clientStatus(c) {
   if (!c) return "activo";
+  const signed = clientSignedDocs(c), paid = clientPaidConfirmed(c);
+  if (!signed && !paid) return "pendiente de firma y pago";
+  if (!signed) return "pendiente de firma";
+  if (!paid) return "pendiente de pago";
   const left = daysLeft(c);
   const sess = sessionsLeft(c);
   const meta = planMeta(c.plan);
@@ -11678,9 +11697,15 @@ function selfClient() {
   return (state.clients || []).find((c) => cleanName(c.name) === n) || null;
 }
 function premiumCount() {
-  return (state.clients || []).filter((c) => /premium/i.test(c.plan || "") && clientStatus(c) !== "vencido").length;
+  return (state.clients || []).filter((c) => /premium/i.test(c.plan || "") && canTrainingNotify(c)).length;
 }
+function isPendingStatus(s) { return String(s || "").indexOf("pendiente") === 0; }
+/* Avisos de entrenamiento solo con firma completa y pago confirmado vigente. */
+function canTrainingNotify(c) { if (!c) return false; const s = clientStatus(c); return s === "activo" || s === "por vencer"; }
 function statusLabel(s) {
+  if (s === "pendiente de firma y pago") return "Pendiente de firma y de pago";
+  if (s === "pendiente de firma") return "Pendiente de firma";
+  if (s === "pendiente de pago") return "Pendiente de pago";
   return s === "vencido" ? "Vencido" : s === "por vencer" ? "Por vencer" : "Activo";
 }
 function statusClass(s) {
@@ -11715,7 +11740,7 @@ function sessionAgeDays(c) {
   return Math.round((Date.now() - t) / 86400000);
 }
 function silentClients() {
-  return (state.clients || []).filter((c) => clientStatus(c) !== "vencido" && sessionAgeDays(c) >= 7);
+  return (state.clients || []).filter((c) => canTrainingNotify(c) && sessionAgeDays(c) >= 7);
 }
 
 function autoCodeOn() {
@@ -12167,7 +12192,7 @@ async function clientCloudRefresh() {
     try {
       store.set("nb_assign_notice", { name: label, at: Date.now(), routineId: hit.routine });
     } catch (e) {}
-    notifyLocal("Programa listo", "Miguel te asignó " + label + ". Ábralo en Hoy.", "/?view=work");
+    if (canTrainingNotify(hit)) notifyLocal("Programa listo", "Miguel te asignó " + label + ". Ábralo en Hoy.", "/?view=work");
   }
   return { ok: true, routine: hit.routine || "" };
 }
@@ -13562,10 +13587,10 @@ function bindStudioOps() {
     }
     const push = await subscribeWebPush().catch(() => ({ ok: false }));
     if (push && push.ok) {
-      notifyLocal("NiuBision", "Web Push listo. Cuando Miguel apruebe un programa, se lo avisamos.", "/?view=work");
+      notifyLocal("NiuBision", (canTrainingNotify(selfClient()) ? "Web Push listo. Cuando Miguel apruebe un programa, se lo avisamos." : "Avisos listos. Primero firme el relevo y el contrato; luego le avisamos de su plan."), "/?view=work");
       toast("Avisos Web Push activos");
     } else {
-      notifyLocal("NiuBision", "Avisos listos. Cuando Miguel apruebe un programa, se lo avisamos.", "/?view=work");
+      notifyLocal("NiuBision", (canTrainingNotify(selfClient()) ? "Avisos listos. Cuando Miguel apruebe un programa, se lo avisamos." : "Avisos listos. Primero firme el relevo y el contrato; luego le avisamos de su plan."), "/?view=work");
       toast(push && push.reason === "novapid" ? "Avisos locales (VAPID pendiente en el servidor)" : "Avisos activos en este teléfono");
     }
     render();
@@ -16283,7 +16308,9 @@ function homeView() {
     const silent = silentClients();
     const today = todayAppts();
     const waitPay = (state.clients || []).filter((c) => clientAwaitingCode(c));
+    const waitSign = (state.clients || []).filter((c) => c && !c.archived && !clientSignedDocs(c));
     const need = [
+      waitSign[0] ? { k: "firma", id: waitSign[0].id, t: "Pendiente de firma", n: waitSign[0].name || "Cliente", d: "Falta relevo o contrato · sin avisos hasta que firme", extra: waitSign.length > 1 ? "+" + (waitSign.length - 1) : "" } : null,
       waitPay[0] ? { k: "confirm", id: waitPay[0].id, t: "Confirmar pago", n: waitPay[0].name || "Cliente", d: (waitPay[0].plan || "") + " · toque para dar código", extra: waitPay.length > 1 ? "+" + (waitPay.length - 1) : "" } : null,
       (function () {
         const notes = (state.inbox || []).filter((n) => n && (n.type === "pay" || n.type === "lead") && !inboxNoteHidden(n));
@@ -17784,7 +17811,7 @@ function peopleView() {
       const st = clientStatus(c);
       const late = sessionAgeDays(c) >= 7;
       if (st === "pausado" || st === "vencido") pausado++;
-      else if (!c.accessCode) nuevo++;
+      else if (!c.accessCode || isPendingStatus(st)) nuevo++;
       else if (late) atrasado++;
       else activo++;
     });
@@ -17833,7 +17860,7 @@ function peopleView() {
       normalizeClient(c);
       const st = clientStatus(c);
       const late = sessionAgeDays(c) >= 7;
-      const railCls = (!c.accessCode) ? "rail-nuevo" : (st === "pausado" || st === "vencido") ? "rail-pausado" : (late ? "rail-atrasado" : "rail-activo");
+      const railCls = (!c.accessCode || isPendingStatus(st)) ? "rail-nuevo" : (st === "pausado" || st === "vencido") ? "rail-pausado" : (late ? "rail-atrasado" : "rail-activo");
       return `<div class="card people-card ${railCls}" data-name="${escAttr(cleanName(c.name))}" data-phone="${escAttr(String(c.phone || "").replace(/\D/g, ""))}">
         <strong>${escapeHtml(c.name)}</strong>
         <p>${late && st === "activo" ? statusChip("sin sesión") : statusChip(st)}</p>
@@ -19327,7 +19354,7 @@ function bindChrome() {
       render();
       return;
     }
-    if (b.dataset.needk === "soon") {
+    if (b.dataset.needk === "soon" || b.dataset.needk === "firma") {
       state.view = "people";
       render();
       return;

@@ -1,3 +1,4 @@
+import { clientGate, isSigned, canNotifyTraining, SIGN_PROMPT } from "./status.js";
 import { dbMode, d1ReadRow, d1WriteRow } from "./db.js";
 import { sendWebPush } from "./webpush.js";
 import { stripeMode, createCheckout as stripeCheckout, verifySignature as stripeVerify, stripeApi, isFounderPlan, founderAllowed, founderLeft, FOUNDER_LIMIT } from "./stripe.js";
@@ -738,13 +739,18 @@ async function notifyCoach(env, row, title, body, url, tag) {
   return r;
 }
 
-async function notifyClient(env, row, clientId, accessCode, title, body, url, tag) {
-  const r = await deliverPush(env, row, clientSubs(row, clientId, accessCode), {
-    title: String(title || "NiuBision").slice(0, 48),
-    body: String(body || "").slice(0, 120),
-    url: url || "/?view=work",
-    tag: tag || "nb-client"
-  });
+// kind "training": solo si firmó relevo + contrato y tiene pago confirmado vigente.
+// kind "code" (pago/código): si no ha firmado, en su lugar se le pide firmar. Nada más sale antes de la firma.
+async function notifyClient(env, row, clientId, accessCode, title, body, url, tag, kind) {
+  const st = row.state || {};
+  const c = ((st.clients) || []).find((x) => x && ((clientId && String(x.id) === String(clientId)) || (accessCode && String(x.accessCode || "") === String(accessCode)))) || null;
+  let payload = { title: String(title || "NiuBision").slice(0, 48), body: String(body || "").slice(0, 120), url: url || "/?view=work", tag: tag || "nb-client" };
+  if (!c) return { sent: 0, gone: 0, skipped: "sin_cliente" };
+  if (!isSigned(c, st)) {
+    if (kind !== "code") return { sent: 0, gone: 0, skipped: "pendiente_firma" };
+    payload = SIGN_PROMPT;
+  } else if (kind !== "code" && !canNotifyTraining(c, st)) return { sent: 0, gone: 0, skipped: "pendiente_pago" };
+  const r = Object.assign(await deliverPush(env, row, clientSubs(row, c.id, c.accessCode), payload), { tag: payload.tag });
   if (r.gone) await putRow(env, row);
   return r;
 }
@@ -797,6 +803,7 @@ async function runDailyReminders(env, nowMs) {
     if (normHour(p.hour) !== hour || p.lastSent === day) continue;
     const c = clients.find((x) => x && String(x.id) === cid);
     if (!c || c.archived) { out.skipped += 1; continue; }
+    if (!canNotifyTraining(c, row.state, nowMs)) { out.skipped += 1; out.gated = (out.gated || 0) + 1; continue; }
     if (c.lastSeen === day || (c.lastSession && c.lastSession.date === day)) { out.skipped += 1; continue; }
     out.due += 1;
     const r = await deliverPush(env, row, clientSubs(row, cid, ""), PUSH_TEMPLATES.daily);
@@ -1014,6 +1021,9 @@ async function handle(req, env) {
     else {
       const c = ((idn.row.state && idn.row.state.clients) || []).find((x) => x && String(x.id) === String(body.clientId || ""));
       if (!c) return json({ error: "Cliente no encontrado" }, 404);
+      const g = clientGate(c, idn.row.state);
+      if (!g.signed) return json({ ok: false, sent: 0, error: "Pendiente de firma: el cliente no ha firmado el relevo y el contrato.", code: "pendiente_firma" }, 409);
+      if (!g.paid) return json({ ok: false, sent: 0, error: "Pendiente de pago: no hay un pago confirmado vigente.", code: "pendiente_pago" }, 409);
       targets = clientSubs(idn.row, c.id, c.accessCode);
     }
     if (!targets.length) return json({ ok: false, sent: 0, error: self ? "Este equipo no tiene avisos activos" : "El cliente no tiene avisos activos", code: "nosubs" }, 200);
@@ -1119,7 +1129,7 @@ async function handle(req, env) {
         const was = prevPr.find((x) => x && x.id === r.id);
         if (was && was.status === "approved") continue;
         const label = String(r.routineName || r.routineId || "programa").slice(0, 40);
-        await notifyClient(env, idn.row, r.clientId, r.accessCode, "Programa listo", "Miguel te asignó " + label + ".", "/?view=work", "nb-aprobado");
+        await notifyClient(env, idn.row, r.clientId, r.accessCode, "Programa listo", "Miguel te asignó " + label + ".", "/?view=work", "nb-aprobado", "training");
       }
     } catch (e) {}
     return json({ ok: true, state: idn.row.state });
@@ -1165,7 +1175,7 @@ async function handle(req, env) {
       id: cid,
       name: String(c.name).slice(0, 80),
       plan: String(c.plan || "Estandar"),
-      unpaid: c.unpaid !== false,
+      unpaid: true, // un lead nunca se marca pagado a sí mismo; solo la confirmación del pago lo cambia
       sex: c.sex || "",
       age: c.age || "",
       phone: String(c.phone || ""),
@@ -1183,7 +1193,7 @@ async function handle(req, env) {
       inbox: dup ? [] : [{ id: "in" + Date.now(), type: "lead", name: client.name, plan: client.plan, at: Date.now(), clientId: client.id }]
     });
     await putRow(env, row);
-    await notifyCoach(env, row, "Lead NiuBision", (client.name || "Cliente") + " firmó. Confirme el pago.", "/?view=inbox", "nb-lead");
+    await notifyCoach(env, row, "Lead NiuBision", (client.name || "Cliente") + (isSigned(client, row.state) ? " firmó. Confirme el pago." : " se registró. Pendiente de firma."), "/?view=inbox", "nb-lead");
     return json({ ok: true, state: { inbox: row.state.inbox } });
   }
 
@@ -1292,7 +1302,7 @@ async function handle(req, env) {
       email: cl.email || params.get("payer_email")
     });
     if (cl.id || cl.accessCode) {
-      await notifyClient(env, row, cl.id, cl.accessCode, "Código listo", "Pago recibido. Su acceso ya está activo.", "/?view=work", "nb-code");
+      await notifyClient(env, row, cl.id, cl.accessCode, "Código listo", "Pago recibido. Su acceso ya está activo.", "/?view=work", "nb-code", "code");
     }
     await notifyCoach(env, row, "Pago PayPal", (cl.name || pay.name || "Cliente") + " · " + (params.get("mc_gross") || "") + " USD", "/?view=inbox", "nb-pay");
     return json({ ok: true });
@@ -1347,7 +1357,7 @@ async function handle(req, env) {
       await putRow(env, row);
       const cl = ((row.state && row.state.clients) || []).find((c) => c.id === (pay.clientId || meta.clientId)) || {};
       await mailReceipt({ date: new Date().toISOString().slice(0, 10), name: cl.name || pay.name || meta.name, plan: cl.plan || pay.plan || meta.plan, amount, method: "Tarjeta (Stripe)", status: "recibido", accessCode: cl.accessCode, email: cl.email || (o.customer_details && o.customer_details.email) });
-      if (cl.id || cl.accessCode) await notifyClient(env, row, cl.id, cl.accessCode, "Código listo", "Pago recibido. Su acceso ya está activo.", "/?view=work", "nb-code");
+      if (cl.id || cl.accessCode) await notifyClient(env, row, cl.id, cl.accessCode, "Código listo", "Pago recibido. Su acceso ya está activo.", "/?view=work", "nb-code", "code");
       await notifyCoach(env, row, "Pago con tarjeta", (cl.name || pay.name || meta.name || "Cliente") + " · " + amount + " USD", "/?view=inbox", "nb-pay");
       return json({ ok: true, paid: invoice });
     }
@@ -1388,7 +1398,7 @@ async function handle(req, env) {
     await putRow(env, row);
     const codeOut = hit && hit.accessCode;
     if (hit) {
-      await notifyClient(env, row, hit.id, codeOut, "Código listo", "Su código de acceso ya está activo. Ábralo en NiuBision.", "/?view=work", "nb-code");
+      await notifyClient(env, row, hit.id, codeOut, "Código listo", "Su código de acceso ya está activo. Ábralo en NiuBision.", "/?view=work", "nb-code", "code");
       await notifyCoach(env, row, "Código emitido", (hit.name || body.name || "Cliente") + " · " + (codeOut || ""), "/?view=inbox", "nb-code-coach");
     }
     return json({ ok: true, accessCode: codeOut, clientId: hit && hit.id });
@@ -1506,3 +1516,4 @@ function nbIvu(total) {
   const b = Math.round(c * 1000 / 1115);
   return { base: (b / 100).toFixed(2), ivu: ((c - b) / 100).toFixed(2) };
 }
+export { runDailyReminders as _runDailyReminders, notifyClient as _notifyClient };
