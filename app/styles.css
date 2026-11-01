@@ -345,6 +345,7 @@ img { background: transparent; }
 .pay-btn em { display:block; color:var(--mute); font-size:12px; font-style:normal; margin-top:2px; line-height:1.35; }
 .mark.paypal { background:#24304a; color:var(--cream); }
 .mark.ath { background:#24332e; color:var(--mint); }
+.mark.stripe { background:#2b2850; color:var(--cream); font-size:.7em; letter-spacing:.04em; }
 .mark.gpay { background:#2a261f; color:var(--gold); }
 .mark.spay { background:#1f1d28; color:var(--cream); }
 .mark.tpay { background:#2a241c; color:var(--peach); }
@@ -2107,3 +2108,5 @@ body.nb-protect #app img,body.nb-protect #app video{-webkit-user-drag:none;user-
 body.nb-protect #app input,body.nb-protect #app textarea,body.nb-protect #app select,body.nb-protect #app [contenteditable="true"]{-webkit-user-select:text;user-select:text}
 :root.nb-hidden body.nb-protect #app{filter:blur(18px)}
 @media print{body.nb-protect #app{visibility:hidden}}
+
+.nb-sr-h1 { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0; }

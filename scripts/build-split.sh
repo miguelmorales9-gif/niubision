@@ -9,13 +9,15 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 env="${NB_ENV:-preview}"
 case "$env" in
-  production) WEB_URL="https://niubision.com"; APP_URL="https://niubision.app"; ROBOTS="index, follow" ;;
-  preview)    WEB_URL="https://web.niubision-ui-preview.pages.dev"; APP_URL="https://app.niubision-ui-preview.pages.dev"; ROBOTS="noindex, nofollow" ;;
+  production) WEB_URL="https://niubision.com"; APP_URL="https://niubision.app"; NFW_URL="https://workouts.niubision.app"; ROBOTS="index, follow" ;;
+  preview)    WEB_URL="https://web.niubision-ui-preview.pages.dev"; APP_URL="https://app.niubision-ui-preview.pages.dev"; NFW_URL="https://v3-premium.nfw-preview.pages.dev"; ROBOTS="noindex, nofollow" ;;
   *) echo "NB_ENV must be preview|production" >&2; exit 1 ;;
 esac
 cmp -s "$root/app/app.js" "$root/public/app/app.js" || { echo "app/app.js and public/app/app.js differ" >&2; exit 1; }
 out="$root/dist"; rm -rf "$out"; mkdir -p "$out/web" "$out/app/app"
-sub() { sed -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__ROBOTS__#$ROBOTS#g" "$1" > "$2"; }
+# Tarjeta (Stripe) solo cuando esté activa: NB_STRIPE=1. Si no, PayPal y ATH Móvil.
+if [ "${NB_STRIPE:-0}" = 1 ]; then PAY_LD="PayPal, ATH Móvil, tarjeta (Stripe)"; PAY_FAQ="PayPal, ATH Móvil o tarjeta por Stripe"; else PAY_LD="PayPal, ATH Móvil"; PAY_FAQ="PayPal o ATH Móvil"; fi
+sub() { sed -e "s#__PAY_LD__#$PAY_LD#g" -e "s#__PAY_FAQ__#$PAY_FAQ#g" -e "s#__WEB_URL__#$WEB_URL#g" -e "s#__APP_URL__#$APP_URL#g" -e "s#__ROBOTS__#$ROBOTS#g" -e "s#__NFW_URL__#$NFW_URL#g" "$1" > "$2"; }
 
 LASTMOD="$(date -u +%Y-%m-%d)"
 WEB_HEADERS="/*\n  Strict-Transport-Security: max-age=15552000\n  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=(), serial=(), hid=(), bluetooth=(), display-capture=(), interest-cohort=()\n  X-Frame-Options: DENY\n  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://cloudflareinsights.com https://api.niubision.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; base-uri 'self'; object-src 'none'\n/\n  ! Access-Control-Allow-Origin\n"
@@ -23,7 +25,10 @@ APP_HEADERS="/*\n  Strict-Transport-Security: max-age=31536000; includeSubDomain
 # ---- web (landing) ----
 cp -r "$root/web/assets" "$out/web/"
 sub "$root/web/index.html" "$out/web/index.html"
+[ "${NB_STRIPE:-0}" = 1 ] && sed -i 's/ data-stripe hidden/ data-stripe/g' "$out/web/index.html"
 cp "$root/web/404.html" "$out/web/404.html"
+sub "$root/web/cancelacion.html" "$out/web/cancelacion.html"
+[ "${NB_STRIPE:-0}" = 1 ] && sed -i "s/ data-stripe hidden/ data-stripe/g" "$out/web/cancelacion.html"
 cp "$root/web/sw.js" "$out/web/sw.js"   # self-unregistering: retires old app SW on niubision.com
 # Pages Functions live outside the static dir (wrangler reads ./functions from the cwd):
 #   cd dist/web-project && wrangler pages deploy ../web --project-name niubision-web
@@ -32,7 +37,7 @@ for f in google4d9e616e9d676137.html d5b45a2523994bee80acf6eec24fbe1c.txt; do cp
 if [ "$env" = production ]; then
   printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$WEB_URL" > "$out/web/robots.txt"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc><lastmod>%s</lastmod></url></urlset>\n' "$WEB_URL" "$LASTMOD" > "$out/web/sitemap.xml"
-  sed -i '/class="preview-note"/d' "$out/web/index.html"   # preview-only banner
+  sed -i '/class="preview-note"/d' "$out/web/index.html" ; sed -i '/class="preview-note"/d' "$out/web/cancelacion.html"   # preview-only banner
 else
   printf 'User-agent: *\nDisallow: /\n' > "$out/web/robots.txt"
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/web/_headers"
@@ -45,7 +50,9 @@ cp "$root/app/app.js" "$root/app/styles.css" "$out/app/app/"
 for f in favicon.svg logo.png icon-*.png screenshot-phone.png screenshot-wide.png og.jpg intro-poster.jpg intro.mp4 studios.json; do
   [ -e "$root/$f" ] && cp "$root"/$f "$out/app/" 2>/dev/null || true
 done
-printf 'window.NB_ENV = { ENV: "%s", WEB_URL: "%s", APP_URL: "%s" };\n' "$env" "$WEB_URL" "$APP_URL" > "$out/app/config.js"
+# NB_STRIPE=1 muestra «Tarjeta (Stripe)» en la app (solo cuando el Worker tenga la llave y STRIPE_LIVE_OK, con el OK de Miguel).
+stripe_flag=""; [ "${NB_STRIPE:-0}" = "1" ] && stripe_flag=', STRIPE: true'
+printf 'window.NB_ENV = { ENV: "%s", WEB_URL: "%s", APP_URL: "%s"%s };\n' "$env" "$WEB_URL" "$APP_URL" "$stripe_flag" > "$out/app/config.js"
 python3 - "$root" "$out/app" "$WEB_URL" "$APP_URL" "$ROBOTS" <<'PY'
 import sys, re, json
 root, out, WEB, APP, ROBOTS = sys.argv[1:]
@@ -76,7 +83,7 @@ app_ld = {"@context": "https://schema.org", "@graph": [
    "operatingSystem": "Web, Android, iOS", "browserRequirements": "Requiere JavaScript", "inLanguage": "es-PR",
    "image": APP + "/og.jpg", "screenshot": [APP + "/screenshot-phone.png", APP + "/screenshot-wide.png"],
    "publisher": {"@id": WEB + "/#business"}, "author": {"@id": WEB + "/#miguel"}, "isAccessibleForFree": False,
-   "offers": {"@type": "Offer", "price": "39", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
+   "offers": {"@type": "Offer", "price": "43.49", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
   {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/NiuBision", "https://www.facebook.com/61553061513345", "https://www.instagram.com/niubision/"], "address": {"@type": "PostalAddress", "addressLocality": "Arecibo", "addressRegion": "PR", "addressCountry": "US"}},
   {"@type": "Person", "@id": WEB + "/#miguel", "name": "Miguel Morales", "url": WEB + "/"}]}
 s, nld = re.subn(r'<script type="application/ld\+json">.*?</script>', lambda m: '<script type="application/ld+json">' + json.dumps(app_ld, ensure_ascii=False) + '</script>', s, count=1, flags=re.S)
