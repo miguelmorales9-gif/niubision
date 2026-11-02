@@ -17608,8 +17608,8 @@ function privacyView() {
     <h3>Salud</h3>
     <p>El cuestionario y el relevo son para seguridad del entrenamiento. No son historia clínica ni se comparten con terceros.</p>
     <h3>Cómo borrar</h3>
-    <p>En la app, Salir. En el teléfono: ajustes del navegador → borrar datos de niubision.com. Para borrar su ficha del estudio, escriba a miguel.morales9@gmail.com o al WhatsApp 7874544038.</p>
-    <p class="muted">Responsable: Miguel Morales · NiuBision · miguel.morales9@gmail.com</p>
+    <p>En la app, Salir. En el teléfono: ajustes del navegador → borrar datos de niubision.com. Para borrar su ficha del estudio, escriba a niubision@gmail.com o al WhatsApp 7874544038.</p>
+    <p class="muted">Responsable: Miguel Morales · NiuBision · niubision@gmail.com</p>
     <p class="disclaimer">${APP_DISCLAIMER}</p>
     <p style="margin-top:8px"><button type="button" class="legal-link" id="seeTerms">Términos y cancelación</button></p>
   </section>`;
@@ -17631,7 +17631,7 @@ function termsView() {
     <p>Sin relevo y cuestionario de salud no hay contrato ni pago. El ejercicio tiene riesgo. NiuBision no es consulta médica.</p>
     <h3>Acceso</h3>
     <p>Si el entrenador elimina al cliente, el código queda anulado. Para volver, paga y recibe un código nuevo.</p>
-    <p class="muted">Miguel Morales · NiuBision · 787-454-4038 · miguel.morales9@gmail.com</p>
+    <p class="muted">Miguel Morales · NiuBision · 787-454-4038 · niubision@gmail.com</p>
     <p style="margin-top:8px"><button type="button" class="legal-link" id="seePrivacy">Privacidad</button></p>
   </section>`;
 }
