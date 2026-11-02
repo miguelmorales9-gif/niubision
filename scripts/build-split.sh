@@ -93,6 +93,9 @@ assert nld == 1
 # pre-render text (seen before JS / by non-JS crawlers): app-specific, links to the marketing site
 s, nh = re.subn(r'<p>Sitio oficial de Miguel Morales[^<]*</p>', '<p>App de clientes de NiuBision: el plan escrito, la sesión de hoy y el contacto con su entrenador, Miguel Morales, certificado por el DRD, licencia 9798-3322359. Planes y precios en <a href="%s/">niubision.com</a>.</p>' % WEB, s, count=1)
 assert nh == 1
+# un solo <h1>: el de <noscript> pasa a <h2> (el hero ya lleva el h1)
+s, nn = re.subn(r'(<noscript>\s*<main>\s*)<h1>NiuBision</h1>', r'\1<h2>NiuBision</h2>', s, count=1)
+assert nn == 1
 # any query (?pago, ?c, ?inv, ?view=...) is a private/state URL: noindex, keep canonical root indexable
 s, nr = re.subn(r'(<meta name="robots" content="[^"]*">)', lambda m: m.group(1) + '\n<script>if(location.search){document.querySelectorAll(\'meta[name=robots]\').forEach(function(m){m.setAttribute("content","noindex, follow");});}</script>', s, count=1)
 assert nr == 1
@@ -116,6 +119,8 @@ else printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$APP_URL" > "$
 printf "$APP_HEADERS" >> "$out/app/_headers"
 printf '/sw.js\n  Cache-Control: no-cache\n/config.js\n  Cache-Control: no-cache\n' >> "$out/app/_headers"
 python3 "$root/scripts/optimize-app.py" "$out/app"
+# Rutas desconocidas: 404 real (no soft-404 con la portada). La app vive en "/" con ?view=...
+sed -e "s#href=\"/\"#href=\"$APP_URL/\"#g" -e "s#/assets/favicon.svg#/favicon.svg#g" "$root/web/404.html" > "$out/app/404.html"
 printf '/app/img/*\n  Cache-Control: public, max-age=31536000, immutable\n' >> "$out/app/_headers"
 # assetlinks.json is intentionally NOT copied: see PLAYSTORE.md (template only).
 echo "built $env: web=$WEB_URL app=$APP_URL -> $out"
