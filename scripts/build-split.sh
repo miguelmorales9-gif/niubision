@@ -10,7 +10,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 env="${NB_ENV:-preview}"
 case "$env" in
   production) WEB_URL="https://niubision.com"; APP_URL="https://niubision.app"; NFW_URL="https://workouts.niubision.app"; ROBOTS="index, follow" ;;
-  preview)    WEB_URL="${NB_WEB_URL:-https://web.niubision-ui-preview.pages.dev}"; APP_URL="${NB_APP_URL:-https://app.niubision-ui-preview.pages.dev}"; NFW_URL="https://v3-premium.nfw-preview.pages.dev"; ROBOTS="noindex, nofollow" ;;
+  preview)    WEB_URL="${NB_WEB_URL:-https://web.niubision-ui-preview.pages.dev}"; APP_URL="${NB_APP_URL:-https://app.niubision-ui-preview.pages.dev}"; NFW_URL="${NB_NFW_URL:-https://workouts.niubision.app}"; ROBOTS="noindex, nofollow" ;;
   *) echo "NB_ENV must be preview|production" >&2; exit 1 ;;
 esac
 # API para el contador de cupos fundador en la web (NB_API sobrescribe, p. ej. el Worker de vista previa).
