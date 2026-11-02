@@ -17589,6 +17589,7 @@ function socialView() {
       <p>Trabajo, disciplina y el día a día de NiuBision. Entre al perfil oficial y síganos.</p>
       <p class="muted" style="margin-top:8px">facebook.com/NiuBision</p>
       <a class="btn primary" href="https://www.facebook.com/NiuBision" target="_blank" rel="noopener noreferrer" style="margin-top:14px">Abrir Facebook</a>
+      <a class="btn" href="https://www.instagram.com/niubision/" target="_blank" rel="noopener noreferrer" aria-label="Instagram de NiuBision, @niubision (abre en otra pestaña)" style="margin-top:10px"><svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>Abrir Instagram</a>
     </div>
   </section>`;
 }
