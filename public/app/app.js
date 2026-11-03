@@ -20256,8 +20256,12 @@ async function boot() {
       if (state.role && !state.splash) await nbLoadData();
       else {
         // Gate/splash first: fetch the chunks after the page's load event so they don't compete with the LCP.
-        const kick = () => setTimeout(() => { nbLoadData(); }, 0);
-        if (document.readyState === "complete") kick(); else window.addEventListener("load", kick, { once: true });
+        // Bajo demanda: al primer toque/tecla, o en reposo unos segundos después de cargar. render() espera el trozo si hace falta.
+        let kicked = false;
+        const kick = () => { if (kicked) return; kicked = true; ["pointerdown", "keydown", "touchstart"].forEach((e) => window.removeEventListener(e, kick, true)); nbLoadData(); };
+        ["pointerdown", "keydown", "touchstart"].forEach((e) => window.addEventListener(e, kick, { capture: true, passive: true }));
+        const idle = () => setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(kick, { timeout: 4000 }) : kick()), 6000);
+        if (document.readyState === "complete") idle(); else window.addEventListener("load", idle, { once: true });
       }
     }
     if (window.NBexercises && window.NBexercises.length) state.exercises = window.NBexercises;
@@ -20284,16 +20288,19 @@ async function boot() {
     const bootSw = async () => {
       if (store.get("nb_sw") !== "50") {
         store.set("nb_sw", "50");
+        /* Limpieza de versiones viejas solo si había algo instalado: un visitante nuevo no recarga la página. */
+        let had = false;
         try {
           const keys = await caches.keys();
+          had = keys.length > 0;
           await Promise.all(keys.map((k) => caches.delete(k)));
         } catch (e) {}
         try {
           const regs = await navigator.serviceWorker.getRegistrations();
+          had = had || regs.length > 0;
           await Promise.all(regs.map((r) => r.unregister()));
         } catch (e) {}
-        location.reload();
-        return;
+        if (had) { location.reload(); return; }
       }
       try {
         const reg = await navigator.serviceWorker.register("/sw.js?v=hybrid-v15", { updateViaCache: "none" });
