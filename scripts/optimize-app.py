@@ -81,7 +81,7 @@ for f in ("index.html", "sw.js"):
         t, nf = re.subn(r'<link href="(https://fonts\.googleapis\.com/css2\?[^"]+)" rel="stylesheet">',
                         lambda m: f'<link rel="preload" as="style" href="{m.group(1)}" onload="this.onload=null;this.rel=\'stylesheet\'">'
                                   f'<noscript><link rel="stylesheet" href="{m.group(1)}"></noscript>', t, count=1)
-        assert nf == 1, "fonts link not found"
+        assert nf <= 1  # fuentes propias: ya no hay enlace a Google Fonts
         # Inline the 1-line env config (same content as /config.js, kept for the SW) to drop a blocking request
         cfg = open(f"{out}/config.js", encoding="utf-8").read().strip()
         assert "</" not in cfg

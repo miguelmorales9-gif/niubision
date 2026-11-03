@@ -45,10 +45,11 @@ else
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > "$out/web/_headers"
 fi
 printf "$WEB_HEADERS" >> "$out/web/_headers"
-printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n  ! Access-Control-Allow-Origin\n/assets/*\n  Cache-Control: public, max-age=604800\n' >> "$out/web/_headers"
+printf '/sw.js\n  Cache-Control: no-cache\n/\n  Cache-Control: no-cache\n  ! Access-Control-Allow-Origin\n/assets/*\n  Cache-Control: public, max-age=604800\n/assets/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n' >> "$out/web/_headers"
 
 # ---- app (own origin, root scope) ----
 cp "$root/app/app.js" "$root/app/styles.css" "$out/app/app/"
+mkdir -p "$out/app/fonts"; cp "$root/web/assets/fonts/"*.woff2 "$out/app/fonts/"   # fuentes propias (sin Google Fonts)
 for f in favicon.svg logo.png icon-*.png screenshot-phone.png screenshot-wide.png og.jpg intro-poster.jpg intro.mp4 studios.json; do
   [ -e "$root/$f" ] && cp "$root"/$f "$out/app/" 2>/dev/null || true
 done
@@ -117,7 +118,7 @@ if [ "$env" = preview ]; then printf 'User-agent: *\nDisallow: /\n' > "$out/app/
 else printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$APP_URL" > "$out/app/robots.txt"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc><lastmod>%s</lastmod></url></urlset>\n' "$APP_URL" "$LASTMOD" > "$out/app/sitemap.xml"; fi
 printf "$APP_HEADERS" >> "$out/app/_headers"
-printf '/sw.js\n  Cache-Control: no-cache\n/config.js\n  Cache-Control: no-cache\n' >> "$out/app/_headers"
+printf '/sw.js\n  Cache-Control: no-cache\n/config.js\n  Cache-Control: no-cache\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n' >> "$out/app/_headers"
 python3 "$root/scripts/optimize-app.py" "$out/app"
 # Rutas desconocidas: 404 real (no soft-404 con la portada). La app vive en "/" con ?view=...
 sed -e "s#href=\"/\"#href=\"$APP_URL/\"#g" -e "s#/assets/favicon.svg#/favicon.svg#g" "$root/web/404.html" > "$out/app/404.html"

@@ -2110,3 +2110,15 @@ body.nb-protect #app input,body.nb-protect #app textarea,body.nb-protect #app se
 @media print{body.nb-protect #app{visibility:hidden}}
 
 .nb-sr-h1 { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Portada: qué recibe y precios (datos reales del plan) */
+.cover-offer { width: 100%; max-width: 420px; margin: 22px auto 6px; padding: 18px 18px 16px; border: 1px solid var(--line); border-radius: 18px; text-align: left; background: color-mix(in srgb, var(--cream) 3%, transparent); }
+.cover-offer-h { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; font-weight: 600; }
+.cover-offer-h + .cover-prices { margin-top: 0; }
+.cover-offer-list { margin: 0 0 16px; padding-left: 18px; color: var(--cream); font-size: 15px; line-height: 1.45; }
+.cover-offer-list li { margin-bottom: 6px; }
+.cover-prices { margin: 0 0 10px; }
+.cover-prices div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.cover-prices dt { color: var(--cream); }
+.cover-prices dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--cream); }
+.cover-offer-note { font-size: 13px; color: var(--mute); margin: 4px 0 12px; line-height: 1.4; }
+.cover-offer .btn { width: 100%; }
