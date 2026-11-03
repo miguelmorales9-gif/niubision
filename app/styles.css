@@ -2122,3 +2122,6 @@ body.nb-protect #app input,body.nb-protect #app textarea,body.nb-protect #app se
 .cover-prices dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--cream); }
 .cover-offer-note { font-size: 13px; color: var(--mute); margin: 4px 0 12px; line-height: 1.4; }
 .cover-offer .btn { width: 100%; }
+
+/* Portada: primera pintura sin entrada desde opacidad 0 (FCP/LCP medibles) */
+.screen.hero.cover.cover-hybrid { animation: none; }
