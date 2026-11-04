@@ -29,6 +29,7 @@ cp -r "$root/web/assets" "$out/web/"
 sub "$root/web/index.html" "$out/web/index.html"
 [ "${NB_STRIPE:-0}" = 1 ] && sed -i 's/ data-stripe hidden/ data-stripe/g' "$out/web/index.html"
 cp "$root/web/404.html" "$out/web/404.html"
+cp "$root/web/manifest.webmanifest" "$out/web/manifest.webmanifest"
 sub "$root/web/cancelacion.html" "$out/web/cancelacion.html"
 [ "${NB_STRIPE:-0}" = 1 ] && sed -i "s/ data-stripe hidden/ data-stripe/g" "$out/web/cancelacion.html"
 cp "$root/web/sw.js" "$out/web/sw.js"   # self-unregistering: retires old app SW on niubision.com
@@ -110,7 +111,7 @@ for sc in m.get("shortcuts", []):
 for i in m["icons"] + m.get("screenshots", []): i["src"] = rel(i["src"])
 json.dump(m, open(f"{out}/manifest.webmanifest", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 sw = open(f"{root}/sw.js", encoding="utf-8").read()
-sw = re.sub(r'const CACHE = "[^"]+"', 'const CACHE = "nb-app-split-v1"', sw, count=1)
+sw = re.sub(r'const CACHE = "[^"]+"', 'const CACHE = "nb-app-split-v2"', sw, count=1)
 sw = sw.replace('  "/index.html",\n', '  "/index.html",\n  "/config.js",\n', 1)
 open(f"{out}/sw.js", "w", encoding="utf-8").write(sw)
 PY
