@@ -29,7 +29,7 @@ cp -r "$root/web/assets" "$out/web/"
 sub "$root/web/index.html" "$out/web/index.html"
 [ "${NB_STRIPE:-0}" = 1 ] && sed -i 's/ data-stripe hidden/ data-stripe/g' "$out/web/index.html"
 cp "$root/web/404.html" "$out/web/404.html"
-cp "$root/web/manifest.webmanifest" "$out/web/manifest.webmanifest"
+cp "$root/web/site.webmanifest" "$out/web/site.webmanifest"
 sub "$root/web/cancelacion.html" "$out/web/cancelacion.html"
 [ "${NB_STRIPE:-0}" = 1 ] && sed -i "s/ data-stripe hidden/ data-stripe/g" "$out/web/cancelacion.html"
 cp "$root/web/sw.js" "$out/web/sw.js"   # self-unregistering: retires old app SW on niubision.com
