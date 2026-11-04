@@ -1,9 +1,9 @@
 {
   "name": "NiuBision · Entrenador personal en Puerto Rico",
   "short_name": "NiuBision",
-  "start_url": "/?source=pwa",
+  "start_url": "/?from=homescreen",
   "scope": "/",
-  "display": "browser",
+  "display": "standalone",
   "background_color": "#0E0D10",
   "theme_color": "#0E0D10",
   "lang": "es",
@@ -26,5 +26,10 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "id": "/",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
   ]
 }
