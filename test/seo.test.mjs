@@ -65,3 +65,26 @@ test("web: páginas legales en sitemap y dist", () => {
   assert.match(terms, /Face ID \/ passkeys/);
   assert.match(priv, /9798-3322359/);
 });
+
+test("seo-nov5: meta longitud, lang es-PR, Person/Business enriquecidos, legales con OG", () => {
+  assert.match(web, /<html lang="es-PR">/);
+  const title = web.match(/<title>([^<]+)<\/title>/)[1];
+  const desc = web.match(/name="description" content="([^"]+)"/)[1];
+  assert.ok(title.length <= 55, title.length);
+  assert.ok(desc.length <= 155, desc.length);
+  const g = ld(web)["@graph"];
+  const person = g.find((n) => n["@type"] === "Person");
+  assert.match(person.description, /Veterano del Ejército/);
+  assert.match(person.description, /diez años/);
+  const biz = g.find((n) => n["@id"] === "https://niubision.com/#business");
+  assert.ok(biz["@type"].includes("ProfessionalService"));
+  assert.equal(biz.legalName, "Miguel Morales");
+  assert.ok(biz.contactPoint?.telephone === "+17874544038");
+  assert.ok(existsSync("dist/web/llms.txt"));
+  const priv = readFileSync("dist/web/privacidad.html", "utf8");
+  assert.match(priv, /property="og:title"/);
+  assert.match(priv, /<html lang="es-PR">/);
+  assert.match(app, /hreflang="es-PR"/);
+  assert.doesNotMatch(app, /facebook\.com\/NiuBision"/);
+  assert.match(app, /workouts\.niubision\.app/);
+});

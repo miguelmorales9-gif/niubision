@@ -1,0 +1,93 @@
+ring full at 1790878157355
+AFTER INTRO: NiuBision | Tu sesión de hoy |  | Entrenamiento con tu coach |  | Entrar | ↗ | Planes | Soy coach |  | Vista previa · código demo 240101 o ?demo=hoy |  | ACERCA DE | PRIVACIDAD |  | ENTRENAMIENTO CON TU COACH |  | Aviso legal. NiuBision es un servicio de entrenamiento de aptitud física en Puerto Rico. No es consultorio médico, ni fisioterapia, ni nutrición. El ejercicio tiene riesgo de lesión y, en casos raros, de evento grave o muerte. Usted asume ese riesgo y debe completar el relevo y el cuestionario de salud antes de escoger o pagar un plan. Si una pregunta de salud es “sí”, hace falta autorización médica. El contenido de 
+COVER {
+  "order": [
+    "Entrar\n↗",
+    "Planes",
+    "Soy coach"
+  ],
+  "quiet": [
+    {
+      "t": "ACERCA DE",
+      "color": "rgba(243, 237, 227, 0.78)",
+      "fontSize": "13px",
+      "opacity": "1"
+    },
+    {
+      "t": "PRIVACIDAD",
+      "color": "rgba(243, 237, 227, 0.78)",
+      "fontSize": "13px",
+      "opacity": "1"
+    }
+  ],
+  "disclaimer": "Aviso legal. NiuBision es un servicio de entrenamiento de aptitud física en Puerto Rico. No es consultorio médico, ni fi",
+  "hasEntrar": true,
+  "hasPlanes": true,
+  "hasCoach": true
+}
+PLANES NiuBision | SALIR | TENGO CÓDIGO |  | PRIMERA VEZ |  | Así entra a NiuBision | Planes — escoja el suyo | Confianza — relevo y PAR-Q | Pagar — PayPal o ATH | Código — llega por WhatsApp | Entrar — péguelo aquí | Ver planes Ya tengo código Entendido |  | SERVICIOS |  | Qué paga y qué recibe |  | Tres planes digitales, una evaluación de entrada, sesiones en gimnasio y un armado extra de rutina con la biblioteca. Los precios están en USD. Precio final, sin IVU. El cobro sale por PayPal o ATH Móvil, no por tarjeta dentro de NiuBision. |  | Cómo elegir | Evaluación 39 — primera vez. 40 minutos. Si luego toma 8 semanas o más, se descuenta. | Base 97/mes — ya sabe entrenar. Plan escrito y un ajuste al mes. Sin llamada. | Estándar 127/mes — el d
+COVER2 NiuBision | Tu sesión de hoy |  | Entrenamiento con tu coach |  | Entrar | ↗ | Planes | Soy coach |  | Vista previa · código demo 240101 o ?demo=hoy |  | ACERCA DE | PRIVACIDAD |  | ENTRENAMIENTO CON TU COACH |  | Aviso legal. NiuBision es un servicio de entrenamiento de aptitud física en Puerto Rico. No es consultorio médico, ni fisioterapia, ni nutrición. El ejercicio tiene riesgo de lesión y, en casos raros, de evento grave o muerte. Usted asume ese riesgo y debe completar el relevo y el cuestionario de salud antes de escoger
+PRIV NiuBision | SALIR | TENGO CÓDIGO |  | AVISO |  | Privacidad |  | NiuBision guarda lo mínimo para entrenar. No vendemos datos. No cobramos tarjetas dentro de la app. |  | En este teléfono |  | Nombre, plan, código, series, peso, medidas, hábitos, fotos de progreso (hasta 6, comprimidas) y firmas del relevo y del contrato. Eso vive en el almacenamiento del navegador de este aparato. |  | Con el entrenador |  | Si hay nube del estu
+CODE SHEET NiuBision | Tu sesión de hoy |  | Entrenamiento con tu coach |  | Entrar | ↗ | Planes | Soy coach |  | Vista previa · código demo 240101 o ?demo=hoy |  | ACERCA DE | PRIVACIDAD |  | ENTRENAMIENTO CON TU COACH |  | Aviso legal. NiuBision es un servicio de entrenamiento de aptitud física en Puerto Rico. No es consultorio médico, ni fisioterapia, ni nutrición. El ejercicio tiene riesgo de lesión y, en casos raros, de evento grave o m
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('button:has-text("Entrar"), #codeGo, .sheet .btn.primary').first()
+    - locator resolved to <button data-mv="1" id="haveCode" class="btn primary cover-cta">…</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="modal">…</div> intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div class="modal">…</div> intercepts pointer events
+    - retrying click action
+      - waiting 100ms
+    56 × waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div class="modal">…</div> intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+
+    at /workspace/niubision/__grok/live-test/cover-full.mjs:96:12 {
+  log: [
+    `  - waiting for locator('button:has-text("Entrar"), #codeGo, .sheet .btn.primary').first()`,
+    '    - locator resolved to <button data-mv="1" id="haveCode" class="btn primary cover-cta">…</button>',
+    '  - attempting click action',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - <div class="modal">…</div> intercepts pointer events',
+    '    - retrying click action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - <div class="modal">…</div> intercepts pointer events',
+    '    - retrying click action',
+    '      - waiting 100ms',
+    '    56 × waiting for element to be visible, enabled and stable',
+    '       - element is visible, enabled and stable',
+    '       - scrolling into view if needed',
+    '       - done scrolling',
+    '       - <div class="modal">…</div> intercepts pointer events',
+    '     - retrying click action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v22.23.3

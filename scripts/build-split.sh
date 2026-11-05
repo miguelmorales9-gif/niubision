@@ -41,6 +41,7 @@ cp "$root/web/sw.js" "$out/web/sw.js"   # self-unregistering: retires old app SW
 #   cd dist/web-project && wrangler pages deploy ../web --project-name niubision-web
 mkdir -p "$out/web-project/functions"; sub "$root/web/functions/_middleware.js" "$out/web-project/functions/_middleware.js"
 for f in google4d9e616e9d676137.html d5b45a2523994bee80acf6eec24fbe1c.txt; do cp "$root/$f" "$out/web/"; done  # Search Console + IndexNow
+cp "$root/web/llms.txt" "$out/web/llms.txt"
 if [ "$env" = production ]; then
   printf 'User-agent: *\nAllow: /\nSitemap: %s/sitemap.xml\n' "$WEB_URL" > "$out/web/robots.txt"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>%s/</loc><lastmod>%s</lastmod></url><url><loc>%s/cancelacion</loc><lastmod>%s</lastmod></url><url><loc>%s/privacidad</loc><lastmod>%s</lastmod></url><url><loc>%s/terminos</loc><lastmod>%s</lastmod></url></urlset>\n' "$WEB_URL" "$LASTMOD" "$WEB_URL" "$LASTMOD" "$WEB_URL" "$LASTMOD" "$WEB_URL" "$LASTMOD" > "$out/web/sitemap.xml"
@@ -65,19 +66,21 @@ python3 - "$root" "$out/app" "$WEB_URL" "$APP_URL" "$ROBOTS" <<'PY'
 import sys, re, json
 root, out, WEB, APP, ROBOTS = sys.argv[1:]
 s = open(f"{root}/index.html", encoding="utf-8").read()
-s = s.replace('<script src="/app/app.js', '<script src="/config.js"></script>\n<script src="/app/app.js', 1)
+s = s.replace('https://www.facebook.com/NiuBision', 'https://www.facebook.com/61553061513345').replace('facebook.com/NiuBision', 'facebook.com/61553061513345')  # canonical FB page id\ns = s.replace('<script src="/app/app.js', '<script src="/config.js"></script>\n<script src="/app/app.js', 1)
 s = s.replace("https://niubision.com/#privacy", APP + "/?view=privacy").replace("https://niubision.com/#terms", APP + "/?view=terms")
 s = s.replace("https://niubision.com/manifest.webmanifest", "/manifest.webmanifest")
 s = re.sub(r'<link rel="sitemap"[^>]*>\n?', "", s)
 s = re.sub(r'https://niubision\.com/(?=[a-z0-9_-]+\.(png|jpg|svg))', APP + "/", s)
 s = re.sub(r'<link rel="canonical"[^>]*>', '<link rel="canonical" href="%s/">' % APP, s, count=1)  # app is its own canonical
-s = re.sub(r'[ \t]*<link rel="alternate" hreflang="[^"]*"[^>]*>\n?', "", s)  # no hreflang on the app
+s = re.sub(r'[ \t]*<link rel="alternate" hreflang="[^"]*"[^>]*>\n?', "", s)
+s = s.replace('<link rel="canonical" href="%s/">' % APP, '<link rel="canonical" href="%s/">\n<link rel="alternate" hreflang="es-PR" href="%s/">\n<link rel="alternate" hreflang="x-default" href="%s/">' % (APP, APP, APP), 1)
 s = s.replace("https://niubision.com/", WEB + "/")  # JSON-LD ids, og -> marketing site
 s = s.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta name="robots" content="%s">' % ROBOTS, 1)
 s = s.replace('<p><a href="' + APP + '/?view=privacy">', '<p><a href="' + WEB + '/">niubision.com</a> · <a href="' + APP + '/?view=privacy">', 1)
 # --- app SEO: own identity (avoid duplicating niubision.com), WebApplication JSON-LD, noindex for param views ---
-AT = "NiuBision App · Su plan y la sesión de hoy | Miguel Morales"
-AD = "La app de NiuBision: su plan escrito, la sesión de hoy y el contacto con su entrenador, Miguel Morales (DRD, licencia 9798-3322359). Entre con su código de 6 dígitos."
+AT = "NiuBision App · Su plan y la sesión de hoy"
+AD = "App de clientes NiuBision: plan escrito, sesión de hoy y contacto con Miguel Morales (DRD 9798-3322359). Entre con su código de 6 dígitos."
+s = s.replace('<html lang="es">', '<html lang="es-PR">', 1)
 s = re.sub(r'<title>[^<]*</title>', '<title>%s</title>' % AT, s, count=1)
 s = re.sub(r'<meta name="description" content="[^"]*">', '<meta name="description" content="%s">' % AD, s, count=1)
 for k in ("og:title", "twitter:title"):
@@ -92,12 +95,12 @@ app_ld = {"@context": "https://schema.org", "@graph": [
    "image": APP + "/og.jpg", "screenshot": [APP + "/screenshot-phone.png", APP + "/screenshot-wide.png"],
    "publisher": {"@id": WEB + "/#business"}, "author": {"@id": WEB + "/#miguel"}, "isAccessibleForFree": False,
    "offers": {"@type": "Offer", "price": "43.49", "priceCurrency": "USD", "url": WEB + "/#planes", "name": "Evaluación de 40 minutos (entrada a la app)"}},
-  {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/NiuBision", "https://www.facebook.com/61553061513345", "https://www.instagram.com/niubision/"], "address": {"@type": "PostalAddress", "addressLocality": "Arecibo", "addressRegion": "PR", "addressCountry": "US"}},
-  {"@type": "Person", "@id": WEB + "/#miguel", "name": "Miguel Morales", "url": WEB + "/"}]}
+  {"@type": ["HealthAndBeautyBusiness", "LocalBusiness"], "@id": WEB + "/#business", "name": "NiuBision", "url": WEB + "/", "sameAs": ["https://www.facebook.com/61553061513345", "https://www.instagram.com/niubision/"], "telephone": "+17874544038", "email": "niubision@gmail.com", "legalName": "Miguel Morales", "address": {"@type": "PostalAddress", "addressLocality": "Arecibo", "addressRegion": "PR", "addressCountry": "US"}},
+  {"@type": "Person", "@id": WEB + "/#miguel", "name": "Miguel Morales", "url": WEB + "/", "description": "Veterano del Ejército de EE. UU. Más de diez años de experiencia. Certificado por el DRD, licencia 9798-3322359.", "jobTitle": "Entrenador personal"}]}
 s, nld = re.subn(r'<script type="application/ld\+json">.*?</script>', lambda m: '<script type="application/ld+json">' + json.dumps(app_ld, ensure_ascii=False) + '</script>', s, count=1, flags=re.S)
 assert nld == 1
 # pre-render text (seen before JS / by non-JS crawlers): app-specific, links to the marketing site
-s, nh = re.subn(r'<p>Sitio oficial de Miguel Morales[^<]*</p>', '<p>App de clientes de NiuBision: el plan escrito, la sesión de hoy y el contacto con su entrenador, Miguel Morales, certificado por el DRD, licencia 9798-3322359. Planes y precios en <a href="%s/">niubision.com</a>.</p>' % WEB, s, count=1)
+s, nh = re.subn(r'<p>Sitio oficial de Miguel Morales[^<]*</p>', '<p>App de clientes de NiuBision: el plan escrito, la sesión de hoy y el contacto con su entrenador, Miguel Morales, certificado por el DRD, licencia 9798-3322359. Planes en <a href="%s/">niubision.com</a>. Programas self-serve en <a href="https://workouts.niubision.app/">NB Workouts</a>.</p>' % WEB, s, count=1)
 assert nh == 1
 # un solo <h1>: el de <noscript> pasa a <h2> (el hero ya lleva el h1)
 s, nn = re.subn(r'(<noscript>\s*<main>\s*)<h1>NiuBision</h1>', r'\1<h2>NiuBision</h2>', s, count=1)
