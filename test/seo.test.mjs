@@ -45,3 +45,23 @@ test("Instagram @niubision: enlace accesible y en sameAs", () => {
   assert.ok(biz.sameAs.includes("https://www.instagram.com/niubision/"));
   assert.ok(readFileSync("app/app.js", "utf8").includes("Abrir Instagram"));
 });
+
+test("web: páginas legales en sitemap y dist", () => {
+  const sm = readFileSync("dist/web/sitemap.xml", "utf8");
+  for (const path of ["/cancelacion", "/privacidad", "/terminos"]) {
+    assert.ok(sm.includes(`https://niubision.com${path}`), path);
+    assert.ok(existsSync(`dist/web${path}.html`), path + ".html");
+  }
+  const priv = readFileSync("dist/web/privacidad.html", "utf8");
+  const terms = readFileSync("dist/web/terminos.html", "utf8");
+  for (const s of [priv, terms]) {
+    assert.match(s, /NiuBision, nombre comercial de Miguel Morales/);
+    assert.match(s, /Arecibo/);
+    assert.match(s, /niubision@gmail\.com/);
+    assert.match(s, /wa\.me\/17874544038/);
+    assert.ok(!/Grabaciones|voz del coach|Fotos y video de cada/.test(s));
+  }
+  assert.match(priv, /Face ID \/ passkeys/);
+  assert.match(terms, /Face ID \/ passkeys/);
+  assert.match(priv, /9798-3322359/);
+});
