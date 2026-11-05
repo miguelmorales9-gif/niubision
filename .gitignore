@@ -3,3 +3,4 @@ cloud/.wrangler/
 *.pem
 dist/
 cloud/*.local.toml
+__grok/
